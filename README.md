@@ -11,9 +11,10 @@ A comprehensive multiplayer web-based civilization management game for high scho
 
 ## 🚀 Live Demo
 
-**Sandbox Environment:** https://3000-i7ap02lrimuuo467n72j3-5634da27.sandbox.novita.ai
+**🚀 PRODUCTION (Live):** https://worldhistorysim.pages.dev  
+**Deployment:** https://93a2b1be.worldhistorysim.pages.dev
 
-*(This is a development sandbox URL - will be replaced with production URL after deployment)*
+**Development Sandbox:** https://3000-i7ap02lrimuuo467n72j3-5634da27.sandbox.novita.ai
 
 ## ✨ Key Features
 
