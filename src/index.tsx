@@ -36,16 +36,35 @@ app.get('/', (c) => {
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
           body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/fc/Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             min-height: 100vh;
+            position: relative;
+          }
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 0;
+          }
+          .content-wrapper {
+            position: relative;
+            z-index: 1;
           }
           .card {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.97);
             backdrop-filter: blur(10px);
           }
         </style>
     </head>
     <body class="flex items-center justify-center p-4">
+        <div class="content-wrapper w-full flex items-center justify-center">
         <div class="card rounded-xl shadow-2xl max-w-4xl w-full p-8">
             <div class="text-center mb-8">
                 <h1 class="text-5xl font-bold text-gray-800 mb-4">
@@ -116,6 +135,7 @@ app.get('/', (c) => {
                     </div>
                 </div>
             </div>
+        </div>
         </div>
     </body>
     </html>
