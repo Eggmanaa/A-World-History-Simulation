@@ -554,7 +554,7 @@ async function buildStructure(buildingType, isPlacingExisting) {
       buildingMap[key] = buildingType;
       
       // Save map data to database
-      await axios.patch(`/api/student/civilization/${civilization.id}/map`, {
+      await axios.post(`/api/student/civilization/${civilization.id}/map`, {
         map_data: JSON.stringify(buildingMap)
       });
       
@@ -574,7 +574,7 @@ async function buildStructure(buildingType, isPlacingExisting) {
       buildingMap[key] = buildingType;
       
       // Save map data
-      await axios.patch(`/api/student/civilization/${civilization.id}/map`, {
+      await axios.post(`/api/student/civilization/${civilization.id}/map`, {
         map_data: JSON.stringify(buildingMap)
       });
       

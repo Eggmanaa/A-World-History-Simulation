@@ -218,7 +218,7 @@ student.get('/simulation/:studentId/civilizations', async (c) => {
 
 // Update civilization stats (for building, etc.)
 // Update civilization map data
-student.patch('/civilization/:civId/map', async (c) => {
+student.post('/civilization/:civId/map', async (c) => {
   try {
     const civId = c.req.param('civId')
     const { map_data } = await c.req.json()
