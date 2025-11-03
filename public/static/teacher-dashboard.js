@@ -219,11 +219,14 @@ function renderPeriodDetails(data) {
             <thead class="bg-gray-100">
               <tr>
                 <th class="px-4 py-2 text-left">Civilization</th>
-                <th class="px-4 py-2 text-center">Houses</th>
-                <th class="px-4 py-2 text-center">Population</th>
+                <th class="px-4 py-2 text-center">Pop.</th>
+                <th class="px-4 py-2 text-center">🏠</th>
+                <th class="px-4 py-2 text-center">⛪</th>
+                <th class="px-4 py-2 text-center">🎭</th>
+                <th class="px-4 py-2 text-center">🧱</th>
+                <th class="px-4 py-2 text-center">🗼</th>
                 <th class="px-4 py-2 text-center">Martial</th>
                 <th class="px-4 py-2 text-center">Defense</th>
-                <th class="px-4 py-2 text-center">Culture</th>
                 <th class="px-4 py-2 text-center">Status</th>
               </tr>
             </thead>
@@ -236,11 +239,14 @@ function renderPeriodDetails(data) {
                       <span class="font-semibold">${civ.name}</span>
                     </div>
                   </td>
-                  <td class="px-4 py-2 text-center">${civ.houses}</td>
                   <td class="px-4 py-2 text-center">${civ.population}</td>
+                  <td class="px-4 py-2 text-center" title="Houses">${civ.houses}</td>
+                  <td class="px-4 py-2 text-center" title="Temples">${civ.temples}</td>
+                  <td class="px-4 py-2 text-center" title="Amphitheaters">${civ.amphitheaters}</td>
+                  <td class="px-4 py-2 text-center" title="Walls">${civ.walls}</td>
+                  <td class="px-4 py-2 text-center" title="Archimedes Towers">${civ.archimedes_towers}</td>
                   <td class="px-4 py-2 text-center">${civ.martial}</td>
                   <td class="px-4 py-2 text-center">${civ.defense}</td>
-                  <td class="px-4 py-2 text-center">${civ.culture}</td>
                   <td class="px-4 py-2 text-center">
                     ${civ.conquered ? 
                       '<span class="text-red-600 font-bold"><i class="fas fa-skull mr-1"></i>Conquered</span>' : 

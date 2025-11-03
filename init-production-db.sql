@@ -96,6 +96,9 @@ CREATE TABLE IF NOT EXISTS civilizations (
   regions TEXT,
   bonus_features TEXT,
   
+  -- Map Data
+  map_data TEXT,
+  
   -- Flags
   conquered BOOLEAN DEFAULT FALSE,
   locked_decline BOOLEAN DEFAULT FALSE,

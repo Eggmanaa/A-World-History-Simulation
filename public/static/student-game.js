@@ -335,6 +335,10 @@ function renderStatsPanel() {
 // Render map (10x10 grid)
 function renderMap() {
   const gridSize = 10;
+  
+  // Get terrain based on regions
+  const terrainMap = getTerrainMap();
+  
   let mapHTML = `
     <div class="bg-gray-800 rounded-lg p-4">
       <h2 class="text-lg font-bold mb-3 border-b border-gray-700 pb-2">
@@ -347,13 +351,14 @@ function renderMap() {
     for (let x = 0; x < gridSize; x++) {
       const key = `${x}_${y}`;
       const building = buildingMap[key];
+      const terrain = terrainMap[key] || 'grass';
       const icon = building ? getBuildingIcon(building) : '';
-      const bgColor = building ? 'bg-green-900' : 'bg-gray-700';
+      const bgColor = building ? 'bg-green-900' : getTerrainColor(terrain);
       
       mapHTML += `
         <div class="map-cell ${bgColor} hover:bg-gray-600 aspect-square flex items-center justify-center text-2xl cursor-pointer rounded transition border border-gray-600" 
              data-x="${x}" data-y="${y}"
-             title="${building || 'Empty'}">${icon}</div>
+             title="${building || terrain}">${icon}</div>
       `;
     }
   }
@@ -367,6 +372,88 @@ function renderMap() {
   `;
   
   return mapHTML;
+}
+
+// Get terrain map based on civilization regions
+function getTerrainMap() {
+  if (!civilization || !civilization.regions) return {};
+  
+  const regions = civilization.regions;
+  const terrainMap = {};
+  
+  // Determine primary terrain type based on regions
+  let primaryTerrain = 'grass';
+  let secondaryTerrain = 'grass';
+  
+  if (regions.includes('Egypt') || regions.includes('North Africa')) {
+    primaryTerrain = 'desert';
+    secondaryTerrain = 'water'; // Nile river
+  } else if (regions.includes('Greece') || regions.includes('Aegean')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'mountain';
+  } else if (regions.includes('Italia') || regions.includes('Rome')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'hills';
+  } else if (regions.includes('China')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'water'; // Yellow River
+  } else if (regions.includes('India')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'water'; // Indus River
+  } else if (regions.includes('Mesopotamia') || regions.includes('Fertile Crescent')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'water'; // Tigris/Euphrates
+  } else if (regions.includes('Persia')) {
+    primaryTerrain = 'desert';
+    secondaryTerrain = 'mountain';
+  } else if (regions.includes('Phoenicia')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'water'; // Coastal
+  } else if (regions.includes('Anatolia')) {
+    primaryTerrain = 'hills';
+    secondaryTerrain = 'mountain';
+  } else if (regions.includes('Gaul') || regions.includes('Celts')) {
+    primaryTerrain = 'forest';
+    secondaryTerrain = 'grass';
+  } else if (regions.includes('Germania') || regions.includes('Teutons')) {
+    primaryTerrain = 'forest';
+    secondaryTerrain = 'grass';
+  } else if (regions.includes('Cush') || regions.includes('Nubia')) {
+    primaryTerrain = 'desert';
+    secondaryTerrain = 'water'; // Nile
+  } else if (regions.includes('Carthage')) {
+    primaryTerrain = 'grass';
+    secondaryTerrain = 'water'; // Coastal
+  }
+  
+  // Generate terrain pattern
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 10; x++) {
+      const key = `${x}_${y}`;
+      // Use pseudo-random but deterministic pattern
+      const hash = (x * 7 + y * 13) % 10;
+      if (hash < 7) {
+        terrainMap[key] = primaryTerrain;
+      } else {
+        terrainMap[key] = secondaryTerrain;
+      }
+    }
+  }
+  
+  return terrainMap;
+}
+
+// Get terrain color
+function getTerrainColor(terrain) {
+  const colors = {
+    'grass': 'bg-green-800',
+    'desert': 'bg-yellow-800',
+    'water': 'bg-blue-800',
+    'mountain': 'bg-gray-600',
+    'hills': 'bg-yellow-700',
+    'forest': 'bg-green-900'
+  };
+  return colors[terrain] || 'bg-gray-700';
 }
 
 // Get building icon
@@ -461,6 +548,7 @@ function showBuildMenu(x, y) {
   selectedTile = x !== undefined ? { x, y } : null;
   
   const buildings = [
+    { type: 'house', name: 'House', cost: 5, icon: '🏠', effect: '+5 Population Capacity', requirement: null },
     { type: 'temple', name: 'Temple', cost: 10, icon: '⛪', effect: '+2 Faith', requirement: null },
     { type: 'amphitheater', name: 'Amphitheater', cost: 10, icon: '🎭', effect: '+3 Culture, -1 Faith', requirement: null },
     { type: 'wall', name: 'Wall', cost: 10, icon: '🧱', effect: '+1 Defense', requirement: null },

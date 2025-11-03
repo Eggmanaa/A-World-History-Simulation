@@ -213,7 +213,16 @@ game.post('/build', async (c) => {
     const now = Date.now()
     const buildingType = building.toLowerCase()
     
-    if (buildingType === 'temple') {
+    if (buildingType === 'house') {
+      await db.prepare(`
+        UPDATE civilizations 
+        SET houses = houses + 1,
+            population_capacity = population_capacity + 5,
+            industry_left = industry_left - ?,
+            updated_at = ?
+        WHERE id = ?
+      `).bind(cost, now, civId).run()
+    } else if (buildingType === 'temple') {
       await db.prepare(`
         UPDATE civilizations 
         SET temples = temples + 1, 

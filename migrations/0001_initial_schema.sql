@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS civilizations (
   regions TEXT, -- JSON array
   bonus_features TEXT, -- JSON array
   
+  -- Map Data
+  map_data TEXT, -- JSON object for building positions
+  
   -- Flags
   conquered BOOLEAN DEFAULT FALSE,
   locked_decline BOOLEAN DEFAULT FALSE,
