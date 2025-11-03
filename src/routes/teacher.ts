@@ -1,0 +1,316 @@
+import { Hono } from 'hono'
+import type { Bindings, Simulation } from '../types'
+import { generateId, generateInviteCode, parseCivilization } from '../db'
+import { getTimelineEvent, TIMELINE } from '../timeline'
+
+const teacher = new Hono<{ Bindings: Bindings }>()
+
+// Create a new period
+teacher.post('/periods', async (c) => {
+  try {
+    const { teacherId, name } = await c.req.json()
+    
+    if (!teacherId || !name) {
+      return c.json({ error: 'Teacher ID and period name required' }, 400)
+    }
+    
+    const db = c.env.DB
+    const periodId = generateId()
+    const inviteCode = generateInviteCode()
+    const now = Date.now()
+    
+    // Create period
+    await db.prepare(
+      'INSERT INTO periods (id, teacher_id, name, invite_code, created_at, archived) VALUES (?, ?, ?, ?, ?, FALSE)'
+    ).bind(periodId, teacherId, name, inviteCode, now).run()
+    
+    // Create simulation for this period
+    const simulationId = generateId()
+    await db.prepare(
+      'INSERT INTO simulations (id, period_id, current_year, timeline_index, paused) VALUES (?, ?, -50000, 0, TRUE)'
+    ).bind(simulationId, periodId).run()
+    
+    return c.json({
+      success: true,
+      period: {
+        id: periodId,
+        name,
+        invite_code: inviteCode,
+        created_at: now
+      },
+      simulation: {
+        id: simulationId,
+        period_id: periodId
+      }
+    })
+  } catch (error) {
+    console.error('Create period error:', error)
+    return c.json({ error: 'Failed to create period' }, 500)
+  }
+})
+
+// Get all periods for a teacher
+teacher.get('/periods/:teacherId', async (c) => {
+  try {
+    const teacherId = c.req.param('teacherId')
+    const db = c.env.DB
+    
+    const result = await db.prepare(`
+      SELECT p.id, p.name, p.invite_code, p.created_at, p.archived,
+             (SELECT COUNT(*) FROM students WHERE period_id = p.id) as student_count,
+             s.id as simulation_id, s.current_year, s.timeline_index, s.paused
+      FROM periods p
+      LEFT JOIN simulations s ON p.id = s.period_id
+      WHERE p.teacher_id = ?
+      ORDER BY p.created_at DESC
+    `).bind(teacherId).all()
+    
+    return c.json({
+      success: true,
+      periods: result.results || []
+    })
+  } catch (error) {
+    console.error('Get periods error:', error)
+    return c.json({ error: 'Failed to get periods' }, 500)
+  }
+})
+
+// Get students in a period
+teacher.get('/periods/:periodId/students', async (c) => {
+  try {
+    const periodId = c.req.param('periodId')
+    const db = c.env.DB
+    
+    const result = await db.prepare(`
+      SELECT s.id, s.name, s.email,
+             c.id as civ_id, c.name as civ_name, c.houses, c.population, 
+             c.martial, c.defense, c.culture, c.faith, c.conquered
+      FROM students s
+      LEFT JOIN civilizations c ON s.id = c.student_id
+      WHERE s.period_id = ?
+      ORDER BY s.name
+    `).bind(periodId).all()
+    
+    return c.json({
+      success: true,
+      students: result.results || []
+    })
+  } catch (error) {
+    console.error('Get students error:', error)
+    return c.json({ error: 'Failed to get students' }, 500)
+  }
+})
+
+// Start simulation
+teacher.post('/simulation/:simulationId/start', async (c) => {
+  try {
+    const simulationId = c.req.param('simulationId')
+    const db = c.env.DB
+    const now = Date.now()
+    
+    await db.prepare(
+      'UPDATE simulations SET started_at = ?, paused = FALSE WHERE id = ?'
+    ).bind(now, simulationId).run()
+    
+    return c.json({
+      success: true,
+      started_at: now
+    })
+  } catch (error) {
+    console.error('Start simulation error:', error)
+    return c.json({ error: 'Failed to start simulation' }, 500)
+  }
+})
+
+// Pause/Resume simulation
+teacher.post('/simulation/:simulationId/pause', async (c) => {
+  try {
+    const simulationId = c.req.param('simulationId')
+    const { paused } = await c.req.json()
+    const db = c.env.DB
+    
+    await db.prepare(
+      'UPDATE simulations SET paused = ? WHERE id = ?'
+    ).bind(paused ? 1 : 0, simulationId).run()
+    
+    return c.json({
+      success: true,
+      paused
+    })
+  } catch (error) {
+    console.error('Pause simulation error:', error)
+    return c.json({ error: 'Failed to pause simulation' }, 500)
+  }
+})
+
+// Advance timeline
+teacher.post('/simulation/:simulationId/advance', async (c) => {
+  try {
+    const simulationId = c.req.param('simulationId')
+    const db = c.env.DB
+    
+    // Get current simulation state
+    const sim = await db.prepare(
+      'SELECT * FROM simulations WHERE id = ?'
+    ).bind(simulationId).first() as Simulation
+    
+    if (!sim) {
+      return c.json({ error: 'Simulation not found' }, 404)
+    }
+    
+    // Check if at end of timeline
+    if (sim.timeline_index >= TIMELINE.length - 1) {
+      return c.json({ error: 'Timeline complete' }, 400)
+    }
+    
+    // Get next event
+    const nextIndex = sim.timeline_index + 1
+    const nextEvent = getTimelineEvent(nextIndex)
+    
+    if (!nextEvent) {
+      return c.json({ error: 'No more events' }, 400)
+    }
+    
+    // Update simulation
+    await db.prepare(
+      'UPDATE simulations SET current_year = ?, timeline_index = ? WHERE id = ?'
+    ).bind(nextEvent.year, nextIndex, simulationId).run()
+    
+    // Log event
+    const eventId = generateId()
+    const now = Date.now()
+    await db.prepare(
+      'INSERT INTO event_log (id, simulation_id, year, event_type, event_data, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(eventId, simulationId, nextEvent.year, 'timeline_advance', JSON.stringify(nextEvent.data), now).run()
+    
+    // If event has growth flag, trigger growth phase for all civilizations
+    if (nextEvent.data.growth) {
+      // Get all civilizations in this simulation
+      const civs = await db.prepare(
+        'SELECT * FROM civilizations WHERE simulation_id = ? AND conquered = FALSE'
+      ).bind(simulationId).all()
+      
+      // Apply growth to each (this is simplified - full logic would be more complex)
+      for (const civRow of civs.results || []) {
+        const civ = parseCivilization(civRow)
+        
+        // Basic growth: add fertility to houses (capped at capacity)
+        const newHouses = Math.min(
+          civ.houses + civ.fertility,
+          civ.population_capacity
+        )
+        
+        // Update population based on year (after 480 BCE, houses support 2 population)
+        const housesDoublePopulation = nextEvent.year >= -480
+        const newPopulation = housesDoublePopulation ? newHouses * 2 : newHouses
+        
+        // Update civilization
+        await db.prepare(`
+          UPDATE civilizations 
+          SET houses = ?, population = ?, advance_count = advance_count + 1, updated_at = ?
+          WHERE id = ?
+        `).bind(newHouses, newPopulation, now, civ.id).run()
+      }
+    }
+    
+    return c.json({
+      success: true,
+      event: nextEvent,
+      new_index: nextIndex,
+      new_year: nextEvent.year
+    })
+  } catch (error) {
+    console.error('Advance timeline error:', error)
+    return c.json({ error: 'Failed to advance timeline' }, 500)
+  }
+})
+
+// Go back one event
+teacher.post('/simulation/:simulationId/back', async (c) => {
+  try {
+    const simulationId = c.req.param('simulationId')
+    const db = c.env.DB
+    
+    // Get current simulation state
+    const sim = await db.prepare(
+      'SELECT * FROM simulations WHERE id = ?'
+    ).bind(simulationId).first() as Simulation
+    
+    if (!sim) {
+      return c.json({ error: 'Simulation not found' }, 404)
+    }
+    
+    // Check if at beginning
+    if (sim.timeline_index <= 0) {
+      return c.json({ error: 'Already at start of timeline' }, 400)
+    }
+    
+    // Get previous event
+    const prevIndex = sim.timeline_index - 1
+    const prevEvent = getTimelineEvent(prevIndex)
+    
+    if (!prevEvent) {
+      return c.json({ error: 'Cannot go back' }, 400)
+    }
+    
+    // Update simulation
+    await db.prepare(
+      'UPDATE simulations SET current_year = ?, timeline_index = ? WHERE id = ?'
+    ).bind(prevEvent.year, prevIndex, simulationId).run()
+    
+    return c.json({
+      success: true,
+      event: prevEvent,
+      new_index: prevIndex,
+      new_year: prevEvent.year
+    })
+  } catch (error) {
+    console.error('Go back error:', error)
+    return c.json({ error: 'Failed to go back' }, 500)
+  }
+})
+
+// Get simulation overview
+teacher.get('/simulation/:simulationId/overview', async (c) => {
+  try {
+    const simulationId = c.req.param('simulationId')
+    const db = c.env.DB
+    
+    // Get simulation info
+    const sim = await db.prepare(
+      'SELECT * FROM simulations WHERE id = ?'
+    ).bind(simulationId).first()
+    
+    if (!sim) {
+      return c.json({ error: 'Simulation not found' }, 404)
+    }
+    
+    // Get all civilizations
+    const civs = await db.prepare(
+      'SELECT * FROM civilizations WHERE simulation_id = ? ORDER BY population DESC'
+    ).bind(simulationId).all()
+    
+    // Get alliances
+    const alliances = await db.prepare(
+      'SELECT * FROM alliances WHERE simulation_id = ?'
+    ).bind(simulationId).all()
+    
+    // Get recent events
+    const events = await db.prepare(
+      'SELECT * FROM event_log WHERE simulation_id = ? ORDER BY created_at DESC LIMIT 10'
+    ).bind(simulationId).all()
+    
+    return c.json({
+      success: true,
+      simulation: sim,
+      civilizations: civs.results?.map(parseCivilization) || [],
+      alliances: alliances.results || [],
+      recent_events: events.results || []
+    })
+  } catch (error) {
+    console.error('Get overview error:', error)
+    return c.json({ error: 'Failed to get overview' }, 500)
+  }
+})
+
+export default teacher
