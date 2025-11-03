@@ -217,6 +217,25 @@ student.get('/simulation/:studentId/civilizations', async (c) => {
 })
 
 // Update civilization stats (for building, etc.)
+// Update civilization map data
+student.patch('/civilization/:civId/map', async (c) => {
+  try {
+    const civId = c.req.param('civId')
+    const { map_data } = await c.req.json()
+    const db = c.env.DB
+    const now = Date.now()
+    
+    await db.prepare(
+      'UPDATE civilizations SET map_data = ?, updated_at = ? WHERE id = ?'
+    ).bind(map_data, now, civId).run()
+    
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Update map error:', error)
+    return c.json({ error: 'Failed to update map' }, 500)
+  }
+})
+
 student.post('/civilization/:civId/update', async (c) => {
   try {
     const civId = c.req.param('civId')
@@ -230,7 +249,7 @@ student.post('/civilization/:civId/update', async (c) => {
       'industry', 'industry_left', 'martial', 'defense', 'science',
       'culture', 'faith', 'diplomacy', 'temples', 'amphitheaters',
       'walls', 'archimedes_towers', 'cultural_stage', 'wonder',
-      'religion_name', 'religion_tenants'
+      'religion_name', 'religion_tenants', 'map_data'
     ]
     
     const updatePairs: string[] = []

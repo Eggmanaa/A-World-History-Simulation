@@ -336,9 +336,6 @@ function renderStatsPanel() {
 function renderMap() {
   const gridSize = 10;
   
-  // Get terrain based on regions
-  const terrainMap = getTerrainMap();
-  
   let mapHTML = `
     <div class="bg-gray-800 rounded-lg p-4">
       <h2 class="text-lg font-bold mb-3 border-b border-gray-700 pb-2">
@@ -351,14 +348,13 @@ function renderMap() {
     for (let x = 0; x < gridSize; x++) {
       const key = `${x}_${y}`;
       const building = buildingMap[key];
-      const terrain = terrainMap[key] || 'grass';
       const icon = building ? getBuildingIcon(building) : '';
-      const bgColor = building ? 'bg-green-900' : getTerrainColor(terrain);
+      const bgColor = building ? 'bg-green-900' : 'bg-gray-700';
       
       mapHTML += `
         <div class="map-cell ${bgColor} hover:bg-gray-600 aspect-square flex items-center justify-center text-2xl cursor-pointer rounded transition border border-gray-600" 
              data-x="${x}" data-y="${y}"
-             title="${building || terrain}">${icon}</div>
+             title="${building || 'Empty'}">${icon}</div>
       `;
     }
   }
@@ -372,88 +368,6 @@ function renderMap() {
   `;
   
   return mapHTML;
-}
-
-// Get terrain map based on civilization regions
-function getTerrainMap() {
-  if (!civilization || !civilization.regions) return {};
-  
-  const regions = civilization.regions;
-  const terrainMap = {};
-  
-  // Determine primary terrain type based on regions
-  let primaryTerrain = 'grass';
-  let secondaryTerrain = 'grass';
-  
-  if (regions.includes('Egypt') || regions.includes('North Africa')) {
-    primaryTerrain = 'desert';
-    secondaryTerrain = 'water'; // Nile river
-  } else if (regions.includes('Greece') || regions.includes('Aegean')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'mountain';
-  } else if (regions.includes('Italia') || regions.includes('Rome')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'hills';
-  } else if (regions.includes('China')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'water'; // Yellow River
-  } else if (regions.includes('India')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'water'; // Indus River
-  } else if (regions.includes('Mesopotamia') || regions.includes('Fertile Crescent')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'water'; // Tigris/Euphrates
-  } else if (regions.includes('Persia')) {
-    primaryTerrain = 'desert';
-    secondaryTerrain = 'mountain';
-  } else if (regions.includes('Phoenicia')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'water'; // Coastal
-  } else if (regions.includes('Anatolia')) {
-    primaryTerrain = 'hills';
-    secondaryTerrain = 'mountain';
-  } else if (regions.includes('Gaul') || regions.includes('Celts')) {
-    primaryTerrain = 'forest';
-    secondaryTerrain = 'grass';
-  } else if (regions.includes('Germania') || regions.includes('Teutons')) {
-    primaryTerrain = 'forest';
-    secondaryTerrain = 'grass';
-  } else if (regions.includes('Cush') || regions.includes('Nubia')) {
-    primaryTerrain = 'desert';
-    secondaryTerrain = 'water'; // Nile
-  } else if (regions.includes('Carthage')) {
-    primaryTerrain = 'grass';
-    secondaryTerrain = 'water'; // Coastal
-  }
-  
-  // Generate terrain pattern
-  for (let y = 0; y < 10; y++) {
-    for (let x = 0; x < 10; x++) {
-      const key = `${x}_${y}`;
-      // Use pseudo-random but deterministic pattern
-      const hash = (x * 7 + y * 13) % 10;
-      if (hash < 7) {
-        terrainMap[key] = primaryTerrain;
-      } else {
-        terrainMap[key] = secondaryTerrain;
-      }
-    }
-  }
-  
-  return terrainMap;
-}
-
-// Get terrain color
-function getTerrainColor(terrain) {
-  const colors = {
-    'grass': 'bg-green-800',
-    'desert': 'bg-yellow-800',
-    'water': 'bg-blue-800',
-    'mountain': 'bg-gray-600',
-    'hills': 'bg-yellow-700',
-    'forest': 'bg-green-900'
-  };
-  return colors[terrain] || 'bg-gray-700';
 }
 
 // Get building icon
@@ -547,12 +461,25 @@ let selectedTile = null;
 function showBuildMenu(x, y) {
   selectedTile = x !== undefined ? { x, y } : null;
   
+  // Count how many of each building type are already placed on map
+  const placedBuildings = {};
+  Object.values(buildingMap).forEach(building => {
+    placedBuildings[building] = (placedBuildings[building] || 0) + 1;
+  });
+  
+  // Calculate available buildings (owned but not yet placed)
+  const availableHouses = civilization.houses - (placedBuildings['house'] || 0);
+  const availableTemples = civilization.temples - (placedBuildings['temple'] || 0);
+  const availableAmphitheaters = civilization.amphitheaters - (placedBuildings['amphitheater'] || 0);
+  const availableWalls = civilization.walls - (placedBuildings['wall'] || 0);
+  const availableArchimedes = civilization.archimedes_towers - (placedBuildings['archimedes'] || 0);
+  
   const buildings = [
-    { type: 'house', name: 'House', cost: 5, icon: '🏠', effect: '+5 Population Capacity', requirement: null },
-    { type: 'temple', name: 'Temple', cost: 10, icon: '⛪', effect: '+2 Faith', requirement: null },
-    { type: 'amphitheater', name: 'Amphitheater', cost: 10, icon: '🎭', effect: '+3 Culture, -1 Faith', requirement: null },
-    { type: 'wall', name: 'Wall', cost: 10, icon: '🧱', effect: '+1 Defense', requirement: null },
-    { type: 'archimedes', name: 'Archimedes Tower', cost: 20, icon: '🗼', effect: '+20 Defense', requirement: 'Science ≥ 30' }
+    { type: 'house', name: 'House', cost: 5, icon: '🏠', effect: '+5 Population Capacity', requirement: null, available: availableHouses },
+    { type: 'temple', name: 'Temple', cost: 10, icon: '⛪', effect: '+2 Faith', requirement: null, available: availableTemples },
+    { type: 'amphitheater', name: 'Amphitheater', cost: 10, icon: '🎭', effect: '+3 Culture, -1 Faith', requirement: null, available: availableAmphitheaters },
+    { type: 'wall', name: 'Wall', cost: 10, icon: '🧱', effect: '+1 Defense', requirement: null, available: availableWalls },
+    { type: 'archimedes', name: 'Archimedes Tower', cost: 20, icon: '🗼', effect: '+20 Defense', requirement: 'Science ≥ 30', available: availableArchimedes }
   ];
   
   const modalHTML = `
@@ -566,19 +493,24 @@ function showBuildMenu(x, y) {
         
         <div class="space-y-3 mb-4">
           ${buildings.map(b => {
-            const canBuild = civilization.industry_left >= b.cost && 
+            // Can place if: have available building OR have enough industry to build new one
+            const canPlaceExisting = b.available > 0;
+            const canBuildNew = civilization.industry_left >= b.cost && 
                             (!b.requirement || (b.type === 'archimedes' && civilization.science >= 30));
+            const canPlace = canPlaceExisting || canBuildNew;
+            
             return `
-              <button onclick="buildStructure('${b.type}')" 
-                      class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded-lg transition text-left ${!canBuild ? 'opacity-50 cursor-not-allowed' : ''}"
-                      ${!canBuild ? 'disabled' : ''}>
+              <button onclick="buildStructure('${b.type}', ${canPlaceExisting})" 
+                      class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded-lg transition text-left ${!canPlace ? 'opacity-50 cursor-not-allowed' : ''}"
+                      ${!canPlace ? 'disabled' : ''}>
                 <div class="flex items-center justify-between">
                   <div>
                     <div class="text-lg">${b.icon} <span class="font-bold">${b.name}</span></div>
                     <div class="text-xs text-gray-400">${b.effect}</div>
+                    ${b.available > 0 ? `<div class="text-xs text-green-400">Available to place: ${b.available}</div>` : ''}
                     ${b.requirement ? `<div class="text-xs text-yellow-400">${b.requirement}</div>` : ''}
                   </div>
-                  <div class="text-yellow-400 font-bold">${b.cost}</div>
+                  <div class="text-yellow-400 font-bold">${canPlaceExisting ? 'FREE' : b.cost}</div>
                 </div>
               </button>
             `;
@@ -608,31 +540,46 @@ function closeBuildMenu() {
 }
 
 // Build structure
-async function buildStructure(buildingType) {
+async function buildStructure(buildingType, isPlacingExisting) {
   if (!selectedTile) {
     alert('Please click on a map tile first!');
     return;
   }
   
   try {
-    const response = await axios.post('/api/game/build', {
-      civId: civilization.id,
-      building: buildingType
-    });
-    
-    // Update civilization
-    civilization = response.data.civilization;
-    
-    // Add to map
-    const key = `${selectedTile.x}_${selectedTile.y}`;
-    buildingMap[key] = buildingType;
-    
-    // Save map data
-    await axios.post(`/api/student/civilization/${civilization.id}/update`, {
-      map_data: JSON.stringify(buildingMap)
-    });
-    
-    alert(`${buildingType} built successfully!`);
+    // If placing existing building, just update map
+    if (isPlacingExisting) {
+      // Add to map
+      const key = `${selectedTile.x}_${selectedTile.y}`;
+      buildingMap[key] = buildingType;
+      
+      // Save map data to database
+      await axios.patch(`/api/student/civilization/${civilization.id}/map`, {
+        map_data: JSON.stringify(buildingMap)
+      });
+      
+      alert(`${buildingType} placed on map!`);
+    } else {
+      // Build new building (costs industry)
+      const response = await axios.post('/api/game/build', {
+        civId: civilization.id,
+        building: buildingType
+      });
+      
+      // Update civilization
+      civilization = response.data.civilization;
+      
+      // Add to map
+      const key = `${selectedTile.x}_${selectedTile.y}`;
+      buildingMap[key] = buildingType;
+      
+      // Save map data
+      await axios.patch(`/api/student/civilization/${civilization.id}/map`, {
+        map_data: JSON.stringify(buildingMap)
+      });
+      
+      alert(`${buildingType} built successfully!`);
+    }
     
     closeBuildMenu();
     renderGame();
