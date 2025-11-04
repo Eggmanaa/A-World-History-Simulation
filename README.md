@@ -12,9 +12,9 @@ A comprehensive multiplayer web-based civilization management game for high scho
 ## 🚀 Live Demo
 
 **🚀 PRODUCTION (Live):** https://worldhistorysim.pages.dev  
-**Deployment:** https://93a2b1be.worldhistorysim.pages.dev
+**Latest Deployment:** https://d7d1d886.worldhistorysim.pages.dev
 
-**Development Sandbox:** https://3000-i7ap02lrimuuo467n72j3-5634da27.sandbox.novita.ai
+**GitHub Repository:** https://github.com/Eggmanaa/A-World-History-Simulation
 
 ## ✨ Key Features
 
@@ -31,12 +31,19 @@ A comprehensive multiplayer web-based civilization management game for high scho
 - ✅ Choose from 18 historical civilization presets or create custom civilizations
 - ✅ Manage core stats: Houses, Population, Fertility, Industry, Martial, Defense, Science, Culture, Faith, Diplomacy
 - ✅ Build structures: Temples, Amphitheaters, Walls, Archimedes Towers
+- ✅ **NEW:** Build Wonders - 15 ancient wonders (Pyramids, Colosseum, Library, etc.)
+- ✅ **NEW:** Culture-specific buildings (Ziggurat, Cothon, Roman Fort, etc.)
+- ✅ **NEW:** Found religions with faith competition (top 3 only, after 1000 BCE)
+- ✅ **NEW:** Select religion tenets (2-3 tenets, Israel gets bonus)
+- ✅ **NEW:** Spread religion to other civilizations
+- ✅ **NEW:** Unlock cultural bonuses based on year and civilization
+- ✅ **NEW:** Track achievements (Glory to Rome, Test of Time, Ozymandias, etc.)
 - ✅ Declare wars (after 670 BCE) and resolve combat automatically
 - ✅ Form alliances (requires Diplomacy ≥ 1)
-- ✅ Found religions (after 1000 BCE) with customizable tenants
 - ✅ Progress through cultural stages: Barbarism → Classical → Imperial → Decline
 - ✅ Automatic growth phase calculations each turn
 - ✅ Historical events affect civilizations based on regions
+- ✅ Place buildings on 10x10 territory map
 
 ## 🎮 Game Mechanics
 
@@ -261,7 +268,7 @@ Repeat until 362 CE (End of Timeline)
 
 ## 🎯 Completed Features
 
-### Backend (✅ Complete)
+### Phase 1: Backend Systems (✅ Complete)
 - [x] Authentication system (teachers & students)
 - [x] Period management with invite codes
 - [x] Civilization creation (preset & custom)
@@ -274,37 +281,71 @@ Repeat until 362 CE (End of Timeline)
 - [x] Event logging
 - [x] D1 database schema
 - [x] 18 civilization presets
+- [x] **NEW:** Wonder building API (15 wonders + 8 culture buildings)
+- [x] **NEW:** Religion founding/spreading API with faith leaderboard
+- [x] **NEW:** Cultural bonuses system (30+ bonuses from 4500 BC to 14 AD)
+- [x] **NEW:** Writing systems (7 types with science bonuses)
+- [x] **NEW:** Science effects (15 levels with unlockable abilities)
+- [x] **NEW:** Achievement tracking infrastructure
 
-### Frontend (⚠️ Partially Complete)
+### Phase 2: Student UI (✅ Complete)
 - [x] Landing page with teacher/student portals
 - [x] Login/registration pages
-- [x] Authentication handler (JavaScript)
-- [ ] Teacher dashboard (HTML structure exists, needs JavaScript)
-- [ ] Student game interface (HTML structure exists, needs JavaScript)
-- [ ] Civilization setup wizard
-- [ ] Timeline progress visualization
-- [ ] Stats display panels
-- [ ] Action buttons (war, alliance, build)
+- [x] Authentication handler
+- [x] Student game interface with map system
+- [x] Civilization setup wizard with presets
+- [x] **NEW:** Wonder building modal with categories (Ancient, Classical, Late)
+- [x] **NEW:** Religion founding modal with faith leaderboard
+- [x] **NEW:** Religion spreading interface
+- [x] **NEW:** Enhanced stats panel (wonders, religion, bonuses, achievements)
+- [x] **NEW:** Territory map (10x10 grid) with building placement
+- [x] **NEW:** Real-time validation and backend integration
+- [x] Stats display panels
+- [x] Action buttons (war, alliance, build, wonder, religion)
+- [x] Timeline year display
+- [ ] Teacher dashboard enhancements (wonder/religion tracking)
 - [ ] Real-time updates (optional WebSockets)
 
-## 🔮 Future Enhancements
+## 🔮 Next Steps & Future Enhancements
 
-### Phase 2 (Recommended Next Steps)
-1. **Interactive hex map** for territory visualization
-2. **Teacher dashboard JavaScript** - Live civilization overview
-3. **Student dashboard JavaScript** - Interactive stats and actions
-4. **Wonder assignment modal** - Visual interface for teachers
-5. **Combat animations** - Visual war resolution
-6. **Alliance network diagram** - Graphical relationship view
-7. **Mobile responsive design** - Tablet/phone support
+### Phase 3: Auto-Apply Systems (High Priority)
+**See NEXT_STEPS.md for detailed plan**
 
-### Phase 3 (Advanced Features)
-8. **Real-time WebSockets** - Live synchronization across students
-9. **Fog of war** on map - Limited visibility
-10. **Achievement system** - Student milestones
-11. **Analytics dashboard** for teachers - Charts and graphs
-12. **Export game data** - CSV for grading
-13. **Historical context panels** - Rich educational content
+1. **Cultural Bonuses Auto-Unlock** - Apply bonuses on timeline advance
+   - Egypt: Monument Builders (30% wonder discount)
+   - Greece: Olympic Games (+1 culture per house)
+   - Sparta: Spartan Training (2x martial)
+   - Rome: Pax Romana (+2 defense per wall)
+   - 30+ more bonuses across 5500 years
+
+2. **Science Effects Auto-Apply** - Apply science-based bonuses
+   - Level 4: +1 martial, Level 5: +1 industry
+   - Level 7: +5 population capacity
+   - Level 30: Unlock Archimedes Towers
+
+3. **Writing System Auto-Adoption** - Adopt writing based on regions
+   - Cuneiform (Mesopotamia): +2 science
+   - Hieroglyphics (Egypt): +2 science
+   - Alphabet (Phoenicia): +3 science
+
+4. **Achievement Tracking in War** - Track conquest achievements
+   - Glory to Rome: 10 conquests
+   - Ozymandias: First defeated
+   - Test of Time: Survive 20 battles
+
+### Phase 4: Teacher Dashboard Enhancements
+5. **Wonder tracking column** - Show wonders in civilization table
+6. **Religion overview tab** - All religions, tenets, spread visualization
+7. **Wonders tab** - All wonders, builders, effects
+8. **Achievements leaderboard** - Who earned what and when
+
+### Phase 5: Polish & Educational Features
+9. **Notification system** - Toast alerts for events
+10. **Visual enhancements** - Wonder icons, religion symbols, achievement medals
+11. **Historical context cards** - Educational pop-ups
+12. **Mobile responsive design** - Tablet/phone support
+13. **Analytics dashboard** for teachers - Charts and graphs
+14. **Export game data** - CSV for grading
 
 ## 📚 Educational Value
 
@@ -365,10 +406,53 @@ Built with ❤️ for history teachers and students everywhere.
 
 ---
 
-**Current Status**: ✅ Backend Complete | ⚠️ Frontend In Progress | 🚀 Ready for Local Testing
+## 📋 Game Data Summary
 
-**Next Steps**:
-1. Create teacher dashboard JavaScript for period management
-2. Create student game interface JavaScript for civilization control
-3. Deploy to Cloudflare Pages production
-4. Test with real classroom scenarios
+### Wonders Available (15 Unique + 8 Culture-Specific)
+**Ancient Wonders:** Great Pyramids, Hanging Gardens, Great Wall, Temple of Artemis, Mausoleum  
+**Classical Wonders:** Colosseum, Library of Alexandria, Lighthouse, Statue of Zeus, Parthenon  
+**Late Wonders:** Hagia Sophia, Great Stupa, Petra, Machu Picchu, Angkor Wat
+
+**Culture Buildings:** Ziggurat (Mesopotamia), Cothon (Carthage), Roman Fort (Rome), Oracle (Greece), Terraces (Inca), Steppe Camp (Mongolia), Pagoda (China/India), Pyramid (Maya)
+
+### Religion Tenets (10 Available)
+- Holy War (+2 martial per map converted)
+- Polytheism (+2 faith per temple)
+- Holy Scriptures (2x faith)
+- Monotheism (-1 faith per temple, -1 faith per amphitheater, +2 faith per house)
+- Philosophy (Convert faith to science)
+- Asceticism (Reduce population capacity for faith)
+- Pilgrimage (+1 faith per civilization following you)
+- Divine Right (+1 martial for religious founder)
+- Sacred Texts (+2 culture for religious founder)
+- Proselytism (Easier religion spreading)
+
+### Cultural Bonuses (30+ Unlockable)
+**Egypt:** Monument Builders, Nile Flooding, Hieroglyphic Mastery  
+**Greece:** Olympic Games, Delphic Oracle, Athenian Democracy  
+**Rome:** Roman Engineering, Pax Romana, Imperial Roads  
+**Sparta:** Spartan Training, Agoge System  
+**Persia:** Royal Road, Zoroastrianism  
+**China:** Mandate of Heaven, Great Wall, Silk Road  
+**And 20+ more across different eras**
+
+### Achievements (8 Trackable)
+- **Glory to Rome:** Conquer 10 civilizations
+- **Test of Time:** Survive 20 battles
+- **Ozymandias:** Be the first defeated
+- **Cultural Victory:** Highest culture at game end
+- **Scientific Achievement:** Reach science level 30
+- **Religious Dominance:** Convert 5+ civilizations
+- **Economic Powerhouse:** Have 200+ industry
+- **Military Supremacy:** 100+ martial
+
+---
+
+**Current Status**: ✅ Phase 1 & 2 Complete | 🚀 Live in Production | ⏳ Auto-Apply Systems Pending
+
+**Next Steps** (See NEXT_STEPS.md for details):
+1. Implement cultural bonuses auto-unlock on timeline advance
+2. Implement science effects auto-apply system
+3. Implement writing system auto-adoption
+4. Add achievement tracking to war system
+5. Enhance teacher dashboard with wonder/religion tracking
