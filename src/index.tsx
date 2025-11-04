@@ -141,6 +141,7 @@ app.get('/teacher/dashboard', (c) => {
     <body class="bg-gray-100">
         <div id="app"></div>
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script src="/static/historical-contexts.js"></script>
         <script src="/static/teacher-dashboard.js"></script>
     </body>
     </html>
@@ -162,6 +163,7 @@ app.get('/student/game', (c) => {
     <body class="bg-gray-900 text-white">
         <div id="app"></div>
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script src="/static/historical-contexts.js"></script>
         <script src="/static/notifications.js"></script>
         <script src="/static/student-game.js"></script>
     </body>

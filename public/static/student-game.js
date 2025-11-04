@@ -249,9 +249,12 @@ function renderGame() {
               <p class="text-gray-400 text-sm">${currentStudent.name}</p>
             </div>
             <div class="flex items-center gap-4">
-              <div class="text-center">
-                <div class="text-xl font-bold text-yellow-400">${formatYear(simulation.current_year)}</div>
-                <div class="text-xs text-gray-400">Current Year</div>
+              <div class="text-center cursor-pointer hover:bg-gray-700 px-3 py-2 rounded transition" onclick="showHistoricalContext()">
+                <div class="text-xl font-bold text-yellow-400 flex items-center gap-2">
+                  ${formatYear(simulation.current_year)}
+                  <i class="fas fa-book text-sm text-blue-400" title="Learn about this period"></i>
+                </div>
+                <div class="text-xs text-gray-400">Current Year (Click for history)</div>
               </div>
               <button onclick="refreshGame()" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded transition text-sm">
                 <i class="fas fa-sync-alt"></i>
@@ -1152,5 +1155,139 @@ async function spreadReligion(targetId) {
 
 function closeReligionSpreadMenu() {
   const modal = document.getElementById('religionSpreadModal');
+  if (modal) modal.remove();
+}
+
+// ========================================
+// HISTORICAL CONTEXT SYSTEM
+// ========================================
+// Historical context data is loaded from /static/historical-contexts.js
+
+function showHistoricalContext() {
+  const yearKey = String(simulation.current_year);
+  const context = HISTORICAL_CONTEXTS[yearKey];
+  
+  if (!context) {
+    notifyInfo('No historical context available for this year yet.', 3000);
+    return;
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'historicalContextModal';
+  modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+  modal.onclick = (e) => { if (e.target === modal) closeHistoricalContext(); };
+  
+  modal.innerHTML = `
+    <div class="bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <!-- Header -->
+      <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-xl z-10">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <i class="fas fa-book-open text-3xl"></i>
+              <h2 class="text-3xl font-bold">${context.title}</h2>
+            </div>
+            <p class="text-blue-100 text-lg">${formatYear(simulation.current_year)}</p>
+          </div>
+          <button onclick="closeHistoricalContext()" class="text-white hover:text-blue-200 transition">
+            <i class="fas fa-times text-3xl"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6 space-y-6 text-gray-100">
+        <!-- What Happened -->
+        <div class="bg-gray-700 rounded-lg p-5">
+          <h3 class="text-xl font-bold text-yellow-400 mb-3 flex items-center">
+            <i class="fas fa-scroll mr-2"></i>What Happened
+          </h3>
+          <p class="text-gray-200 leading-relaxed">${context.description}</p>
+        </div>
+        
+        <!-- Why It Matters -->
+        <div class="bg-blue-900 bg-opacity-30 rounded-lg p-5 border-l-4 border-blue-500">
+          <h3 class="text-xl font-bold text-blue-400 mb-3 flex items-center">
+            <i class="fas fa-lightbulb mr-2"></i>Why It Matters
+          </h3>
+          <p class="text-gray-200 leading-relaxed">${context.whyItMatters}</p>
+        </div>
+        
+        <!-- Real World Impact -->
+        <div class="bg-purple-900 bg-opacity-30 rounded-lg p-5 border-l-4 border-purple-500">
+          <h3 class="text-xl font-bold text-purple-400 mb-3 flex items-center">
+            <i class="fas fa-globe mr-2"></i>Real World Impact
+          </h3>
+          <p class="text-gray-200 leading-relaxed">${context.realWorldImpact}</p>
+        </div>
+        
+        ${context.primarySources ? `
+          <div class="bg-green-900 bg-opacity-30 rounded-lg p-5 border-l-4 border-green-500">
+            <h3 class="text-xl font-bold text-green-400 mb-3 flex items-center">
+              <i class="fas fa-quote-left mr-2"></i>Primary Sources
+            </h3>
+            <ul class="space-y-2">
+              ${context.primarySources.map(source => `
+                <li class="text-gray-200 italic">"${source}"</li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        
+        ${context.keyFigures ? `
+          <div class="bg-yellow-900 bg-opacity-30 rounded-lg p-5 border-l-4 border-yellow-500">
+            <h3 class="text-xl font-bold text-yellow-400 mb-3 flex items-center">
+              <i class="fas fa-users mr-2"></i>Key Figures
+            </h3>
+            <div class="flex flex-wrap gap-2">
+              ${context.keyFigures.map(figure => `
+                <span class="bg-yellow-800 bg-opacity-50 text-yellow-200 px-3 py-1 rounded-full text-sm">
+                  ${figure}
+                </span>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Modern Connection -->
+        <div class="bg-gradient-to-r from-pink-900 to-red-900 bg-opacity-30 rounded-lg p-5 border-l-4 border-pink-500">
+          <h3 class="text-xl font-bold text-pink-400 mb-3 flex items-center">
+            <i class="fas fa-link mr-2"></i>Connection to Today
+          </h3>
+          <p class="text-gray-200 leading-relaxed">${context.modernConnection}</p>
+        </div>
+        
+        <!-- Discussion Prompt -->
+        <div class="bg-gray-700 rounded-lg p-5 border-2 border-dashed border-gray-500">
+          <h3 class="text-lg font-bold text-gray-300 mb-3 flex items-center">
+            <i class="fas fa-comments mr-2"></i>Think About It
+          </h3>
+          <p class="text-gray-300 italic">How might your civilization's choices in this simulation compare to what actually happened in history? What would you do differently?</p>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div class="sticky bottom-0 bg-gray-700 p-4 rounded-b-xl border-t border-gray-600 flex justify-between items-center">
+        <div class="text-sm text-gray-400">
+          <i class="fas fa-info-circle mr-1"></i>
+          Historical content for educational purposes
+        </div>
+        <button onclick="closeHistoricalContext()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition font-bold">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Show notification that historical context is available
+  notifyInfo('📖 Historical context loaded! Learn about this period.', 5000, {
+    title: context.title
+  });
+}
+
+function closeHistoricalContext() {
+  const modal = document.getElementById('historicalContextModal');
   if (modal) modal.remove();
 }
