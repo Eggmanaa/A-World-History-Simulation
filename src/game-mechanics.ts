@@ -335,11 +335,66 @@ export function checkAchievements(civ: Civilization): string[] {
     earned.push('glory_to_rome')
   }
   
+  // Scientific Achievement: Science level 30+
+  if (civ.science >= 30 && !current.includes('scientific_achievement')) {
+    earned.push('scientific_achievement')
+  }
+  
+  // Economic Powerhouse: Industry 200+
+  if (civ.industry >= 200 && !current.includes('economic_powerhouse')) {
+    earned.push('economic_powerhouse')
+  }
+  
+  // Military Supremacy: Martial 100+
+  if (civ.martial >= 100 && !current.includes('military_supremacy')) {
+    earned.push('military_supremacy')
+  }
+  
+  // Religious Dominance: 5+ followers
+  if (civ.religion_followers >= 5 && !current.includes('religious_dominance')) {
+    earned.push('religious_dominance')
+  }
+  
   // Test of Time: Survived from start (checked at game end)
+  // Cultural Victory: Highest culture (checked at game end)
   // Evangelist: Most followers (checked at game end)
   // Ozymandias: First defeated (set when conquered)
   
   return earned
+}
+
+// Check end-game achievements for all civilizations
+export function checkEndGameAchievements(allCivs: Civilization[]): Map<string, string[]> {
+  const achievementsMap = new Map<string, string[]>()
+  
+  // Cultural Victory: Highest culture
+  const highestCulture = Math.max(...allCivs.map(c => c.culture))
+  const culturalVictors = allCivs.filter(c => c.culture === highestCulture && !c.conquered)
+  culturalVictors.forEach(civ => {
+    const current = civ.achievements ? (typeof civ.achievements === 'string' ? JSON.parse(civ.achievements) : civ.achievements) : []
+    if (!current.includes('cultural_victory')) {
+      const earned = achievementsMap.get(civ.id) || []
+      earned.push('cultural_victory')
+      achievementsMap.set(civ.id, earned)
+    }
+  })
+  
+  // Evangelist: Most religious followers
+  const religionFounded = allCivs.filter(c => c.religion_name && !c.conquered)
+  if (religionFounded.length > 0) {
+    const maxFollowers = Math.max(...religionFounded.map(c => c.religion_followers || 0))
+    const evangelists = religionFounded.filter(c => (c.religion_followers || 0) === maxFollowers)
+    evangelists.forEach(civ => {
+      const current = civ.achievements ? (typeof civ.achievements === 'string' ? JSON.parse(civ.achievements) : civ.achievements) : []
+      if (!current.includes('evangelist')) {
+        const earned = achievementsMap.get(civ.id) || []
+        earned.push('evangelist')
+        achievementsMap.set(civ.id, earned)
+      }
+    })
+  }
+  
+  return achievementsMap
 }
 
 // Get cultural stage multipliers

@@ -5,6 +5,39 @@ let civilization = null;
 let simulation = null;
 let selectedPreset = null;
 let buildingMap = {}; // Store building positions: { x_y: 'building_type' }
+let availableWonders = [];
+let availableTenets = [];
+let builtWonders = [];
+let civilizationsInSim = [];
+
+// Loading spinner utilities
+function showLoading(message = 'Loading...') {
+  let loader = document.getElementById('global-loader');
+  if (!loader) {
+    loader = document.createElement('div');
+    loader.id = 'global-loader';
+    loader.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    loader.innerHTML = `
+      <div class="bg-gray-800 rounded-lg p-6 shadow-xl">
+        <div class="flex items-center space-x-3">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          <span class="text-white font-semibold" id="loader-message">${message}</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(loader);
+  } else {
+    loader.style.display = 'flex';
+    document.getElementById('loader-message').textContent = message;
+  }
+}
+
+function hideLoading() {
+  const loader = document.getElementById('global-loader');
+  if (loader) {
+    loader.style.display = 'none';
+  }
+}
 
 // Check authentication
 document.addEventListener('DOMContentLoaded', async () => {
@@ -27,6 +60,8 @@ function logout() {
 // Load game
 async function loadGame() {
   try {
+    showLoading('Loading your civilization...');
+    
     // Load civilization
     const civResponse = await axios.get(`/api/student/civilization/${currentStudent.id}`);
     civilization = civResponse.data.civilization;
@@ -36,6 +71,7 @@ async function loadGame() {
     simulation = simResponse.data.simulation;
     
     if (!civilization) {
+      hideLoading();
       showCivilizationSetup();
     } else {
       // Load building map if exists
@@ -56,14 +92,16 @@ async function loadGame() {
       // Load all civilizations in simulation
       await loadAllCivilizations();
       
+      hideLoading();
       renderGame();
     }
   } catch (error) {
+    hideLoading();
     if (error.response?.status === 404) {
       showCivilizationSetup();
     } else {
       console.error('Failed to load game:', error);
-      alert('Failed to load game');
+      notifyError('Failed to load game');
     }
   }
 }
@@ -651,7 +689,7 @@ async function buildStructure(buildingType, isPlacingExisting) {
         map_data: JSON.stringify(buildingMap)
       });
       
-      alert(`${buildingType} placed on map!`);
+      notifySuccess(`${buildingType.charAt(0).toUpperCase() + buildingType.slice(1)} placed on map!`, 3000);
     } else {
       // Build new building (costs industry)
       const response = await axios.post('/api/game/build', {
@@ -671,7 +709,7 @@ async function buildStructure(buildingType, isPlacingExisting) {
         map_data: JSON.stringify(buildingMap)
       });
       
-      alert(`${buildingType} built successfully!`);
+      notifySuccess(`${buildingType.charAt(0).toUpperCase() + buildingType.slice(1)} built successfully!`, 3000);
     }
     
     closeBuildMenu();
@@ -750,8 +788,8 @@ async function showWonderMenu() {
   );
   
   const modalHTML = `
-    <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onclick="closeWonderMenu()">
-      <div class="bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6" onclick="event.stopPropagation()">
+    <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-2 sm:p-4" onclick="closeWonderMenu()">
+      <div class="bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6" onclick="event.stopPropagation()">
         <h2 class="text-2xl font-bold text-white mb-4">
           <i class="fas fa-trophy mr-2 text-yellow-400"></i>Build Wonder
         </h2>
@@ -850,13 +888,19 @@ async function buildWonder(wonderId, isCultureBuilding) {
     });
     
     civilization = response.data.civilization;
-    alert(`${response.data.wonder.displayName} built successfully!`);
+    const wonder = response.data.wonder;
+    
+    // Show notification with effects
+    const effects = Object.entries(wonder.effects)
+      .map(([key, value]) => `+${value} ${key.replace(/_/g, ' ')}`)
+      .join(', ');
+    notifyWonder(wonder.displayName, effects);
     
     closeWonderMenu();
     await loadGame();
   } catch (error) {
     console.error('Failed to build wonder:', error);
-    alert(error.response?.data?.error || 'Failed to build wonder');
+    notifyError(error.response?.data?.error || 'Failed to build wonder');
   }
 }
 
@@ -892,8 +936,8 @@ async function showReligionFoundingMenu() {
     const maxTenets = isIsrael ? 3 : 2;
     
     const modalHTML = `
-      <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onclick="closeReligionFoundingMenu()">
-        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full p-6" onclick="event.stopPropagation()">
+      <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-2 sm:p-4" onclick="closeReligionFoundingMenu()">
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
           <h2 class="text-2xl font-bold text-white mb-4">
             <i class="fas fa-star mr-2 text-yellow-400"></i>Found Religion
           </h2>
@@ -989,12 +1033,12 @@ async function foundReligion(maxTenets) {
     .map(cb => cb.value);
   
   if (!religionName) {
-    alert('Please enter a religion name!');
+    notifyWarning('Please enter a religion name!');
     return;
   }
   
   if (selectedTenets.length !== maxTenets) {
-    alert(`Please select exactly ${maxTenets} tenet${maxTenets > 1 ? 's' : ''}!`);
+    notifyWarning(`Please select exactly ${maxTenets} tenet${maxTenets > 1 ? 's' : ''}!`);
     return;
   }
   
@@ -1006,13 +1050,16 @@ async function foundReligion(maxTenets) {
     });
     
     civilization = response.data.civilization;
-    alert(`${religionName} has been founded!`);
+    const tenetNames = selectedTenets.map(t => t.replace(/_/g, ' ')).join(', ');
+    notifyReligion(`${religionName} founded with tenets: ${tenetNames}`, 8000, {
+      title: `⭐ ${religionName} Founded!`
+    });
     
     closeReligionFoundingMenu();
     await loadGame();
   } catch (error) {
     console.error('Failed to found religion:', error);
-    alert(error.response?.data?.error || 'Failed to found religion');
+    notifyError(error.response?.data?.error || 'Failed to found religion');
   }
 }
 
@@ -1091,13 +1138,15 @@ async function spreadReligion(targetId) {
       targetId
     });
     
-    alert(response.data.message || 'Religion spread successfully!');
+    notifyReligion(response.data.message || 'Religion spread successfully!', 6000, {
+      title: `⭐ ${civilization.religion_name} Spreads`
+    });
     
     closeReligionSpreadMenu();
     await loadGame();
   } catch (error) {
     console.error('Failed to spread religion:', error);
-    alert(error.response?.data?.error || 'Failed to spread religion');
+    notifyError(error.response?.data?.error || 'Failed to spread religion');
   }
 }
 

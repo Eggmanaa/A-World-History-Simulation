@@ -6,7 +6,8 @@ import {
   applyScienceEffects, 
   getUnlockedBonuses, 
   applyCulturalBonus,
-  getWritingSystem
+  getWritingSystem,
+  checkAchievements
 } from '../game-mechanics'
 
 const teacher = new Hono<{ Bindings: Bindings }>()
@@ -256,6 +257,43 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
         const housesDoublePopulation = nextEvent.year >= -480
         const newPopulation = housesDoublePopulation ? newHouses * 2 : newHouses
         
+        // === CHECK FOR AUTOMATIC ACHIEVEMENTS ===
+        const newAchievements = checkAchievements(civ)
+        const currentAchievements = typeof civ.achievements === 'string' ? JSON.parse(civ.achievements) : (civ.achievements || [])
+        
+        for (const achievementId of newAchievements) {
+          if (!currentAchievements.includes(achievementId)) {
+            currentAchievements.push(achievementId)
+            
+            // Award achievement in database
+            const achievementId_db = generateId()
+            const achievementNames: Record<string, string> = {
+              'scientific_achievement': 'Scientific Achievement',
+              'economic_powerhouse': 'Economic Powerhouse',
+              'military_supremacy': 'Military Supremacy',
+              'religious_dominance': 'Religious Dominance'
+            }
+            
+            await db.prepare(
+              'INSERT INTO achievements (id, civ_id, achievement_id, achievement_name, earned_at, year_earned) VALUES (?, ?, ?, ?, ?, ?)'
+            ).bind(
+              achievementId_db, civ.id, achievementId, achievementNames[achievementId] || achievementId,
+              now, nextEvent.year
+            ).run()
+            
+            // Log achievement event
+            const achievementEventId = generateId()
+            await db.prepare(
+              'INSERT INTO event_log (id, simulation_id, year, event_type, event_data, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+            ).bind(achievementEventId, simulationId, nextEvent.year, 'achievement_earned', JSON.stringify({
+              civilization: civ.name,
+              achievement: achievementId
+            }), now).run()
+          }
+        }
+        
+        civ.achievements = currentAchievements as any
+        
         // Update civilization with all changes
         await db.prepare(`
           UPDATE civilizations 
@@ -270,6 +308,7 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
               fertility = ?,
               population_capacity = ?,
               cultural_bonuses = ?,
+              achievements = ?,
               writing = ?,
               advance_count = advance_count + 1, 
               updated_at = ?
@@ -286,6 +325,7 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
           civ.fertility,
           civ.population_capacity,
           JSON.stringify(typeof civ.cultural_bonuses === 'string' ? JSON.parse(civ.cultural_bonuses) : (civ.cultural_bonuses || [])),
+          JSON.stringify(typeof civ.achievements === 'string' ? JSON.parse(civ.achievements) : (civ.achievements || [])),
           civ.writing || null,
           now, 
           civ.id
