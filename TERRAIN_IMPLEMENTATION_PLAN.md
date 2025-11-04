@@ -47,48 +47,29 @@ This document outlines the complete implementation plan for the terrain, hex gri
 - Added `is_island BOOLEAN DEFAULT FALSE` to civilizations
 - Added same fields to civ_presets table for preset configuration
 
-### 🔄 Phase 3: Backend Integration (3-4 hours)
+### ✅ Phase 3: Backend Integration (COMPLETED - 3 hours)
 
-**Files to modify**:
+**Completed Changes**:
 
-1. **`src/db.ts`**
-   - Import terrain system functions
-   - Update parseCivilization() to include water_resource, terrain_data, is_island
+1. **`src/routes/student.ts`** - ✅ Civilization creation
+   - Integrated `generateHexMap()` to create terrain on civ creation
+   - Integrated `getWaterResourceForRegion()` to assign water resource by region
+   - Integrated `getPopulationCapacity()` to set capacity based on water type
+   - Added `checkIfIslandRegion()` to detect island regions (Greece, Crete)
+   - Updated INSERT statement to include terrain fields
    
-2. **`src/routes/student.ts`** - Civilization creation
-   ```typescript
-   // When creating civilization:
-   const regions = parsedRegions;
-   const waterResource = getWaterResourceForRegion(regions);
-   const populationCapacity = getPopulationCapacity(waterResource);
-   const hexMap = generateHexMap(regions, 3); // radius 3 = ~37 hexes
-   const isIsland = checkIfIslandRegion(regions); // Greece, Crete
+2. **`src/game-logic.ts`** - ✅ Combat & growth calculations
+   - Modified `resolveWar()` to include terrain defense bonuses
+   - Modified `applyGrowthPhase()` to include terrain industry bonuses
+   - Both functions now parse terrain_data and calculate bonuses
    
-   // Store in database
-   await db.prepare(`
-     INSERT INTO civilizations (..., water_resource, population_capacity, terrain_data, is_island)
-     VALUES (..., ?, ?, ?, ?)
-   `).bind(..., waterResource, populationCapacity, JSON.stringify(hexMap), isIsland).run();
-   ```
+3. **`src/terrain-system.ts`** - ✅ Added helper function
+   - Exported `checkIfIslandRegion()` function for region detection
 
-3. **`src/routes/game.ts`** - Combat calculations
-   ```typescript
-   // Calculate defense with terrain
-   const terrainDefense = calculateTerrainDefense(
-     JSON.parse(defender.terrain_data),
-     defender.is_island
-   );
-   const totalDefense = defender.defense + terrainDefense;
-   ```
-
-4. **`src/routes/teacher.ts`** - Growth phase
-   ```typescript
-   // Calculate industry with terrain
-   const terrainIndustry = calculateTerrainIndustry(
-     JSON.parse(civ.terrain_data)
-   );
-   civ.industry = baseIndustry + terrainIndustry;
-   ```
+**Testing**:
+- ✅ Build succeeds without TypeScript errors
+- ✅ Development server starts successfully
+- ✅ Git committed with detailed message
 
 ### 🔄 Phase 4: Hex Grid UI (4-5 hours)
 
