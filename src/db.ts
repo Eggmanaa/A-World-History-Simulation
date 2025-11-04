@@ -59,6 +59,7 @@ export function parseCivilization(row: any): Civilization {
     battles_survived: row.battles_survived || 0,
     maps_conquered: row.maps_conquered || 0,
     religion_followers: row.religion_followers || 0,
+    terrain_data: row.terrain_data ? parseJSON(row.terrain_data, []) : undefined,
     conquered: Boolean(row.conquered),
     locked_decline: Boolean(row.locked_decline),
     great_wall: Boolean(row.great_wall),
@@ -66,7 +67,8 @@ export function parseCivilization(row: any): Civilization {
     alexandrian_bonus: Boolean(row.alexandrian_bonus),
     roman_split: Boolean(row.roman_split),
     israel_bonus: Boolean(row.israel_bonus),
-    spartans_bonus: Boolean(row.spartans_bonus)
+    spartans_bonus: Boolean(row.spartans_bonus),
+    is_island: Boolean(row.is_island)
   }
 }
 

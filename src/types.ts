@@ -94,6 +94,11 @@ export interface Civilization {
   religion_followers: number
   map_data?: string // stored as JSON string
   
+  // Terrain System
+  water_resource?: string // Type of water resource (river, lake, lake_brackish, marsh, ocean, none)
+  terrain_data?: string // stored as JSON string - hex map with coordinates and terrain types
+  is_island?: boolean // Island bonus: +7 defense
+  
   // Flags
   conquered: boolean
   locked_decline: boolean
@@ -159,6 +164,11 @@ export interface CivPreset {
   industry: number
   houses: number
   created_at: number
+  
+  // Terrain System
+  water_resource?: string // Default water resource for this preset
+  is_island?: boolean // Island civilizations get +7 defense
+  terrain_template?: string // Name of terrain template to use (e.g., 'Egypt', 'Greece')
 }
 
 // Timeline Event Structure
