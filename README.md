@@ -42,6 +42,17 @@ A comprehensive multiplayer web-based civilization management game for high scho
 ### For Students
 - ✅ Choose from 18 historical civilization presets or create custom civilizations
 - ✅ Manage core stats: Houses, Population, Fertility, Industry, Martial, Defense, Science, Culture, Faith, Diplomacy
+- ✅ **NEW: Terrain System** - Region-based hex map generation with terrain bonuses
+  - 🌊 Water resources determine population capacity (4-15 houses)
+  - ⛰️ Mountains provide defense (+10) and industry (+4)
+  - 🌲 Forests boost lumber production (+3 industry, +1 defense)
+  - 🏜️ Deserts provide defensive advantage (+4 defense)
+  - 🏝️ Island civilizations get +7 defense bonus
+- ✅ **NEW: Hex Grid Map** - Interactive territory visualization
+  - Click hexes to place buildings
+  - Hover to see terrain bonuses
+  - Terrain legend showing all types
+  - Visual terrain icons (mountains, forests, rivers, etc.)
 - ✅ Build structures: Temples, Amphitheaters, Walls, Archimedes Towers
 - ✅ **NEW:** Build Wonders - 15 ancient wonders (Pyramids, Colosseum, Library, etc.)
 - ✅ **NEW:** Culture-specific buildings (Ziggurat, Cothon, Roman Fort, etc.)
@@ -55,17 +66,38 @@ A comprehensive multiplayer web-based civilization management game for high scho
 - ✅ Progress through cultural stages: Barbarism → Classical → Imperial → Decline
 - ✅ Automatic growth phase calculations each turn
 - ✅ Historical events affect civilizations based on regions
-- ✅ Place buildings on 10x10 territory map
 
 ## 🎮 Game Mechanics
 
 ### Core Stats
 - **Houses/Population**: Base of civilization size (population = houses × 1, or × 2 after 480 BCE)
+- **Population Capacity**: Maximum houses determined by water resource type (4-15)
 - **Fertility**: Houses gained per growth phase
-- **Industry**: Points spent on buildings each turn
-- **Martial/Defense**: Combat strength for wars
+- **Industry**: Points spent on buildings each turn (boosted by terrain)
+- **Martial/Defense**: Combat strength for wars (terrain provides defense bonuses)
 - **Science/Culture/Faith**: Cultural development and religion
 - **Diplomacy**: Enables alliances
+
+### Terrain System (NEW!)
+- **Water Resources** - Determines population capacity:
+  - 🌊 River (Freshwater): 15 houses maximum (Egypt, Mesopotamia)
+  - 💧 Lake (Freshwater): 10 houses (Greece, Persia)
+  - 💧 Lake (Brackish): 6 houses (Some coastal regions)
+  - 💧 Marsh (Brackish): 7 houses (Swamp regions)
+  - 🌊 Ocean (Saltwater): 5 houses (Island regions)
+  - 🚰 Wells: 4 houses (Desert civilizations)
+
+- **Terrain Types** - Provide defense and industry bonuses:
+  - ⛰️ Mountains: +10 defense, +4 industry (stone, minerals)
+  - 🏔️ High Mountains: +15 defense, +2 industry (extreme peaks)
+  - 🌲 Forest: +1 defense, +3 industry (lumber)
+  - 🏜️ Desert: +4 defense (harsh terrain)
+  - 💧 Marsh: -2 defense (swampy ground)
+  - 🌊 River: +1 defense (water barrier)
+  - 🌾 Plains/Grassland: No bonuses (farmland)
+  
+- **Geography Bonuses**:
+  - 🏝️ Island civilizations: +7 defense (Greece, Crete)
 
 ### Traits (Choose 1-2 at start)
 - **Industrious**: 2× Industry
@@ -133,6 +165,7 @@ webapp/
 │   ├── types.ts            # TypeScript type definitions
 │   ├── db.ts               # Database utilities (ID generation, hashing, parsing)
 │   ├── game-logic.ts       # Game mechanics (traits, growth, war, saves)
+│   ├── terrain-system.ts   # Terrain generation, hex math, bonuses (NEW!)
 │   ├── timeline.ts         # 27 historical events with descriptions
 │   └── routes/
 │       ├── auth.ts         # Teacher/student login & registration
@@ -140,9 +173,16 @@ webapp/
 │       ├── student.ts      # Civilization creation, stats viewing
 │       └── game.ts         # Wars, alliances, buildings, religions
 ├── public/static/
-│   └── auth.js             # Frontend authentication handler
+│   ├── auth.js             # Frontend authentication handler
+│   ├── student-game.js     # Student game interface with hex map
+│   ├── teacher-dashboard.js # Teacher dashboard with terrain display
+│   ├── hex-map.js          # Hex grid rendering engine (NEW!)
+│   ├── historical-contexts.js # Educational content (NEW!)
+│   └── notifications.js    # Toast notification system
 ├── migrations/
-│   └── 0001_initial_schema.sql  # Database schema
+│   ├── 0001_initial_schema.sql  # Database schema
+│   ├── 0002_add_game_features.sql # Wonders, religions, achievements
+│   └── 0003_add_terrain_system.sql # Terrain fields (NEW!)
 ├── seed.sql                # Civilization presets data
 ├── ecosystem.config.cjs    # PM2 configuration for development
 ├── wrangler.jsonc          # Cloudflare configuration
@@ -332,15 +372,37 @@ Repeat until 362 CE (End of Timeline)
 - [x] **NEW:** Comprehensive individual student stat tracking
 - [x] **NEW:** Detailed civilization modal with ALL stats organized by category
 - [x] **NEW:** Student information display (name, email) in detail view
+- [x] **NEW:** Terrain & Water Resources section in detail view
+- [x] **NEW:** Terrain composition and bonuses display
 
 ### Phase 5: Polish Features (✅ Complete)
 - [x] Toast notification system (7 types)
 - [x] Loading states for async operations
 - [x] Enhanced achievements with auto-tracking
 - [x] Mobile responsive design
+- [x] **NEW:** Educational historical context pop-ups with primary sources
+- [x] **NEW:** Clickable year display with timeline event information
 - [ ] Real-time updates (optional WebSockets)
 - [ ] Analytics dashboard for teachers
 - [ ] Export game data (CSV for grading)
+
+### Phase 6: Terrain System (✅ Complete)
+- [x] Backend terrain generation algorithms
+- [x] Hex coordinate system (cube coordinates)
+- [x] 12 region-specific terrain templates
+- [x] Water resource assignment by region
+- [x] Population capacity determined by water type (4-15)
+- [x] Terrain defense bonuses in combat
+- [x] Terrain industry bonuses in growth phase
+- [x] Island detection and bonus (+7 defense)
+- [x] Hex grid rendering engine with canvas
+- [x] Interactive hex map with click/hover
+- [x] Terrain colors and icons
+- [x] Building placement on hexes
+- [x] Terrain legend and tooltips
+- [x] Water resource display in UI
+- [x] Terrain bonuses panel (defense, industry)
+- [x] Teacher dashboard terrain data display
 
 ## 🔮 Next Steps & Future Enhancements
 
@@ -455,13 +517,23 @@ Built with ❤️ for history teachers and students everywhere.
 
 ---
 
-**Current Status**: ✅ All Core Phases Complete (1-5) | 🚀 Live in Production | 🎉 Feature Complete!
+**Current Status**: ✅ All Core Phases Complete (1-6) | 🚀 Ready for Deployment | 🎉 Terrain System Integrated!
 
 **Implemented Features**:
 ✅ Phase 1: Backend Systems (Authentication, Timeline, Wars, Alliances, Buildings, Religions)
-✅ Phase 2: Student UI (Game Interface, Map System, Wonder Building, Religion Founding)
+✅ Phase 2: Student UI (Game Interface, Hex Map System, Wonder Building, Religion Founding)
 ✅ Phase 3: Auto-Apply Systems (Cultural Bonuses, Science Effects, Writing, Achievements)
 ✅ Phase 4: Teacher Dashboard (Wonders Tab, Religions Tab, Achievements Tab, Individual Stats)
-✅ Phase 5: Polish Features (Notifications, Loading States, Mobile Responsive)
+✅ Phase 5: Polish Features (Notifications, Loading States, Historical Context, Mobile Responsive)
+✅ Phase 6: Terrain System (Hex Grids, Water Resources, Terrain Bonuses, Region Templates) **NEW!**
 
-**Optional Enhancements**: Real-time updates, Analytics dashboard, CSV export, Historical context cards
+**Latest Additions (Phase 6 - Terrain System)**:
+- 🗺️ Hex-based map system with interactive terrain
+- 🌊 Water resource types affecting population capacity (4-15 houses)
+- ⛰️ Terrain bonuses for defense and industry
+- 🏝️ Island geography detection with bonus defense
+- 🎨 Visual terrain representation with colors and icons
+- 📊 Teacher dashboard terrain analytics
+- 🎓 Educational terrain tooltips
+
+**Optional Enhancements**: Real-time updates, Analytics dashboard, CSV export, Sound effects
