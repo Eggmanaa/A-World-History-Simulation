@@ -46,6 +46,16 @@ async function loadGame() {
           buildingMap = {};
         }
       }
+      
+      // Load wonder data
+      await loadWonderData();
+      
+      // Load religion data
+      await loadReligionData();
+      
+      // Load all civilizations in simulation
+      await loadAllCivilizations();
+      
       renderGame();
     }
   } catch (error) {
@@ -246,8 +256,14 @@ function renderGame() {
 
 // Render stats panel
 function renderStatsPanel() {
+  const wonders = civilization.wonders || [];
+  const cultureBuildings = civilization.culture_buildings || [];
+  const culturalBonuses = civilization.cultural_bonuses || [];
+  const achievements = civilization.achievements || [];
+  const religionTenants = civilization.religion_tenants || [];
+  
   return `
-    <div class="bg-gray-800 rounded-lg p-4 sticky top-4">
+    <div class="bg-gray-800 rounded-lg p-4 sticky top-4 max-h-screen overflow-y-auto">
       <h2 class="text-lg font-bold mb-3 border-b border-gray-700 pb-2">
         <i class="fas fa-chart-bar mr-2 text-blue-400"></i>Stats
       </h2>
@@ -322,6 +338,60 @@ function renderStatsPanel() {
         </div>
       </div>
 
+      ${wonders.length > 0 || cultureBuildings.length > 0 ? `
+        <div class="mt-3 pt-3 border-t border-gray-700">
+          <h3 class="font-bold mb-2 text-xs text-gray-400">Wonders Built (${wonders.length + cultureBuildings.length})</h3>
+          <div class="flex flex-wrap gap-1">
+            ${[...wonders, ...cultureBuildings].slice(0, 6).map(w => {
+              const wonder = availableWonders.find(aw => aw.id === w);
+              return wonder ? `<span class="text-lg" title="${wonder.displayName}">${wonder.icon}</span>` : '';
+            }).join('')}
+            ${(wonders.length + cultureBuildings.length) > 6 ? `<span class="text-xs text-gray-400">+${(wonders.length + cultureBuildings.length) - 6} more</span>` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      ${civilization.religion_name ? `
+        <div class="mt-3 pt-3 border-t border-gray-700">
+          <h3 class="font-bold mb-2 text-xs text-gray-400"><i class="fas fa-star mr-1 text-yellow-400"></i>Religion</h3>
+          <div class="bg-yellow-900 border border-yellow-700 rounded p-2 text-xs">
+            <p class="font-bold text-yellow-300">${civilization.religion_name}</p>
+            ${religionTenants.length > 0 ? `
+              <div class="mt-1 space-y-0.5">
+                ${religionTenants.map(t => {
+                  const tenet = availableTenets.find(at => at.id === t);
+                  return tenet ? `<p class="text-gray-300">• ${tenet.name}</p>` : '';
+                }).join('')}
+              </div>
+            ` : ''}
+            <p class="text-gray-400 mt-1">Followers: ${civilization.religion_followers || 0}</p>
+          </div>
+        </div>
+      ` : ''}
+
+      ${culturalBonuses.length > 0 ? `
+        <div class="mt-3 pt-3 border-t border-gray-700">
+          <h3 class="font-bold mb-2 text-xs text-gray-400"><i class="fas fa-gem mr-1 text-pink-400"></i>Cultural Bonuses (${culturalBonuses.length})</h3>
+          <div class="space-y-1 text-xs max-h-24 overflow-y-auto">
+            ${culturalBonuses.slice(0, 5).map(b => `
+              <div class="bg-pink-900 border border-pink-700 rounded px-2 py-1">
+                ${b.replace(/_/g, ' ')}
+              </div>
+            `).join('')}
+            ${culturalBonuses.length > 5 ? `<p class="text-gray-400 text-center">+${culturalBonuses.length - 5} more</p>` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      ${achievements.length > 0 ? `
+        <div class="mt-3 pt-3 border-t border-gray-700">
+          <h3 class="font-bold mb-2 text-xs text-gray-400"><i class="fas fa-medal mr-1 text-yellow-400"></i>Achievements (${achievements.length})</h3>
+          <div class="flex flex-wrap gap-1">
+            ${achievements.map(a => `<span class="text-lg" title="${a}">🏆</span>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+
       ${civilization.wonder ? `
         <div class="mt-3 bg-yellow-900 rounded-lg p-2">
           <h3 class="font-bold text-yellow-300 text-sm"><i class="fas fa-trophy mr-1"></i>Wonder</h3>
@@ -384,6 +454,9 @@ function getBuildingIcon(building) {
 
 // Render actions panel
 function renderActionsPanel() {
+  const canFoundReligion = simulation.current_year >= -1000 && !civilization.religion_name;
+  const canSpreadReligion = civilization.religion_name && civilization.religion_followers >= 0;
+  
   return `
     <div class="bg-gray-800 rounded-lg p-4">
       <h2 class="text-lg font-bold mb-3 border-b border-gray-700 pb-2">
@@ -407,6 +480,26 @@ function renderActionsPanel() {
             <div class="font-bold">Build Structure</div>
             <div class="text-xs opacity-80">Industry: ${civilization.industry_left}</div>
           </button>
+          
+          <button onclick="showWonderMenu()" class="w-full bg-purple-600 hover:bg-purple-700 px-4 py-3 rounded-lg transition text-left text-sm">
+            <i class="fas fa-trophy text-lg mr-2"></i>
+            <div class="font-bold">Build Wonder</div>
+            <div class="text-xs opacity-80">Great monuments</div>
+          </button>
+          
+          ${canFoundReligion ? `
+            <button onclick="showReligionFoundingMenu()" class="w-full bg-yellow-500 hover:bg-yellow-600 px-4 py-3 rounded-lg transition text-left text-sm">
+              <i class="fas fa-star text-lg mr-2"></i>
+              <div class="font-bold">Found Religion</div>
+              <div class="text-xs opacity-80">After 1000 BCE</div>
+            </button>
+          ` : canSpreadReligion ? `
+            <button onclick="showReligionSpreadMenu()" class="w-full bg-yellow-500 hover:bg-yellow-600 px-4 py-3 rounded-lg transition text-left text-sm">
+              <i class="fas fa-hands-praying text-lg mr-2"></i>
+              <div class="font-bold">Spread Religion</div>
+              <div class="text-xs opacity-80">Convert others</div>
+            </button>
+          ` : ''}
           
           ${simulation.current_year >= -670 ? `
             <button onclick="alert('War system: Select target civilization')" class="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg transition text-left text-sm">
@@ -598,4 +691,417 @@ async function refreshGame() {
 function formatYear(year) {
   if (year < 0) return `${Math.abs(year)} BCE`;
   return `${year} CE`;
+}
+
+// Load wonder data
+async function loadWonderData() {
+  try {
+    const response = await axios.get('/api/wonders/list');
+    availableWonders = [...response.data.wonders, ...response.data.cultureBuildings];
+    
+    const simResponse = await axios.get(`/api/wonders/simulation/${simulation.id}`);
+    builtWonders = simResponse.data.builtWonders || [];
+  } catch (error) {
+    console.error('Failed to load wonder data:', error);
+  }
+}
+
+// Load religion data
+async function loadReligionData() {
+  try {
+    const response = await axios.get('/api/religion/tenets');
+    availableTenets = response.data.tenets || [];
+  } catch (error) {
+    console.error('Failed to load religion data:', error);
+  }
+}
+
+// Load all civilizations in simulation
+async function loadAllCivilizations() {
+  try {
+    const response = await axios.get(`/api/teacher/simulation/${simulation.id}/civilizations`);
+    civilizationsInSim = response.data.civilizations || [];
+  } catch (error) {
+    console.error('Failed to load civilizations:', error);
+  }
+}
+
+// Show wonder building menu
+async function showWonderMenu() {
+  // Reload wonder data to get latest
+  await loadWonderData();
+  
+  const civWonders = civilization.wonders || [];
+  const civCultureBuildings = civilization.culture_buildings || [];
+  const civRegions = civilization.regions || [];
+  
+  // Separate wonders by category
+  const ancientWonders = availableWonders.filter(w => 
+    w.cost <= 150 && !w.cultureSpecific && w.unique
+  );
+  const classicalWonders = availableWonders.filter(w => 
+    w.cost > 150 && w.cost <= 250 && !w.cultureSpecific && w.unique
+  );
+  const lateWonders = availableWonders.filter(w => 
+    w.cost > 250 && !w.cultureSpecific && w.unique
+  );
+  const cultureBuildings = availableWonders.filter(w => 
+    w.cultureSpecific && w.cultureSpecific.some(c => civRegions.includes(c))
+  );
+  
+  const modalHTML = `
+    <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onclick="closeWonderMenu()">
+      <div class="bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6" onclick="event.stopPropagation()">
+        <h2 class="text-2xl font-bold text-white mb-4">
+          <i class="fas fa-trophy mr-2 text-yellow-400"></i>Build Wonder
+        </h2>
+        <p class="text-sm text-yellow-400 mb-4">Industry Available: ${civilization.industry_left}</p>
+        
+        ${ancientWonders.length > 0 ? `
+          <div class="mb-4">
+            <h3 class="text-lg font-bold text-purple-400 mb-2">Ancient Wonders</h3>
+            <div class="grid md:grid-cols-2 gap-3">
+              ${ancientWonders.map(w => renderWonderCard(w, civWonders, builtWonders)).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${classicalWonders.length > 0 ? `
+          <div class="mb-4">
+            <h3 class="text-lg font-bold text-blue-400 mb-2">Classical Wonders</h3>
+            <div class="grid md:grid-cols-2 gap-3">
+              ${classicalWonders.map(w => renderWonderCard(w, civWonders, builtWonders)).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${lateWonders.length > 0 ? `
+          <div class="mb-4">
+            <h3 class="text-lg font-bold text-red-400 mb-2">Late Wonders</h3>
+            <div class="grid md:grid-cols-2 gap-3">
+              ${lateWonders.map(w => renderWonderCard(w, civWonders, builtWonders)).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${cultureBuildings.length > 0 ? `
+          <div class="mb-4">
+            <h3 class="text-lg font-bold text-pink-400 mb-2">Culture Buildings</h3>
+            <div class="grid md:grid-cols-2 gap-3">
+              ${cultureBuildings.map(w => renderWonderCard(w, civCultureBuildings, builtWonders, true)).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <button onclick="closeWonderMenu()" class="w-full bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg transition mt-4">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+  
+  const modalContainer = document.createElement('div');
+  modalContainer.id = 'wonderModal';
+  modalContainer.innerHTML = modalHTML;
+  document.body.appendChild(modalContainer);
+}
+
+function renderWonderCard(wonder, ownedWonders, allBuiltWonders, isCultureBuilding = false) {
+  const isOwned = ownedWonders.includes(wonder.id);
+  const isBuiltByOther = wonder.unique && allBuiltWonders.includes(wonder.id) && !isOwned;
+  const canAfford = civilization.industry_left >= wonder.cost;
+  const canBuild = canAfford && !isBuiltByOther && !isOwned;
+  
+  // Check science requirement
+  let scienceReq = true;
+  if (wonder.requirements?.science) {
+    scienceReq = civilization.science >= wonder.requirements.science;
+  }
+  
+  const finalCanBuild = canBuild && scienceReq;
+  
+  return `
+    <button onclick="buildWonder('${wonder.id}', ${isCultureBuilding})" 
+            class="bg-gray-700 hover:bg-gray-600 p-3 rounded-lg transition text-left ${!finalCanBuild ? 'opacity-50 cursor-not-allowed' : ''}"
+            ${!finalCanBuild ? 'disabled' : ''}>
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <div class="text-2xl mb-1">${wonder.icon}</div>
+          <div class="font-bold text-white">${wonder.displayName}</div>
+        </div>
+        <div class="text-yellow-400 font-bold">${wonder.cost}</div>
+      </div>
+      <div class="text-xs text-gray-400 mb-2">${wonder.description}</div>
+      ${Object.keys(wonder.effects).map(key => `
+        <div class="text-xs text-green-400">+${wonder.effects[key]} ${key.replace(/_/g, ' ')}</div>
+      `).join('')}
+      ${isOwned ? '<div class="text-xs text-blue-400 mt-1">✓ Already built</div>' : ''}
+      ${isBuiltByOther ? '<div class="text-xs text-red-400 mt-1">✗ Already built by another</div>' : ''}
+      ${!scienceReq ? `<div class="text-xs text-yellow-400 mt-1">Requires Science ${wonder.requirements.science}</div>` : ''}
+    </button>
+  `;
+}
+
+async function buildWonder(wonderId, isCultureBuilding) {
+  try {
+    const response = await axios.post('/api/wonders/build', {
+      civId: civilization.id,
+      wonderId
+    });
+    
+    civilization = response.data.civilization;
+    alert(`${response.data.wonder.displayName} built successfully!`);
+    
+    closeWonderMenu();
+    await loadGame();
+  } catch (error) {
+    console.error('Failed to build wonder:', error);
+    alert(error.response?.data?.error || 'Failed to build wonder');
+  }
+}
+
+function closeWonderMenu() {
+  const modal = document.getElementById('wonderModal');
+  if (modal) modal.remove();
+}
+
+// Show religion founding menu
+async function showReligionFoundingMenu() {
+  try {
+    // Get faith leaderboard
+    const leaderboardResponse = await axios.get(`/api/religion/leaderboard/${simulation.id}`);
+    const leaderboard = leaderboardResponse.data.leaderboard || [];
+    const canFound = leaderboardResponse.data.canFound || false;
+    
+    if (!canFound) {
+      alert('Only the top 3 civilizations by faith can found a religion!');
+      return;
+    }
+    
+    // Get tenets
+    const tenetsResponse = await axios.get('/api/religion/tenets');
+    const allTenets = tenetsResponse.data.tenets || [];
+    
+    // Get already taken tenets
+    const takenTenets = civilizationsInSim
+      .filter(c => c.religion_name)
+      .flatMap(c => c.religion_tenants || []);
+    
+    // Check if Israel (gets 3 tenets instead of 2)
+    const isIsrael = (civilization.regions || []).includes('Israel');
+    const maxTenets = isIsrael ? 3 : 2;
+    
+    const modalHTML = `
+      <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onclick="closeReligionFoundingMenu()">
+        <div class="bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full p-6" onclick="event.stopPropagation()">
+          <h2 class="text-2xl font-bold text-white mb-4">
+            <i class="fas fa-star mr-2 text-yellow-400"></i>Found Religion
+          </h2>
+          
+          <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-400 mb-2">Faith Leaderboard (Top 3 Can Found)</h3>
+            <div class="space-y-1">
+              ${leaderboard.slice(0, 5).map((c, i) => `
+                <div class="flex justify-between text-sm ${c.id === civilization.id ? 'bg-blue-900 text-blue-200' : 'text-gray-400'}  px-2 py-1 rounded">
+                  <span>#${i + 1} ${c.name}</span>
+                  <span>Faith: ${c.faith}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
+          <form id="foundReligionForm" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">Religion Name</label>
+              <input type="text" id="religionName" required
+                     class="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                     placeholder="Enter religion name">
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-2">
+                Select ${maxTenets} Tenet${maxTenets > 1 ? 's' : ''} ${isIsrael ? '(Israel Bonus: +1 Tenet)' : ''}
+              </label>
+              <div class="space-y-2 max-h-60 overflow-y-auto">
+                ${allTenets.map(t => {
+                  const isTaken = takenTenets.includes(t.id);
+                  return `
+                    <label class="flex items-start p-2 rounded-lg cursor-pointer ${isTaken ? 'bg-gray-900 opacity-50' : 'bg-gray-700 hover:bg-gray-600'}">
+                      <input type="checkbox" name="tenets" value="${t.id}" 
+                             class="mt-1 mr-2" ${isTaken ? 'disabled' : ''}>
+                      <div class="flex-1">
+                        <div class="font-bold text-white">${t.name}</div>
+                        <div class="text-xs text-gray-400">${t.effect}</div>
+                        ${isTaken ? '<div class="text-xs text-red-400">Already taken</div>' : ''}
+                      </div>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+            
+            <div class="flex gap-3">
+              <button type="submit" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition font-bold">
+                Found Religion
+              </button>
+              <button type="button" onclick="closeReligionFoundingMenu()" 
+                      class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+    
+    const modalContainer = document.createElement('div');
+    modalContainer.id = 'religionFoundingModal';
+    modalContainer.innerHTML = modalHTML;
+    document.body.appendChild(modalContainer);
+    
+    // Setup form handler
+    document.getElementById('foundReligionForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await foundReligion(maxTenets);
+    });
+    
+    // Limit checkbox selection
+    const checkboxes = document.querySelectorAll('input[name="tenets"]');
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checked = document.querySelectorAll('input[name="tenets"]:checked');
+        if (checked.length > maxTenets) {
+          cb.checked = false;
+          alert(`You can only select ${maxTenets} tenet${maxTenets > 1 ? 's' : ''}!`);
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('Failed to load religion data:', error);
+    alert('Failed to load religion data');
+  }
+}
+
+async function foundReligion(maxTenets) {
+  const religionName = document.getElementById('religionName').value.trim();
+  const selectedTenets = Array.from(document.querySelectorAll('input[name="tenets"]:checked'))
+    .map(cb => cb.value);
+  
+  if (!religionName) {
+    alert('Please enter a religion name!');
+    return;
+  }
+  
+  if (selectedTenets.length !== maxTenets) {
+    alert(`Please select exactly ${maxTenets} tenet${maxTenets > 1 ? 's' : ''}!`);
+    return;
+  }
+  
+  try {
+    const response = await axios.post('/api/religion/found', {
+      civId: civilization.id,
+      religionName,
+      tenetIds: selectedTenets
+    });
+    
+    civilization = response.data.civilization;
+    alert(`${religionName} has been founded!`);
+    
+    closeReligionFoundingMenu();
+    await loadGame();
+  } catch (error) {
+    console.error('Failed to found religion:', error);
+    alert(error.response?.data?.error || 'Failed to found religion');
+  }
+}
+
+function closeReligionFoundingMenu() {
+  const modal = document.getElementById('religionFoundingModal');
+  if (modal) modal.remove();
+}
+
+// Show religion spreading menu
+async function showReligionSpreadMenu() {
+  // Reload civilization data
+  await loadAllCivilizations();
+  
+  const targets = civilizationsInSim.filter(c => 
+    c.id !== civilization.id && 
+    !c.conquered &&
+    c.religion_name !== civilization.religion_name
+  );
+  
+  if (targets.length === 0) {
+    alert('No valid targets to spread religion to!');
+    return;
+  }
+  
+  const modalHTML = `
+    <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onclick="closeReligionSpreadMenu()">
+      <div class="bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full p-6" onclick="event.stopPropagation()">
+        <h2 class="text-2xl font-bold text-white mb-4">
+          <i class="fas fa-hands-praying mr-2 text-yellow-400"></i>Spread Religion
+        </h2>
+        
+        <p class="text-sm text-gray-300 mb-4">
+          Spread <span class="text-yellow-400 font-bold">${civilization.religion_name}</span> to another civilization.
+          You must have higher faith than the target.
+        </p>
+        
+        <div class="space-y-2 mb-4">
+          ${targets.map(t => `
+            <button onclick="spreadReligion('${t.id}')" 
+                    class="w-full bg-gray-700 hover:bg-gray-600 p-3 rounded-lg transition text-left">
+              <div class="flex justify-between items-center">
+                <div>
+                  <div class="font-bold text-white">${t.name}</div>
+                  <div class="text-xs text-gray-400">
+                    ${t.religion_name ? `Follows: ${t.religion_name}` : 'No religion'}
+                  </div>
+                </div>
+                <div class="text-sm">
+                  <div class="text-gray-400">Faith: ${t.faith}</div>
+                  <div class="${civilization.faith > t.faith ? 'text-green-400' : 'text-red-400'}">
+                    ${civilization.faith > t.faith ? '✓ Can spread' : '✗ Too strong'}
+                  </div>
+                </div>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+        
+        <button onclick="closeReligionSpreadMenu()" class="w-full bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  
+  const modalContainer = document.createElement('div');
+  modalContainer.id = 'religionSpreadModal';
+  modalContainer.innerHTML = modalHTML;
+  document.body.appendChild(modalContainer);
+}
+
+async function spreadReligion(targetId) {
+  try {
+    const response = await axios.post('/api/religion/spread', {
+      founderId: civilization.id,
+      targetId
+    });
+    
+    alert(response.data.message || 'Religion spread successfully!');
+    
+    closeReligionSpreadMenu();
+    await loadGame();
+  } catch (error) {
+    console.error('Failed to spread religion:', error);
+    alert(error.response?.data?.error || 'Failed to spread religion');
+  }
+}
+
+function closeReligionSpreadMenu() {
+  const modal = document.getElementById('religionSpreadModal');
+  if (modal) modal.remove();
 }
