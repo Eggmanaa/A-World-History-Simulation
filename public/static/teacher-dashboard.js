@@ -165,8 +165,12 @@ async function viewPeriodDetails(periodId) {
   }
 }
 
+// Store current simulation data globally for tabs
+let currentSimulationData = null;
+
 // Render period details
 function renderPeriodDetails(data) {
+  currentSimulationData = data; // Store for tab switching
   const container = document.getElementById('periodDetails');
   const sim = data.simulation;
   const civs = data.civilizations || [];
@@ -225,13 +229,24 @@ function renderPeriodDetails(data) {
                 <th class="px-4 py-2 text-center">🎭</th>
                 <th class="px-4 py-2 text-center">🧱</th>
                 <th class="px-4 py-2 text-center">🗼</th>
+                <th class="px-4 py-2 text-center">Wonders</th>
+                <th class="px-4 py-2 text-center">Religion</th>
+                <th class="px-4 py-2 text-center">Faith</th>
+                <th class="px-4 py-2 text-center">Science</th>
                 <th class="px-4 py-2 text-center">Martial</th>
                 <th class="px-4 py-2 text-center">Defense</th>
+                <th class="px-4 py-2 text-center">Achievements</th>
                 <th class="px-4 py-2 text-center">Status</th>
               </tr>
             </thead>
             <tbody>
-              ${civs.map(civ => `
+              ${civs.map(civ => {
+                const wonders = civ.wonders || [];
+                const cultureBuildings = civ.culture_buildings || [];
+                const totalWonders = wonders.length + cultureBuildings.length;
+                const achievements = civ.achievements || [];
+                
+                return `
                 <tr class="border-t ${civ.conquered ? 'bg-red-50 opacity-60' : 'hover:bg-gray-50'}">
                   <td class="px-4 py-2">
                     <div class="flex items-center">
@@ -245,8 +260,19 @@ function renderPeriodDetails(data) {
                   <td class="px-4 py-2 text-center" title="Amphitheaters">${civ.amphitheaters}</td>
                   <td class="px-4 py-2 text-center" title="Walls">${civ.walls}</td>
                   <td class="px-4 py-2 text-center" title="Archimedes Towers">${civ.archimedes_towers}</td>
+                  <td class="px-4 py-2 text-center" title="${totalWonders} Wonders">
+                    ${totalWonders > 0 ? `<span class="font-bold text-purple-600">🏛️ ${totalWonders}</span>` : '-'}
+                  </td>
+                  <td class="px-4 py-2 text-center" title="${civ.religion_name || 'None'}">
+                    ${civ.religion_name ? `<span class="text-yellow-600">⭐</span>` : '-'}
+                  </td>
+                  <td class="px-4 py-2 text-center">${civ.faith}</td>
+                  <td class="px-4 py-2 text-center">${civ.science}</td>
                   <td class="px-4 py-2 text-center">${civ.martial}</td>
                   <td class="px-4 py-2 text-center">${civ.defense}</td>
+                  <td class="px-4 py-2 text-center" title="${achievements.length} Achievements">
+                    ${achievements.length > 0 ? `<span class="font-bold text-yellow-500">🏆 ${achievements.length}</span>` : '-'}
+                  </td>
                   <td class="px-4 py-2 text-center">
                     ${civ.conquered ? 
                       '<span class="text-red-600 font-bold"><i class="fas fa-skull mr-1"></i>Conquered</span>' : 
@@ -254,11 +280,263 @@ function renderPeriodDetails(data) {
                     }
                   </td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
         </div>
       </div>
+
+      <!-- Detailed Tabs -->
+      <div class="mb-6">
+        <div class="border-b border-gray-200 mb-4">
+          <nav class="flex gap-4">
+            <button onclick="showTab('wonders')" id="tab-wonders" class="tab-button px-4 py-2 font-semibold border-b-2 border-transparent hover:border-purple-500 transition">
+              <i class="fas fa-trophy mr-2"></i>Wonders
+            </button>
+            <button onclick="showTab('religions')" id="tab-religions" class="tab-button px-4 py-2 font-semibold border-b-2 border-transparent hover:border-yellow-500 transition">
+              <i class="fas fa-star mr-2"></i>Religions
+            </button>
+            <button onclick="showTab('achievements')" id="tab-achievements" class="tab-button px-4 py-2 font-semibold border-b-2 border-transparent hover:border-yellow-500 transition">
+              <i class="fas fa-medal mr-2"></i>Achievements
+            </button>
+            <button onclick="showTab('bonuses')" id="tab-bonuses" class="tab-button px-4 py-2 font-semibold border-b-2 border-transparent hover:border-pink-500 transition">
+              <i class="fas fa-gem mr-2"></i>Cultural Bonuses
+            </button>
+          </nav>
+        </div>
+        <div id="tab-content">
+          ${renderWondersTab(civs)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Tab switching
+function showTab(tabName) {
+  if (!currentSimulationData) return;
+  
+  // Update tab buttons
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.classList.remove('border-purple-500', 'border-yellow-500', 'border-pink-500', 'text-gray-900');
+    btn.classList.add('border-transparent', 'text-gray-600');
+  });
+  
+  const activeTab = document.getElementById(`tab-${tabName}`);
+  activeTab.classList.remove('border-transparent', 'text-gray-600');
+  activeTab.classList.add('text-gray-900');
+  
+  if (tabName === 'wonders') {
+    activeTab.classList.add('border-purple-500');
+  } else if (tabName === 'religions') {
+    activeTab.classList.add('border-yellow-500');
+  } else if (tabName === 'achievements') {
+    activeTab.classList.add('border-yellow-500');
+  } else if (tabName === 'bonuses') {
+    activeTab.classList.add('border-pink-500');
+  }
+  
+  const container = document.getElementById('tab-content');
+  const civs = currentSimulationData.civilizations || [];
+  
+  if (tabName === 'wonders') {
+    container.innerHTML = renderWondersTab(civs);
+  } else if (tabName === 'religions') {
+    container.innerHTML = renderReligionsTab(civs);
+  } else if (tabName === 'achievements') {
+    container.innerHTML = renderAchievementsTab(civs);
+  } else if (tabName === 'bonuses') {
+    container.innerHTML = renderBonusesTab(civs);
+  }
+}
+
+// Render religions tab
+function renderReligionsTab(civs) {
+  const religions = civs.filter(civ => civ.religion_name);
+  
+  if (religions.length === 0) {
+    return '<div class="text-center py-8 text-gray-500">No religions have been founded yet</div>';
+  }
+  
+  return `
+    <div class="grid md:grid-cols-2 gap-4">
+      ${religions.map(civ => {
+        const tenets = civ.religion_tenants || [];
+        return `
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center">
+                <div class="w-4 h-4 rounded-full mr-2" style="background-color: ${civ.color}"></div>
+                <div>
+                  <h4 class="font-bold text-gray-800">${civ.religion_name}</h4>
+                  <p class="text-sm text-gray-600">Founded by ${civ.name}</p>
+                </div>
+              </div>
+              <div class="text-2xl">⭐</div>
+            </div>
+            <div class="mb-3">
+              <p class="text-sm font-semibold text-gray-700 mb-1">Tenets:</p>
+              <div class="space-y-1">
+                ${tenets.map(t => `
+                  <div class="text-sm text-gray-600 bg-yellow-100 px-2 py-1 rounded">
+                    • ${t.replace(/_/g, ' ')}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div class="flex justify-between text-sm text-gray-600">
+              <span><i class="fas fa-users mr-1"></i>Followers: ${civ.religion_followers || 0}</span>
+              <span><i class="fas fa-pray mr-1"></i>Faith: ${civ.faith}</span>
+            </div>
+          </div>
+        `}).join('')}
+    </div>
+  `;
+}
+
+// Render achievements tab
+function renderAchievementsTab(civs) {
+  const achievementData = [
+    { id: 'glory_to_rome', name: 'Glory to Rome', description: 'Conquer 10 civilizations', icon: '⚔️' },
+    { id: 'test_of_time', name: 'Test of Time', description: 'Survive 20 battles', icon: '🛡️' },
+    { id: 'ozymandias', name: 'Ozymandias', description: 'First civilization defeated', icon: '💀' },
+    { id: 'cultural_victory', name: 'Cultural Victory', description: 'Highest culture at game end', icon: '🎭' },
+    { id: 'scientific_achievement', name: 'Scientific Achievement', description: 'Reach science level 30', icon: '🔬' },
+    { id: 'religious_dominance', name: 'Religious Dominance', description: 'Convert 5+ civilizations', icon: '⭐' },
+    { id: 'economic_powerhouse', name: 'Economic Powerhouse', description: 'Have 200+ industry', icon: '💰' },
+    { id: 'military_supremacy', name: 'Military Supremacy', description: '100+ martial', icon: '⚔️' }
+  ];
+  
+  const achievementsByCiv = {};
+  civs.forEach(civ => {
+    const achievements = civ.achievements || [];
+    if (achievements.length > 0) {
+      achievementsByCiv[civ.name] = {
+        color: civ.color,
+        achievements: achievements
+      };
+    }
+  });
+  
+  if (Object.keys(achievementsByCiv).length === 0) {
+    return '<div class="text-center py-8 text-gray-500">No achievements earned yet</div>';
+  }
+  
+  return `
+    <div class="space-y-4">
+      ${achievementData.map(achievement => {
+        const earners = Object.entries(achievementsByCiv).filter(([_, data]) => 
+          data.achievements.includes(achievement.id)
+        );
+        
+        if (earners.length === 0) return '';
+        
+        return `
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div class="flex items-center mb-3">
+              <span class="text-3xl mr-3">${achievement.icon}</span>
+              <div>
+                <h4 class="font-bold text-gray-800">${achievement.name}</h4>
+                <p class="text-sm text-gray-600">${achievement.description}</p>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              ${earners.map(([civName, data]) => `
+                <div class="flex items-center bg-white px-3 py-1 rounded border border-yellow-300">
+                  <div class="w-3 h-3 rounded-full mr-2" style="background-color: ${data.color}"></div>
+                  <span class="text-sm font-semibold">${civName}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `}).join('')}
+    </div>
+  `;
+}
+
+// Render cultural bonuses tab
+function renderBonusesTab(civs) {
+  const bonusesByCiv = {};
+  
+  civs.forEach(civ => {
+    const bonuses = civ.cultural_bonuses || [];
+    if (bonuses.length > 0) {
+      bonusesByCiv[civ.name] = {
+        color: civ.color,
+        bonuses: bonuses
+      };
+    }
+  });
+  
+  if (Object.keys(bonusesByCiv).length === 0) {
+    return '<div class="text-center py-8 text-gray-500">No cultural bonuses unlocked yet</div>';
+  }
+  
+  return `
+    <div class="grid md:grid-cols-2 gap-4">
+      ${Object.entries(bonusesByCiv).map(([civName, data]) => `
+        <div class="bg-pink-50 border border-pink-200 rounded-lg p-4">
+          <div class="flex items-center mb-3">
+            <div class="w-4 h-4 rounded-full mr-2" style="background-color: ${data.color}"></div>
+            <h4 class="font-bold text-gray-800">${civName}</h4>
+          </div>
+          <div class="space-y-1">
+            ${data.bonuses.map(b => `
+              <div class="bg-pink-100 text-pink-800 px-2 py-1 rounded text-sm">
+                <i class="fas fa-gem mr-1"></i>${b.replace(/_/g, ' ')}
+              </div>
+            `).join('')}
+          </div>
+          <div class="mt-2 text-sm text-gray-600">
+            Total: ${data.bonuses.length} bonus${data.bonuses.length > 1 ? 'es' : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Render wonders tab
+function renderWondersTab(civs) {
+  const wondersByCiv = {};
+  
+  civs.forEach(civ => {
+    const wonders = civ.wonders || [];
+    const cultureBuildings = civ.culture_buildings || [];
+    const allWonders = [...wonders, ...cultureBuildings];
+    
+    if (allWonders.length > 0) {
+      wondersByCiv[civ.name] = {
+        color: civ.color,
+        wonders: allWonders
+      };
+    }
+  });
+  
+  if (Object.keys(wondersByCiv).length === 0) {
+    return '<div class="text-center py-8 text-gray-500">No wonders have been built yet</div>';
+  }
+  
+  return `
+    <div class="grid md:grid-cols-2 gap-4">
+      ${Object.entries(wondersByCiv).map(([civName, data]) => `
+        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div class="flex items-center mb-3">
+            <div class="w-4 h-4 rounded-full mr-2" style="background-color: ${data.color}"></div>
+            <h4 class="font-bold text-gray-800">${civName}</h4>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${data.wonders.map(w => `
+              <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm" title="${w}">
+                🏛️ ${w.replace(/_/g, ' ')}
+              </span>
+            `).join('')}
+          </div>
+          <div class="mt-2 text-sm text-gray-600">
+            Total: ${data.wonders.length} wonder${data.wonders.length > 1 ? 's' : ''}
+          </div>
+        </div>
+      `).join('')}
     </div>
   `;
 }

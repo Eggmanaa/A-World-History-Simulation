@@ -2,6 +2,12 @@ import { Hono } from 'hono'
 import type { Bindings, Simulation } from '../types'
 import { generateId, generateInviteCode, parseCivilization } from '../db'
 import { getTimelineEvent, TIMELINE } from '../timeline'
+import { 
+  applyScienceEffects, 
+  getUnlockedBonuses, 
+  applyCulturalBonus,
+  getWritingSystem
+} from '../game-mechanics'
 
 const teacher = new Hono<{ Bindings: Bindings }>()
 
@@ -190,9 +196,55 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
         'SELECT * FROM civilizations WHERE simulation_id = ? AND conquered = FALSE'
       ).bind(simulationId).all()
       
-      // Apply growth to each (this is simplified - full logic would be more complex)
+      // Apply growth to each
       for (const civRow of civs.results || []) {
-        const civ = parseCivilization(civRow)
+        let civ = parseCivilization(civRow)
+        
+        // === PHASE 3: AUTO-APPLY SYSTEMS ===
+        
+        // 1. Apply Science Effects (bonuses based on science level)
+        civ = applyScienceEffects(civ)
+        
+        // 2. Check and Unlock Cultural Bonuses
+        const regions = typeof civ.regions === 'string' ? JSON.parse(civ.regions) : (civ.regions || [])
+        const currentBonuses = typeof civ.cultural_bonuses === 'string' ? JSON.parse(civ.cultural_bonuses) : (civ.cultural_bonuses || [])
+        const unlockedBonuses = getUnlockedBonuses(nextEvent.year, regions)
+        
+        for (const bonusId of unlockedBonuses) {
+          if (!currentBonuses.includes(bonusId)) {
+            civ = applyCulturalBonus(civ, bonusId)
+            
+            // Log cultural bonus unlock event
+            const bonusEventId = generateId()
+            await db.prepare(
+              'INSERT INTO event_log (id, simulation_id, year, event_type, event_data, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+            ).bind(bonusEventId, simulationId, nextEvent.year, 'cultural_bonus_unlocked', JSON.stringify({ 
+              civilization: civ.name,
+              bonus: bonusId
+            }), now).run()
+          }
+        }
+        
+        // 3. Auto-Adopt Writing System (if not already adopted)
+        if (!civ.writing) {
+          const writingSystem = getWritingSystem(regions)
+          if (writingSystem) {
+            civ.writing = writingSystem.id
+            civ.science += writingSystem.scienceBonus
+            
+            // Log writing adoption event
+            const writingEventId = generateId()
+            await db.prepare(
+              'INSERT INTO event_log (id, simulation_id, year, event_type, event_data, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+            ).bind(writingEventId, simulationId, nextEvent.year, 'writing_adopted', JSON.stringify({
+              civilization: civ.name,
+              writing: writingSystem.name,
+              scienceBonus: writingSystem.scienceBonus
+            }), now).run()
+          }
+        }
+        
+        // === STANDARD GROWTH CALCULATIONS ===
         
         // Basic growth: add fertility to houses (capped at capacity)
         const newHouses = Math.min(
@@ -204,12 +256,40 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
         const housesDoublePopulation = nextEvent.year >= -480
         const newPopulation = housesDoublePopulation ? newHouses * 2 : newHouses
         
-        // Update civilization
+        // Update civilization with all changes
         await db.prepare(`
           UPDATE civilizations 
-          SET houses = ?, population = ?, advance_count = advance_count + 1, updated_at = ?
+          SET houses = ?, 
+              population = ?, 
+              martial = ?,
+              defense = ?,
+              culture = ?,
+              faith = ?,
+              science = ?,
+              industry = ?,
+              fertility = ?,
+              population_capacity = ?,
+              cultural_bonuses = ?,
+              writing = ?,
+              advance_count = advance_count + 1, 
+              updated_at = ?
           WHERE id = ?
-        `).bind(newHouses, newPopulation, now, civ.id).run()
+        `).bind(
+          newHouses, 
+          newPopulation,
+          civ.martial,
+          civ.defense,
+          civ.culture,
+          civ.faith,
+          civ.science,
+          civ.industry,
+          civ.fertility,
+          civ.population_capacity,
+          JSON.stringify(typeof civ.cultural_bonuses === 'string' ? JSON.parse(civ.cultural_bonuses) : (civ.cultural_bonuses || [])),
+          civ.writing || null,
+          now, 
+          civ.id
+        ).run()
       }
     }
     
@@ -267,6 +347,26 @@ teacher.post('/simulation/:simulationId/back', async (c) => {
   } catch (error) {
     console.error('Go back error:', error)
     return c.json({ error: 'Failed to go back' }, 500)
+  }
+})
+
+// Get all civilizations in simulation (for students and teacher dashboard)
+teacher.get('/simulation/:simulationId/civilizations', async (c) => {
+  try {
+    const simulationId = c.req.param('simulationId')
+    const db = c.env.DB
+    
+    const civs = await db.prepare(
+      'SELECT * FROM civilizations WHERE simulation_id = ? ORDER BY population DESC'
+    ).bind(simulationId).all()
+    
+    return c.json({
+      success: true,
+      civilizations: civs.results?.map(parseCivilization) || []
+    })
+  } catch (error) {
+    console.error('Get civilizations error:', error)
+    return c.json({ error: 'Failed to get civilizations' }, 500)
   }
 })
 

@@ -69,11 +69,109 @@ game.post('/war/declare', async (c) => {
       sim?.current_year || -670, now
     ).run()
     
-    // If there's a loser, mark as conquered
+    // === PHASE 3: ACHIEVEMENT TRACKING ===
+    
+    // If attacker won, increment their conquest count
+    if (result.winner.id === attackerId) {
+      const newMapsConquered = (attackerCiv.maps_conquered || 0) + 1
+      await db.prepare(
+        'UPDATE civilizations SET maps_conquered = ?, updated_at = ? WHERE id = ?'
+      ).bind(newMapsConquered, now, attackerId).run()
+      
+      // Check for "Glory to Rome" achievement (10 conquests)
+      if (newMapsConquered >= 10) {
+        const achievements = attackerCiv.achievements ? 
+          (typeof attackerCiv.achievements === 'string' ? JSON.parse(attackerCiv.achievements) : attackerCiv.achievements) : []
+        
+        if (!achievements.includes('glory_to_rome')) {
+          achievements.push('glory_to_rome')
+          
+          // Award achievement
+          const achievementId = generateId()
+          await db.prepare(
+            'INSERT INTO achievements (id, civ_id, achievement_id, achievement_name, earned_at, year_earned) VALUES (?, ?, ?, ?, ?, ?)'
+          ).bind(
+            achievementId, attackerId, 'glory_to_rome', 'Glory to Rome',
+            now, sim?.current_year || -670
+          ).run()
+          
+          // Update civilization
+          await db.prepare(
+            'UPDATE civilizations SET achievements = ?, updated_at = ? WHERE id = ?'
+          ).bind(JSON.stringify(achievements), now, attackerId).run()
+        }
+      }
+    }
+    
+    // If defender won, increment their battles_survived count
+    if (result.winner.id === defenderId) {
+      const newBattlesSurvived = (defenderCiv.battles_survived || 0) + 1
+      await db.prepare(
+        'UPDATE civilizations SET battles_survived = ?, updated_at = ? WHERE id = ?'
+      ).bind(newBattlesSurvived, now, defenderId).run()
+      
+      // Check for "Test of Time" achievement (20 battles survived)
+      if (newBattlesSurvived >= 20) {
+        const achievements = defenderCiv.achievements ? 
+          (typeof defenderCiv.achievements === 'string' ? JSON.parse(defenderCiv.achievements) : defenderCiv.achievements) : []
+        
+        if (!achievements.includes('test_of_time')) {
+          achievements.push('test_of_time')
+          
+          // Award achievement
+          const achievementId = generateId()
+          await db.prepare(
+            'INSERT INTO achievements (id, civ_id, achievement_id, achievement_name, earned_at, year_earned) VALUES (?, ?, ?, ?, ?, ?)'
+          ).bind(
+            achievementId, defenderId, 'test_of_time', 'Test of Time',
+            now, sim?.current_year || -670
+          ).run()
+          
+          // Update civilization
+          await db.prepare(
+            'UPDATE civilizations SET achievements = ?, updated_at = ? WHERE id = ?'
+          ).bind(JSON.stringify(achievements), now, defenderId).run()
+        }
+      }
+    }
+    
+    // If there's a loser, mark as conquered and check for "Ozymandias" achievement
     if (result.loser) {
+      // Check if this is the first civilization to be defeated in this simulation
+      const firstDefeated = await db.prepare(
+        'SELECT COUNT(*) as count FROM civilizations WHERE simulation_id = ? AND conquered = TRUE'
+      ).bind(attackerCiv.simulation_id).first()
+      
+      const isFirst = (firstDefeated?.count as number || 0) === 0
+      
       await db.prepare(
         'UPDATE civilizations SET conquered = TRUE, updated_at = ? WHERE id = ?'
       ).bind(now, result.loser.id).run()
+      
+      // Award "Ozymandias" to first defeated civilization
+      if (isFirst) {
+        const achievements = result.loser.id === attackerId ? 
+          (attackerCiv.achievements ? (typeof attackerCiv.achievements === 'string' ? JSON.parse(attackerCiv.achievements) : attackerCiv.achievements) : []) :
+          (defenderCiv.achievements ? (typeof defenderCiv.achievements === 'string' ? JSON.parse(defenderCiv.achievements) : defenderCiv.achievements) : [])
+        
+        if (!achievements.includes('ozymandias')) {
+          achievements.push('ozymandias')
+          
+          // Award achievement
+          const achievementId = generateId()
+          await db.prepare(
+            'INSERT INTO achievements (id, civ_id, achievement_id, achievement_name, earned_at, year_earned) VALUES (?, ?, ?, ?, ?, ?)'
+          ).bind(
+            achievementId, result.loser.id, 'ozymandias', 'Ozymandias',
+            now, sim?.current_year || -670
+          ).run()
+          
+          // Update civilization
+          await db.prepare(
+            'UPDATE civilizations SET achievements = ?, updated_at = ? WHERE id = ?'
+          ).bind(JSON.stringify(achievements), now, result.loser.id).run()
+        }
+      }
     }
     
     // Log event
