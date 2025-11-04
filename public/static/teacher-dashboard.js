@@ -793,6 +793,41 @@ async function showCivilizationDetails(civId) {
             </div>
           </div>
 
+          <!-- Terrain & Water Resources Section -->
+          ${civ.water_resource || civ.terrain_data ? `
+            <div class="bg-blue-50 rounded-lg p-4">
+              <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-map mr-2 text-blue-600"></i>Terrain & Water Resources
+              </h3>
+              <div class="grid md:grid-cols-4 gap-4">
+                ${civ.water_resource ? `
+                  <div>
+                    <p class="text-sm text-gray-600">Water Resource</p>
+                    <p class="font-bold text-gray-800">${getWaterResourceDisplay(civ.water_resource)}</p>
+                  </div>
+                ` : ''}
+                ${civ.is_island ? `
+                  <div>
+                    <p class="text-sm text-gray-600">Geography</p>
+                    <p class="font-bold text-gray-800">
+                      <i class="fas fa-water mr-1 text-blue-500"></i>Island (+7 Defense)
+                    </p>
+                  </div>
+                ` : ''}
+                ${civ.terrain_data ? `
+                  <div>
+                    <p class="text-sm text-gray-600">Terrain Bonuses</p>
+                    <p class="font-bold text-gray-800">${getTerrainBonusesDisplay(civ.terrain_data, civ.is_island)}</p>
+                  </div>
+                  <div>
+                    <p class="text-sm text-gray-600">Terrain Composition</p>
+                    <p class="font-bold text-gray-800 text-xs">${getTerrainCompositionDisplay(civ.terrain_data)}</p>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+
           <!-- Military Section -->
           <div class="bg-red-50 rounded-lg p-4">
             <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -974,4 +1009,70 @@ async function showCivilizationDetails(civId) {
       </div>
     </div>
   `;
+}
+
+// Helper functions for terrain system display
+
+function getWaterResourceDisplay(waterResource) {
+  const info = {
+    river: 'River (Freshwater) - Max 15 houses',
+    lake: 'Lake (Freshwater) - Max 10 houses',
+    lake_brackish: 'Lake (Brackish) - Max 6 houses',
+    marsh: 'Marsh (Brackish) - Max 7 houses',
+    ocean: 'Ocean (Saltwater) - Max 5 houses',
+    none: 'Wells - Max 4 houses'
+  };
+  
+  return info[waterResource] || waterResource;
+}
+
+function getTerrainBonusesDisplay(terrainData, isIsland) {
+  if (typeof terrainData === 'string') {
+    try {
+      terrainData = JSON.parse(terrainData);
+    } catch (e) {
+      return 'Error parsing terrain';
+    }
+  }
+  
+  if (!Array.isArray(terrainData)) {
+    return 'No terrain data';
+  }
+  
+  const bonuses = calculateTotalTerrainBonuses(terrainData, isIsland);
+  return `+${bonuses.defense} Defense, +${bonuses.industry} Industry`;
+}
+
+function getTerrainCompositionDisplay(terrainData) {
+  if (typeof terrainData === 'string') {
+    try {
+      terrainData = JSON.parse(terrainData);
+    } catch (e) {
+      return 'Error parsing terrain';
+    }
+  }
+  
+  if (!Array.isArray(terrainData)) {
+    return 'No terrain data';
+  }
+  
+  // Count terrain types
+  const counts = {};
+  for (const tile of terrainData) {
+    const terrain = tile.terrain || 'plains';
+    counts[terrain] = (counts[terrain] || 0) + 1;
+  }
+  
+  // Format as percentages
+  const total = terrainData.length;
+  const parts = [];
+  for (const [terrain, count] of Object.entries(counts)) {
+    const percentage = Math.round((count / total) * 100);
+    if (percentage > 0) {
+      const icon = TERRAIN_CONFIG[terrain]?.icon || '🌾';
+      parts.push(`${icon}${percentage}%`);
+    }
+  }
+  
+  return parts.join(' ') || 'Mixed terrain';
 }

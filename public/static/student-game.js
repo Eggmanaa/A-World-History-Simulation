@@ -443,42 +443,83 @@ function renderStatsPanel() {
   `;
 }
 
-// Render map (10x10 grid)
+// Render map (Hex Grid)
 function renderMap() {
-  const gridSize = 10;
+  // Get terrain data
+  const terrainTiles = civilization.terrain_data || [];
+  const waterResource = civilization.water_resource || 'lake';
+  const isIsland = civilization.is_island || false;
+  
+  // Calculate terrain bonuses
+  const terrainBonuses = calculateTotalTerrainBonuses(terrainTiles, isIsland);
+  
+  // Get water resource info
+  const waterResourceInfo = getWaterResourceInfo(waterResource);
   
   let mapHTML = `
     <div class="bg-gray-800 rounded-lg p-4">
-      <h2 class="text-lg font-bold mb-3 border-b border-gray-700 pb-2">
-        <i class="fas fa-map mr-2 text-green-400"></i>Your Territory
-      </h2>
-      <div class="grid grid-cols-10 gap-1 bg-gray-900 p-2 rounded" id="mapGrid">
-  `;
-  
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      const key = `${x}_${y}`;
-      const building = buildingMap[key];
-      const icon = building ? getBuildingIcon(building) : '';
-      const bgColor = building ? 'bg-green-900' : 'bg-gray-700';
-      
-      mapHTML += `
-        <div class="map-cell ${bgColor} hover:bg-gray-600 aspect-square flex items-center justify-center text-2xl cursor-pointer rounded transition border border-gray-600" 
-             data-x="${x}" data-y="${y}"
-             title="${building || 'Empty'}">${icon}</div>
-      `;
-    }
-  }
-  
-  mapHTML += `
+      <div class="flex justify-between items-start mb-3 border-b border-gray-700 pb-2">
+        <div>
+          <h2 class="text-lg font-bold">
+            <i class="fas fa-map mr-2 text-green-400"></i>Your Territory
+          </h2>
+          <div class="text-xs text-gray-400 mt-1">
+            ${waterResourceInfo.icon} ${waterResourceInfo.name}
+          </div>
+        </div>
+        <div class="text-right text-xs">
+          <div class="text-green-400">
+            <i class="fas fa-shield-alt mr-1"></i>Defense: +${terrainBonuses.defense}
+          </div>
+          <div class="text-yellow-400">
+            <i class="fas fa-industry mr-1"></i>Industry: +${terrainBonuses.industry}
+          </div>
+          ${isIsland ? '<div class="text-blue-400"><i class="fas fa-water mr-1"></i>Island: +7 def</div>' : ''}
+        </div>
       </div>
+      
+      <!-- Hex Map Canvas -->
+      <div id="hexMapContainer" class="bg-gray-900 rounded relative" style="height: 500px; width: 100%;">
+        <!-- Canvas will be inserted here by HexMap class -->
+      </div>
+      
       <div class="mt-3 text-xs text-gray-400 text-center">
-        Click a tile to place a building
+        Click a hex to place a building · Hover to see terrain bonuses
+      </div>
+      
+      <!-- Terrain Legend -->
+      <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div class="bg-gray-900 rounded p-2">
+          <span class="text-lg">⛰️</span> Mountains
+          <div class="text-gray-400">+10 def, +4 ind</div>
+        </div>
+        <div class="bg-gray-900 rounded p-2">
+          <span class="text-lg">🌲</span> Forest
+          <div class="text-gray-400">+1 def, +3 ind</div>
+        </div>
+        <div class="bg-gray-900 rounded p-2">
+          <span class="text-lg">🏜️</span> Desert
+          <div class="text-gray-400">+4 defense</div>
+        </div>
       </div>
     </div>
   `;
   
   return mapHTML;
+}
+
+// Get water resource display info
+function getWaterResourceInfo(waterResource) {
+  const info = {
+    river: { name: 'River (Freshwater)', icon: '🌊', capacity: 15 },
+    lake: { name: 'Lake (Freshwater)', icon: '💧', capacity: 10 },
+    lake_brackish: { name: 'Lake (Brackish)', icon: '💧', capacity: 6 },
+    marsh: { name: 'Marsh (Brackish)', icon: '💧', capacity: 7 },
+    ocean: { name: 'Ocean (Saltwater)', icon: '🌊', capacity: 5 },
+    none: { name: 'Wells', icon: '🚰', capacity: 4 }
+  };
+  
+  return info[waterResource] || info.lake;
 }
 
 // Get building icon
@@ -573,27 +614,43 @@ function renderActionsPanel() {
 }
 
 // Setup map click handlers
+// Global hex map instance
+let hexMapInstance = null;
+
 function setupMapHandlers() {
-  document.querySelectorAll('.map-cell').forEach(cell => {
-    cell.addEventListener('click', () => {
-      const x = cell.dataset.x;
-      const y = cell.dataset.y;
-      const key = `${x}_${y}`;
-      
-      if (buildingMap[key]) {
-        alert(`This tile already has: ${buildingMap[key]}`);
-      } else {
-        showBuildMenu(x, y);
-      }
-    });
-  });
+  // Initialize hex map
+  const terrainTiles = civilization.terrain_data || [];
+  
+  if (terrainTiles.length === 0) {
+    console.warn('No terrain data available');
+    return;
+  }
+  
+  // Create hex map instance
+  hexMapInstance = new HexMap('hexMapContainer', terrainTiles);
+  
+  // Load existing buildings onto hex map
+  if (buildingMap) {
+    hexMapInstance.setBuildings(buildingMap);
+  }
+  
+  // Set click handler
+  hexMapInstance.onHexClick = (tile, coord) => {
+    const key = `${coord.q},${coord.r},${coord.s}`;
+    
+    if (buildingMap[key]) {
+      notifyInfo(`This hex already has: ${buildingMap[key]}`, 2000);
+    } else {
+      showBuildMenu(coord.q, coord.r, coord.s);
+    }
+  };
 }
 
 // Show build menu
 let selectedTile = null;
 
-function showBuildMenu(x, y) {
-  selectedTile = x !== undefined ? { x, y } : null;
+function showBuildMenu(q, r, s) {
+  selectedTile = q !== undefined ? { q, r, s } : null;
   
   // Count how many of each building type are already placed on map
   const placedBuildings = {};
@@ -622,7 +679,7 @@ function showBuildMenu(x, y) {
         <h2 class="text-2xl font-bold text-white mb-4">
           <i class="fas fa-hammer mr-2 text-yellow-400"></i>Build Structure
         </h2>
-        ${selectedTile ? `<p class="text-sm text-gray-400 mb-4">Position: (${selectedTile.x}, ${selectedTile.y})</p>` : ''}
+        ${selectedTile ? `<p class="text-sm text-gray-400 mb-4">Hex: (${selectedTile.q}, ${selectedTile.r}, ${selectedTile.s})</p>` : ''}
         <p class="text-sm text-yellow-400 mb-4">Industry Available: ${civilization.industry_left}</p>
         
         <div class="space-y-3 mb-4">
@@ -676,16 +733,21 @@ function closeBuildMenu() {
 // Build structure
 async function buildStructure(buildingType, isPlacingExisting) {
   if (!selectedTile) {
-    alert('Please click on a map tile first!');
+    alert('Please click on a hex first!');
     return;
   }
   
   try {
     // If placing existing building, just update map
     if (isPlacingExisting) {
-      // Add to map
-      const key = `${selectedTile.x}_${selectedTile.y}`;
+      // Add to map using hex coordinates
+      const key = `${selectedTile.q},${selectedTile.r},${selectedTile.s}`;
       buildingMap[key] = buildingType;
+      
+      // Update hex map display
+      if (hexMapInstance) {
+        hexMapInstance.placeBuilding(selectedTile.q, selectedTile.r, selectedTile.s, buildingType);
+      }
       
       // Save map data to database
       await axios.post(`/api/student/civilization/${civilization.id}/map`, {
@@ -703,9 +765,14 @@ async function buildStructure(buildingType, isPlacingExisting) {
       // Update civilization
       civilization = response.data.civilization;
       
-      // Add to map
-      const key = `${selectedTile.x}_${selectedTile.y}`;
+      // Add to map using hex coordinates
+      const key = `${selectedTile.q},${selectedTile.r},${selectedTile.s}`;
       buildingMap[key] = buildingType;
+      
+      // Update hex map display
+      if (hexMapInstance) {
+        hexMapInstance.placeBuilding(selectedTile.q, selectedTile.r, selectedTile.s, buildingType);
+      }
       
       // Save map data
       await axios.post(`/api/student/civilization/${civilization.id}/map`, {
@@ -716,7 +783,7 @@ async function buildStructure(buildingType, isPlacingExisting) {
     }
     
     closeBuildMenu();
-    renderGame();
+    selectedTile = null;
   } catch (error) {
     console.error('Build error:', error);
     alert(error.response?.data?.error || 'Failed to build structure');
