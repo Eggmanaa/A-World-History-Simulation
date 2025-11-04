@@ -29,29 +29,23 @@ This document outlines the complete implementation plan for the terrain, hex gri
 
 ## What Needs To Be Done
 
-### 🔄 Phase 2: Database Schema Updates (2-3 hours)
+### ✅ Phase 2: Database Schema Updates (COMPLETED - 2 hours)
 
-**Migration needed**: `0003_add_terrain_system.sql`
+**Migration created**: `migrations/0003_add_terrain_system.sql`
 
-```sql
--- Add water resource to civilizations
-ALTER TABLE civilizations ADD COLUMN water_resource TEXT DEFAULT 'lake';
+**Completed Steps**:
+1. ✅ Created migration file with terrain system fields
+2. ✅ Applied to local database successfully
+3. ✅ Updated TypeScript types in `src/types.ts`
+4. ✅ Updated parseCivilization() function in `src/db.ts`
+5. ✅ Verified columns exist in both civilizations and civ_presets tables
+6. ✅ Git committed changes
 
--- Update population_capacity to use water resource values
--- (Will be calculated programmatically, but update defaults)
-
--- Add terrain data storage
-ALTER TABLE civilizations ADD COLUMN terrain_data TEXT; -- JSON hex map
-
--- Add island flag for +7 defense
-ALTER TABLE civilizations ADD COLUMN is_island BOOLEAN DEFAULT FALSE;
-```
-
-**Steps**:
-1. Create migration file
-2. Apply to local database
-3. Update parseCivilization() function in `src/db.ts`
-4. Test migration
+**Database Changes**:
+- Added `water_resource TEXT DEFAULT 'lake'` to civilizations
+- Added `terrain_data TEXT` to civilizations (JSON hex map)
+- Added `is_island BOOLEAN DEFAULT FALSE` to civilizations
+- Added same fields to civ_presets table for preset configuration
 
 ### 🔄 Phase 3: Backend Integration (3-4 hours)
 

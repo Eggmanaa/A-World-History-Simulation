@@ -474,3 +474,15 @@ export function getWaterResourceForRegion(regions: string[]): WaterResourceType 
 export function getPopulationCapacity(waterResource: WaterResourceType): number {
   return WATER_RESOURCES[waterResource].populationCapacity;
 }
+
+// Check if region is an island (gets +7 defense bonus)
+export function checkIfIslandRegion(regions: string[]): boolean {
+  for (const region of regions) {
+    const template = REGION_TEMPLATES[region];
+    if (template && template.isIsland) {
+      return true;
+    }
+  }
+  
+  return false;
+}

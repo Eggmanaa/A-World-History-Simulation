@@ -2,6 +2,7 @@
 // Translated from Python simulation code
 
 import type { Civilization, Trait } from './types'
+import { calculateTerrainDefense, calculateTerrainIndustry } from './terrain-system'
 
 // Apply trait modifiers to civilization stats
 export function applyTraitModifiers(civ: Partial<Civilization>): Partial<Civilization> {
@@ -179,7 +180,17 @@ export function applyGrowthPhase(civ: Civilization, housesDoublePopulation: bool
   
   // 3. Calculate base stats from population
   // Industry = Population ÷ 5
-  const baseIndustry = Math.floor(civ.population / 5)
+  let baseIndustry = Math.floor(civ.population / 5)
+  
+  // Add terrain industry bonuses
+  if (civ.terrain_data) {
+    const terrainData = typeof civ.terrain_data === 'string' 
+      ? JSON.parse(civ.terrain_data) 
+      : civ.terrain_data
+    const terrainIndustry = calculateTerrainIndustry(terrainData)
+    baseIndustry += terrainIndustry
+  }
+  
   // Other base stats = Population ÷ 10
   const baseStats = Math.floor(civ.population / 10)
   
@@ -240,7 +251,17 @@ export function resolveWar(attacker: Civilization, defender: Civilization): {
   defenderTotal: number
 } {
   const attackerTotal = attacker.martial
-  const defenderTotal = defender.martial + defender.defense
+  
+  // Calculate defender's terrain defense bonus
+  let terrainDefense = 0
+  if (defender.terrain_data) {
+    const terrainData = typeof defender.terrain_data === 'string' 
+      ? JSON.parse(defender.terrain_data) 
+      : defender.terrain_data
+    terrainDefense = calculateTerrainDefense(terrainData, defender.is_island || false)
+  }
+  
+  const defenderTotal = defender.martial + defender.defense + terrainDefense
   
   if (attackerTotal > defenderTotal) {
     return {

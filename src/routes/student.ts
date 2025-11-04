@@ -2,6 +2,12 @@ import { Hono } from 'hono'
 import type { Bindings, Civilization } from '../types'
 import { generateId, getDefaultCivStats, parseCivilization, parseCivPreset } from '../db'
 import { applyTraitModifiers } from '../game-logic'
+import { 
+  generateHexMap, 
+  getWaterResourceForRegion, 
+  getPopulationCapacity,
+  checkIfIslandRegion
+} from '../terrain-system'
 
 const student = new Hono<{ Bindings: Bindings }>()
 
@@ -89,6 +95,16 @@ student.post('/civilization', async (c) => {
     // Apply trait modifiers
     civStats = applyTraitModifiers(civStats)
     
+    // Generate terrain system data
+    const regions = civStats.regions || []
+    const waterResource = getWaterResourceForRegion(regions)
+    const populationCapacity = getPopulationCapacity(waterResource)
+    const hexMap = generateHexMap(regions, 3) // radius 3 = ~37 hexes
+    const isIsland = checkIfIslandRegion(regions)
+    
+    // Override population capacity with water resource value
+    civStats.population_capacity = populationCapacity
+    
     // Create civilization
     const civId = generateId()
     const now = Date.now()
@@ -100,18 +116,20 @@ student.post('/civilization', async (c) => {
         industry, industry_left, martial, defense, science, culture, faith, diplomacy,
         temples, amphitheaters, walls, archimedes_towers,
         cultural_stage, traits, regions,
+        water_resource, terrain_data, is_island,
         conquered, locked_decline, advance_count,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       civId, student.simulation_id, studentId, name, color || '#3B82F6',
-      civStats.houses || 0, civStats.population || 0, civStats.population_capacity || 200,
+      civStats.houses || 0, civStats.population || 0, populationCapacity,
       civStats.fertility || 2, civStats.industry || 5, civStats.industry_left || 5,
       civStats.martial || 5, civStats.defense || 5, civStats.science || 0,
       civStats.culture || 0, civStats.faith || 5, civStats.diplomacy || 0,
       civStats.temples || 0, civStats.amphitheaters || 0, civStats.walls || 0,
       civStats.archimedes_towers || 0, civStats.cultural_stage || 'barbarism',
       JSON.stringify(civStats.traits || []), JSON.stringify(civStats.regions || []),
+      waterResource, JSON.stringify(hexMap), isIsland ? 1 : 0,
       0, 0, 0, now, now
     ).run()
     
