@@ -247,11 +247,12 @@ function renderPeriodDetails(data) {
                 const achievements = civ.achievements || [];
                 
                 return `
-                <tr class="border-t ${civ.conquered ? 'bg-red-50 opacity-60' : 'hover:bg-gray-50'}">
+                <tr class="border-t ${civ.conquered ? 'bg-red-50 opacity-60' : 'hover:bg-gray-50'} cursor-pointer" onclick="showCivilizationDetails('${civ.id}')">
                   <td class="px-4 py-2">
                     <div class="flex items-center">
                       <div class="w-4 h-4 rounded-full mr-2" style="background-color: ${civ.color}"></div>
                       <span class="font-semibold">${civ.name}</span>
+                      <i class="fas fa-info-circle ml-2 text-gray-400 text-sm" title="Click for details"></i>
                     </div>
                   </td>
                   <td class="px-4 py-2 text-center">${civ.population}</td>
@@ -650,4 +651,327 @@ async function createPeriod(e) {
 // Close modal
 function closeModal() {
   document.getElementById('modalContainer').innerHTML = '';
+}
+
+// Show civilization details modal
+async function showCivilizationDetails(civId) {
+  // Find civilization in current data
+  if (!currentSimulationData) return;
+  
+  const civ = currentSimulationData.civilizations.find(c => c.id === civId);
+  if (!civ) return;
+  
+  // Get student info
+  let studentInfo = null;
+  try {
+    const response = await axios.get(`/api/teacher/periods/${selectedPeriod.id}/students`);
+    const students = response.data.students || [];
+    studentInfo = students.find(s => s.civ_id === civId);
+  } catch (error) {
+    console.error('Failed to load student info:', error);
+  }
+  
+  // Parse arrays
+  const regions = civ.regions || [];
+  const traits = civ.traits || [];
+  const wonders = civ.wonders || [];
+  const cultureBuildings = civ.culture_buildings || [];
+  const allWonders = [...wonders, ...cultureBuildings];
+  const culturalBonuses = civ.cultural_bonuses || [];
+  const achievements = civ.achievements || [];
+  const religionTenets = civ.religion_tenants || [];
+  
+  // Achievement metadata
+  const achievementData = {
+    'glory_to_rome': { name: 'Glory to Rome', description: 'Conquer 10 civilizations', icon: '⚔️' },
+    'test_of_time': { name: 'Test of Time', description: 'Survive 20 battles', icon: '🛡️' },
+    'ozymandias': { name: 'Ozymandias', description: 'First civilization defeated', icon: '💀' },
+    'cultural_victory': { name: 'Cultural Victory', description: 'Highest culture at game end', icon: '🎭' },
+    'scientific_achievement': { name: 'Scientific Achievement', description: 'Reach science level 30', icon: '🔬' },
+    'religious_dominance': { name: 'Religious Dominance', description: 'Convert 5+ civilizations', icon: '⭐' },
+    'economic_powerhouse': { name: 'Economic Powerhouse', description: 'Have 200+ industry', icon: '💰' },
+    'military_supremacy': { name: 'Military Supremacy', description: '100+ martial', icon: '⚔️' }
+  };
+  
+  // Format cultural stage
+  const stageDisplay = (civ.cultural_stage || 'barbarism').replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  
+  // Format timestamp
+  const lastUpdated = new Date(civ.updated_at).toLocaleString();
+  
+  const modal = document.getElementById('modalContainer');
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onclick="closeModal()">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="sticky top-0 bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-xl z-10">
+          <div class="flex justify-between items-start">
+            <div class="flex items-center">
+              <div class="w-8 h-8 rounded-full mr-3" style="background-color: ${civ.color}"></div>
+              <div>
+                <h2 class="text-3xl font-bold">${civ.name}</h2>
+                ${studentInfo ? `
+                  <p class="text-red-100 mt-1">
+                    <i class="fas fa-user-graduate mr-2"></i>Student: ${studentInfo.name} (${studentInfo.email})
+                  </p>
+                ` : ''}
+              </div>
+            </div>
+            <button onclick="closeModal()" class="text-white hover:text-red-200 transition">
+              <i class="fas fa-times text-3xl"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="p-6 space-y-6">
+          <!-- Basic Info Section -->
+          <div class="bg-gray-50 rounded-lg p-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <i class="fas fa-info-circle mr-2 text-blue-600"></i>Basic Information
+            </h3>
+            <div class="grid md:grid-cols-3 gap-4">
+              <div>
+                <p class="text-sm text-gray-600">Cultural Stage</p>
+                <p class="font-bold text-gray-800">${stageDisplay}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Regions</p>
+                <p class="font-bold text-gray-800">${regions.length > 0 ? regions.map(r => r.replace(/_/g, ' ')).join(', ') : 'None'}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Traits</p>
+                <p class="font-bold text-gray-800">${traits.length > 0 ? traits.map(t => t.replace(/_/g, ' ')).join(', ') : 'None'}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Advance Count</p>
+                <p class="font-bold text-gray-800">${civ.advance_count || 0}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Status</p>
+                <p class="font-bold ${civ.conquered ? 'text-red-600' : 'text-green-600'}">
+                  ${civ.conquered ? '<i class="fas fa-skull mr-1"></i>Conquered' : '<i class="fas fa-check-circle mr-1"></i>Active'}
+                </p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Last Updated</p>
+                <p class="font-bold text-gray-800 text-xs">${lastUpdated}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Population & Resources Section -->
+          <div class="bg-green-50 rounded-lg p-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <i class="fas fa-users mr-2 text-green-600"></i>Population & Resources
+            </h3>
+            <div class="grid md:grid-cols-4 gap-4">
+              <div>
+                <p class="text-sm text-gray-600">Population</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.population}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Houses</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.houses}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Fertility</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.fertility}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Population Capacity</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.population_capacity}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Industry (Total)</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.industry}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Industry (Remaining)</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.industry_left}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Military Section -->
+          <div class="bg-red-50 rounded-lg p-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <i class="fas fa-shield-alt mr-2 text-red-600"></i>Military Power
+            </h3>
+            <div class="grid md:grid-cols-4 gap-4">
+              <div>
+                <p class="text-sm text-gray-600">Martial</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.martial}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Defense</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.defense}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Maps Conquered</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.maps_conquered || 0}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Battles Survived</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.battles_survived || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cultural & Scientific Section -->
+          <div class="bg-purple-50 rounded-lg p-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <i class="fas fa-book mr-2 text-purple-600"></i>Cultural & Scientific Progress
+            </h3>
+            <div class="grid md:grid-cols-4 gap-4">
+              <div>
+                <p class="text-sm text-gray-600">Culture</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.culture}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Science</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.science}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Faith</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.faith}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Diplomacy</p>
+                <p class="font-bold text-gray-800 text-2xl">${civ.diplomacy}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Writing System</p>
+                <p class="font-bold text-gray-800">${civ.writing ? civ.writing.replace(/_/g, ' ') : 'None'}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Buildings Section -->
+          <div class="bg-blue-50 rounded-lg p-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <i class="fas fa-building mr-2 text-blue-600"></i>Buildings
+            </h3>
+            <div class="grid md:grid-cols-4 gap-4">
+              <div class="text-center">
+                <div class="text-3xl mb-2">⛪</div>
+                <p class="text-sm text-gray-600">Temples</p>
+                <p class="font-bold text-gray-800 text-xl">${civ.temples}</p>
+              </div>
+              <div class="text-center">
+                <div class="text-3xl mb-2">🎭</div>
+                <p class="text-sm text-gray-600">Amphitheaters</p>
+                <p class="font-bold text-gray-800 text-xl">${civ.amphitheaters}</p>
+              </div>
+              <div class="text-center">
+                <div class="text-3xl mb-2">🧱</div>
+                <p class="text-sm text-gray-600">Walls</p>
+                <p class="font-bold text-gray-800 text-xl">${civ.walls}</p>
+              </div>
+              <div class="text-center">
+                <div class="text-3xl mb-2">🗼</div>
+                <p class="text-sm text-gray-600">Archimedes Towers</p>
+                <p class="font-bold text-gray-800 text-xl">${civ.archimedes_towers}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wonders Section -->
+          <div class="bg-purple-50 rounded-lg p-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+              <i class="fas fa-trophy mr-2 text-purple-600"></i>Wonders & Culture Buildings
+            </h3>
+            ${allWonders.length > 0 ? `
+              <div class="flex flex-wrap gap-2">
+                ${allWonders.map(w => `
+                  <span class="bg-purple-100 text-purple-800 px-3 py-2 rounded-lg text-sm font-semibold">
+                    🏛️ ${w.replace(/_/g, ' ')}
+                  </span>
+                `).join('')}
+              </div>
+            ` : '<p class="text-gray-500 text-center py-4">No wonders built yet</p>'}
+          </div>
+
+          <!-- Religion Section -->
+          ${civ.religion_name ? `
+            <div class="bg-yellow-50 rounded-lg p-4">
+              <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-star mr-2 text-yellow-600"></i>Religion
+              </h3>
+              <div class="space-y-3">
+                <div>
+                  <p class="text-sm text-gray-600">Religion Name</p>
+                  <p class="font-bold text-gray-800 text-xl">⭐ ${civ.religion_name}</p>
+                </div>
+                ${religionTenets.length > 0 ? `
+                  <div>
+                    <p class="text-sm text-gray-600 mb-2">Tenets</p>
+                    <div class="flex flex-wrap gap-2">
+                      ${religionTenets.map(t => `
+                        <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm">
+                          ${t.replace(/_/g, ' ')}
+                        </span>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                <div class="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-sm text-gray-600">Followers</p>
+                    <p class="font-bold text-gray-800 text-xl">${civ.religion_followers || 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Cultural Bonuses Section -->
+          ${culturalBonuses.length > 0 ? `
+            <div class="bg-pink-50 rounded-lg p-4">
+              <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-gem mr-2 text-pink-600"></i>Cultural Bonuses (${culturalBonuses.length})
+              </h3>
+              <div class="flex flex-wrap gap-2">
+                ${culturalBonuses.map(b => `
+                  <span class="bg-pink-100 text-pink-800 px-3 py-1 rounded text-sm">
+                    <i class="fas fa-gem mr-1"></i>${b.replace(/_/g, ' ')}
+                  </span>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Achievements Section -->
+          ${achievements.length > 0 ? `
+            <div class="bg-yellow-50 rounded-lg p-4">
+              <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-medal mr-2 text-yellow-600"></i>Achievements (${achievements.length})
+              </h3>
+              <div class="grid md:grid-cols-2 gap-3">
+                ${achievements.map(a => {
+                  const meta = achievementData[a] || { name: a, description: '', icon: '🏆' };
+                  return `
+                    <div class="bg-yellow-100 border border-yellow-300 rounded-lg p-3 flex items-center">
+                      <span class="text-3xl mr-3">${meta.icon}</span>
+                      <div>
+                        <p class="font-bold text-gray-800">${meta.name}</p>
+                        <p class="text-sm text-gray-600">${meta.description}</p>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Footer -->
+        <div class="sticky bottom-0 bg-gray-100 p-4 rounded-b-xl border-t">
+          <button onclick="closeModal()" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg transition font-bold">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 }
