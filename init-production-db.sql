@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS civilizations (
   -- Map Data
   map_data TEXT,
   
+  -- New Game Features
+  wonders TEXT,
+  culture_buildings TEXT,
+  cultural_bonuses TEXT,
+  achievements TEXT,
+  battles_survived INTEGER DEFAULT 0,
+  maps_conquered INTEGER DEFAULT 0,
+  religion_followers INTEGER DEFAULT 0,
+  
   -- Flags
   conquered BOOLEAN DEFAULT FALSE,
   locked_decline BOOLEAN DEFAULT FALSE,
@@ -177,12 +186,39 @@ CREATE TABLE IF NOT EXISTS civ_presets (
   created_at INTEGER NOT NULL
 );
 
+-- Achievements table
+CREATE TABLE IF NOT EXISTS achievements (
+  id TEXT PRIMARY KEY,
+  civ_id TEXT NOT NULL,
+  achievement_id TEXT NOT NULL,
+  achievement_name TEXT NOT NULL,
+  earned_at INTEGER NOT NULL,
+  year_earned INTEGER NOT NULL,
+  FOREIGN KEY (civ_id) REFERENCES civilizations(id)
+);
+
+-- Religion spreading table
+CREATE TABLE IF NOT EXISTS religion_spread (
+  id TEXT PRIMARY KEY,
+  simulation_id TEXT NOT NULL,
+  religion_name TEXT NOT NULL,
+  founder_civ_id TEXT NOT NULL,
+  follower_civ_id TEXT NOT NULL,
+  spread_at INTEGER NOT NULL,
+  FOREIGN KEY (simulation_id) REFERENCES simulations(id),
+  FOREIGN KEY (founder_civ_id) REFERENCES civilizations(id),
+  FOREIGN KEY (follower_civ_id) REFERENCES civilizations(id)
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_periods_teacher ON periods(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_students_period ON students(period_id);
 CREATE INDEX IF NOT EXISTS idx_civilizations_simulation ON civilizations(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_civilizations_student ON civilizations(student_id);
 CREATE INDEX IF NOT EXISTS idx_alliances_simulation ON alliances(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_achievements_civ ON achievements(civ_id);
+CREATE INDEX IF NOT EXISTS idx_religion_spread_sim ON religion_spread(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_religion_spread_founder ON religion_spread(founder_civ_id);
 CREATE INDEX IF NOT EXISTS idx_wars_simulation ON wars(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_event_log_simulation ON event_log(simulation_id);
 CREATE INDEX IF NOT EXISTS idx_event_log_year ON event_log(simulation_id, year);

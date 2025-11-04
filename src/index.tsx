@@ -8,6 +8,8 @@ import authRoutes from './routes/auth'
 import teacherRoutes from './routes/teacher'
 import studentRoutes from './routes/student'
 import gameRoutes from './routes/game'
+import wonderRoutes from './routes/wonders'
+import religionRoutes from './routes/religion'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -22,6 +24,8 @@ app.route('/api/auth', authRoutes)
 app.route('/api/teacher', teacherRoutes)
 app.route('/api/student', studentRoutes)
 app.route('/api/game', gameRoutes)
+app.route('/api/wonders', wonderRoutes)
+app.route('/api/religion', religionRoutes)
 
 // Root route - Main landing page
 app.get('/', (c) => {

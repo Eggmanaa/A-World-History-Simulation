@@ -84,6 +84,16 @@ export interface Civilization {
   regions?: string[] // stored as JSON string
   bonus_features?: string[] // stored as JSON string
   
+  // New Features
+  wonders?: string[] // stored as JSON string - IDs of wonders built
+  culture_buildings?: string[] // stored as JSON string - IDs of culture-specific buildings
+  cultural_bonuses?: string[] // stored as JSON string - IDs of unlocked bonuses
+  achievements?: string[] // stored as JSON string - IDs of earned achievements
+  battles_survived: number
+  maps_conquered: number
+  religion_followers: number
+  map_data?: string // stored as JSON string
+  
   // Flags
   conquered: boolean
   locked_decline: boolean
