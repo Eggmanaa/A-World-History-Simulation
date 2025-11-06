@@ -53,9 +53,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Logout
 function logout() {
+  stopPolling();
   sessionStorage.removeItem('student');
   window.location.href = '/';
 }
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+  stopPolling();
+});
 
 // Load game
 async function loadGame() {
@@ -233,8 +239,54 @@ async function createCivilization(e) {
   }
 }
 
+// Start polling for real-time updates
+function startPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+  }
+  
+  // Poll every 5 seconds for updates
+  pollingInterval = setInterval(async () => {
+    try {
+      // Check simulation state
+      const simResponse = await axios.get(`/api/student/simulation/${currentStudent.id}`);
+      const newSim = simResponse.data.simulation;
+      
+      // Check if simulation has advanced
+      if (newSim.current_year !== simulation.current_year || 
+          newSim.timeline_index !== simulation.timeline_index ||
+          newSim.paused !== simulation.paused) {
+        // Reload game data
+        await loadGame();
+      } else {
+        // Just refresh civilization data for industry updates
+        const civResponse = await axios.get(`/api/student/civilization/${currentStudent.id}`);
+        const newCiv = civResponse.data.civilization;
+        
+        // Check if civilization data has changed
+        if (newCiv && JSON.stringify(newCiv) !== JSON.stringify(civilization)) {
+          civilization = newCiv;
+          renderGame();
+        }
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+    }
+  }, 5000); // Poll every 5 seconds
+}
+
+// Stop polling
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+}
+
 // Render game
 function renderGame() {
+  // Start polling for updates
+  startPolling();
   document.getElementById('app').innerHTML = `
     <div class="min-h-screen bg-gray-900 text-white">
       <!-- Header -->
@@ -616,6 +668,7 @@ function renderActionsPanel() {
 // Setup map click handlers
 // Global hex map instance
 let hexMapInstance = null;
+let pollingInterval = null; // For auto-refresh
 
 function setupMapHandlers() {
   // Initialize hex map
@@ -627,7 +680,8 @@ function setupMapHandlers() {
   }
   
   // Create hex map instance
-  hexMapInstance = new HexMap('hexMapContainer', terrainTiles);
+  // Use new HexMapV2 with fixed rendering
+  hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
   
   // Load existing buildings onto hex map
   if (buildingMap) {
@@ -665,12 +719,42 @@ function showBuildMenu(q, r, s) {
   const availableWalls = civilization.walls - (placedBuildings['wall'] || 0);
   const availableArchimedes = civilization.archimedes_towers - (placedBuildings['archimedes'] || 0);
   
+  // Check if selected tile allows house building
+  let canBuildHouseOnTile = true;
+  let tileTerrainType = null;
+  if (selectedTile && civilization.terrain_data) {
+    const tile = civilization.terrain_data.find(t => 
+      t.coord && t.coord.q === selectedTile.q && 
+      t.coord.r === selectedTile.r && t.coord.s === selectedTile.s
+    );
+    if (tile) {
+      tileTerrainType = tile.terrain;
+      const restrictedTerrains = ['ocean', 'river', 'marsh', 'forest', 'mountains', 'high_mountains', 'desert'];
+      canBuildHouseOnTile = !restrictedTerrains.includes(tile.terrain);
+    }
+  }
+  
+  // Check houses built this turn vs fertility limit
+  const housesBuiltThisTurn = civilization.houses_built_this_turn || 0;
+  const canBuildMoreHouses = housesBuiltThisTurn < civilization.fertility;
+  
   const buildings = [
-    { type: 'house', name: 'House', cost: 5, icon: '🏠', effect: '+5 Population Capacity', requirement: null, available: availableHouses },
-    { type: 'temple', name: 'Temple', cost: 10, icon: '⛪', effect: '+2 Faith', requirement: null, available: availableTemples },
-    { type: 'amphitheater', name: 'Amphitheater', cost: 10, icon: '🎭', effect: '+3 Culture, -1 Faith', requirement: null, available: availableAmphitheaters },
-    { type: 'wall', name: 'Wall', cost: 10, icon: '🧱', effect: '+1 Defense', requirement: null, available: availableWalls },
-    { type: 'archimedes', name: 'Archimedes Tower', cost: 20, icon: '🗼', effect: '+20 Defense', requirement: 'Science ≥ 30', available: availableArchimedes }
+    { 
+      type: 'house', 
+      name: 'House', 
+      cost: 0, // Houses cost 0 industry
+      icon: '🏠', 
+      effect: `+1 Population (limit: ${civilization.fertility}/turn from fertility)`,
+      requirement: canBuildHouseOnTile ? 
+        (canBuildMoreHouses ? null : `Max ${civilization.fertility} houses per advancement`) :
+        `Cannot build on ${tileTerrainType}`,
+      available: availableHouses,
+      canBuild: canBuildHouseOnTile && canBuildMoreHouses
+    },
+    { type: 'temple', name: 'Temple', cost: 10, icon: '⛪', effect: '+2 Faith', requirement: null, available: availableTemples, canBuild: true },
+    { type: 'amphitheater', name: 'Amphitheater', cost: 10, icon: '🎭', effect: '+3 Culture, -1 Faith', requirement: null, available: availableAmphitheaters, canBuild: true },
+    { type: 'wall', name: 'Wall', cost: 10, icon: '🧱', effect: '+1 Defense', requirement: null, available: availableWalls, canBuild: true },
+    { type: 'archimedes', name: 'Archimedes Tower', cost: 20, icon: '🗼', effect: '+20 Defense', requirement: 'Science ≥ 30', available: availableArchimedes, canBuild: true }
   ];
   
   const modalHTML = `
@@ -686,8 +770,10 @@ function showBuildMenu(q, r, s) {
           ${buildings.map(b => {
             // Can place if: have available building OR have enough industry to build new one
             const canPlaceExisting = b.available > 0;
-            const canBuildNew = civilization.industry_left >= b.cost && 
-                            (!b.requirement || (b.type === 'archimedes' && civilization.science >= 30));
+            const canBuildNew = b.type === 'house' ? 
+              b.canBuild : // Houses have special rules
+              (civilization.industry_left >= b.cost && 
+               (!b.requirement || (b.type === 'archimedes' && civilization.science >= 30)));
             const canPlace = canPlaceExisting || canBuildNew;
             
             return `

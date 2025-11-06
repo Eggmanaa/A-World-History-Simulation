@@ -312,11 +312,17 @@ game.post('/build', async (c) => {
     const buildingType = building.toLowerCase()
     
     if (buildingType === 'house') {
-      // Houses cost 0 industry and are limited by fertility
+      // Houses cost 0 industry and are limited by fertility per turn
+      // Check if already built houses this turn equal to fertility
+      if ((civData.houses_built_this_turn || 0) >= civData.fertility) {
+        return c.json({ 
+          error: `Can only build ${civData.fertility} houses per advancement (limited by fertility)` 
+        }, 400)
+      }
+      
       await db.prepare(`
         UPDATE civilizations 
         SET houses = houses + 1,
-            population_capacity = population_capacity + 5,
             houses_built_this_turn = houses_built_this_turn + 1,
             updated_at = ?
         WHERE id = ?

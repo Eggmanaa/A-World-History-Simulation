@@ -3,11 +3,11 @@ import type { Bindings, Civilization } from '../types'
 import { generateId, getDefaultCivStats, parseCivilization, parseCivPreset } from '../db'
 import { applyTraitModifiers } from '../game-logic'
 import { 
-  generateHexMap, 
+  generateHexMapV2, 
   getWaterResourceForRegion, 
   getPopulationCapacity,
   checkIfIslandRegion
-} from '../terrain-system'
+} from '../terrain-system-v2'
 
 const student = new Hono<{ Bindings: Bindings }>()
 
@@ -99,7 +99,7 @@ student.post('/civilization', async (c) => {
     const regions = civStats.regions || []
     const waterResource = getWaterResourceForRegion(regions)
     const populationCapacity = getPopulationCapacity(waterResource)
-    const hexMap = generateHexMap(regions, 3) // radius 3 = ~37 hexes
+    const hexMap = generateHexMapV2(regions, 3) // radius 3 = ~37 hexes with clean biomes
     const isIsland = checkIfIslandRegion(regions)
     
     // Override population capacity with water resource value
