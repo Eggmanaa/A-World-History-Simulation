@@ -12,7 +12,7 @@ A comprehensive multiplayer web-based civilization management game for high scho
 ## 🚀 Live Demo
 
 **🚀 PRODUCTION (Live):** https://worldhistorysim.pages.dev  
-**Latest Deployment:** https://a7d8b398.worldhistorysim.pages.dev
+**Latest Deployment:** https://366d7f1d.worldhistorysim.pages.dev *(Deployed: 2025-01-06)*
 
 **GitHub Repository:** https://github.com/Eggmanaa/A-World-History-Simulation
 
@@ -517,7 +517,7 @@ Built with ❤️ for history teachers and students everywhere.
 
 ---
 
-**Current Status**: ✅ All Core Phases Complete (1-6) | 🚀 Ready for Deployment | 🎉 Terrain System Integrated!
+**Current Status**: ✅ All Core Phases Complete (1-6) | 🚀 **DEPLOYED TO PRODUCTION** | 🎉 Latest Update: January 6, 2025
 
 **Implemented Features**:
 ✅ Phase 1: Backend Systems (Authentication, Timeline, Wars, Alliances, Buildings, Religions)
@@ -525,15 +525,26 @@ Built with ❤️ for history teachers and students everywhere.
 ✅ Phase 3: Auto-Apply Systems (Cultural Bonuses, Science Effects, Writing, Achievements)
 ✅ Phase 4: Teacher Dashboard (Wonders Tab, Religions Tab, Achievements Tab, Individual Stats)
 ✅ Phase 5: Polish Features (Notifications, Loading States, Historical Context, Mobile Responsive)
-✅ Phase 6: Terrain System (Hex Grids, Water Resources, Terrain Bonuses, Region Templates) **NEW!**
+✅ Phase 6: Terrain System (Hex Grids, Water Resources, Terrain Bonuses, Region Templates)
 
-**Latest Additions (Phase 6 - Terrain System)**:
-- 🗺️ Hex-based map system with interactive terrain
-- 🌊 Water resource types affecting population capacity (4-15 houses)
-- ⛰️ Terrain bonuses for defense and industry
-- 🏝️ Island geography detection with bonus defense
-- 🎨 Visual terrain representation with colors and icons
-- 📊 Teacher dashboard terrain analytics
-- 🎓 Educational terrain tooltips
+**Latest Deployment (January 6, 2025) - Three Major Updates**:
 
-**Optional Enhancements**: Real-time updates, Analytics dashboard, CSV export, Sound effects
+1. **🏠 Housing System Overhaul**:
+   - Houses now cost **0 industry** (changed from 5)
+   - Limited by **fertility rating** per advancement stage
+   - Cannot build on water, forests, mountains, or deserts (unless cultural/science bonus allows)
+   - Automatic tracking of houses built per turn with reset on timeline advancement
+
+2. **🗺️ Terrain Generation Rewrite**:
+   - **Honeycomb hex pattern** with clean edges (no overlap)
+   - **Biome system**: Mountains, forests, and deserts appear as contiguous regions on map edges
+   - **Barbarian entrance**: At least one edge hex between two biomes for raider entry
+   - **Boolean terrain bonuses**: Apply once if terrain type exists anywhere (not per-hex multiplication)
+
+3. **⚡ Instantaneous Updates**:
+   - **Auto-refresh system**: 5-second polling for game state changes
+   - **Real-time industry tracking**: Decreases when students build, resets on advancement
+   - **Automatic UI updates**: No manual page refresh needed
+   - **Timeline notifications**: Alert when teacher advances year
+
+**Optional Enhancements**: WebSockets for true real-time, Analytics dashboard, CSV export, Sound effects
