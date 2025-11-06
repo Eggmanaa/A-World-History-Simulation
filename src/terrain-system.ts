@@ -357,7 +357,7 @@ export const REGION_TEMPLATES: Record<string, RegionTemplate> = {
   }
 };
 
-// Generate hex map for a region
+// Generate hex map for a region with improved biome layout
 export function generateHexMap(regions: string[], hexRadius: number = 3): HexTile[] {
   const tiles: HexTile[] = [];
   
@@ -370,58 +370,85 @@ export function generateHexMap(regions: string[], hexRadius: number = 3): HexTil
     }
   }
   
-  // Generate hex grid structure (radius 3 = 37 hexes)
-  const allCoords: HexCoordinate[] = [];
+  // Generate all hex coordinates for the given radius
+  const hexCoords: HexCoordinate[] = [];
   for (let q = -hexRadius; q <= hexRadius; q++) {
     const r1 = Math.max(-hexRadius, -q - hexRadius);
     const r2 = Math.min(hexRadius, -q + hexRadius);
     
     for (let r = r1; r <= r2; r++) {
       const s = -q - r;
-      allCoords.push({ q, r, s });
+      hexCoords.push({ q, r, s });
     }
   }
   
-  // Identify edge hexes (outermost ring)
-  const edgeHexes = allCoords.filter(coord => {
-    return Math.abs(coord.q) === hexRadius || 
-           Math.abs(coord.r) === hexRadius || 
-           Math.abs(coord.s) === hexRadius;
+  // Separate edge and center hexes
+  const edgeHexes: HexCoordinate[] = [];
+  const centerHexes: HexCoordinate[] = [];
+  
+  for (const coord of hexCoords) {
+    const maxCoord = Math.max(Math.abs(coord.q), Math.abs(coord.r), Math.abs(coord.s));
+    if (maxCoord === hexRadius) {
+      edgeHexes.push(coord);
+    } else {
+      centerHexes.push(coord);
+    }
+  }
+  
+  // Sort edge hexes by angle for contiguous biome assignment
+  edgeHexes.sort((a, b) => {
+    const angleA = Math.atan2(a.r * Math.sqrt(3)/2, a.q * 3/2);
+    const angleB = Math.atan2(b.r * Math.sqrt(3)/2, b.q * 3/2);
+    return angleA - angleB;
   });
   
-  // Identify center hexes (everything else)
-  const centerHexes = allCoords.filter(coord => {
-    return Math.abs(coord.q) < hexRadius && 
-           Math.abs(coord.r) < hexRadius && 
-           Math.abs(coord.s) < hexRadius;
-  });
-  
-  // Create biomes on edges: mountains, forests, deserts
+  // Determine biomes based on template
   const biomeTypes: TerrainType[] = ['mountains', 'forest', 'desert'];
-  const biomes = assignBiomesToEdges(edgeHexes, biomeTypes);
+  const hexesPerBiome = Math.ceil(edgeHexes.length / biomeTypes.length);
   
-  // Find barbarian entrance (between two biomes)
-  const barbarianEntrance = findBarbarianEntrance(edgeHexes, biomes);
-  if (barbarianEntrance) {
-    biomes[`${barbarianEntrance.q},${barbarianEntrance.r},${barbarianEntrance.s}`] = 'plains';
+  // Create edge tiles with biomes
+  for (let i = 0; i < edgeHexes.length; i++) {
+    const biomeIndex = Math.floor(i / hexesPerBiome);
+    const biomeTerrain = biomeTypes[Math.min(biomeIndex, biomeTypes.length - 1)];
+    
+    // Add barbarian entrance between biomes
+    if (i > 0 && i % hexesPerBiome === 0) {
+      tiles.push({
+        coord: edgeHexes[i - 1],
+        terrain: 'plains' // Clear entrance
+      });
+    } else {
+      tiles.push({
+        coord: edgeHexes[i],
+        terrain: biomeTerrain
+      });
+    }
   }
   
-  // Fill center with plains/grassland
+  // Fill center with appropriate terrain
+  const centerTerrainOptions = ['plains', 'grassland'];
+  if (template.waterResource === 'river') {
+    centerTerrainOptions.push('river');
+  }
+  
   for (const coord of centerHexes) {
-    const key = `${coord.q},${coord.r},${coord.s}`;
+    const randomTerrain = centerTerrainOptions[Math.floor(Math.random() * centerTerrainOptions.length)];
     tiles.push({
       coord,
-      terrain: Math.random() < 0.5 ? 'plains' : 'grassland'
+      terrain: randomTerrain
     });
   }
   
-  // Add edge hexes with biomes
-  for (const coord of edgeHexes) {
-    const key = `${coord.q},${coord.r},${coord.s}`;
-    tiles.push({
-      coord,
-      terrain: biomes[key] || 'plains'
-    });
+  // Ensure at least one river hex if template has river water resource
+  if (template.waterResource === 'river' && !tiles.some(t => t.terrain === 'river')) {
+    const centerIndex = Math.floor(centerHexes.length / 2);
+    const centerTileIndex = tiles.findIndex(t => 
+      t.coord.q === centerHexes[centerIndex].q && 
+      t.coord.r === centerHexes[centerIndex].r
+    );
+    if (centerTileIndex >= 0) {
+      tiles[centerTileIndex].terrain = 'river';
+    }
   }
   
   return tiles;
