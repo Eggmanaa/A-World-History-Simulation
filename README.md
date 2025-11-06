@@ -21,6 +21,7 @@ A comprehensive multiplayer web-based civilization management game for high scho
 ### For Teachers
 - ✅ Create and manage multiple class periods
 - ✅ Generate unique invite codes for students
+- ✅ **NEW:** Delete class periods/games (allows students to rejoin with new codes)
 - ✅ Control timeline advancement (forward/backward)
 - ✅ View all civilizations and their stats in summary table
 - ✅ **NEW:** Click any civilization to see comprehensive individual stats
@@ -548,3 +549,11 @@ Built with ❤️ for history teachers and students everywhere.
    - **Timeline notifications**: Alert when teacher advances year
 
 **Optional Enhancements**: WebSockets for true real-time, Analytics dashboard, CSV export, Sound effects
+
+## 🎨 Visual Design Updates
+
+### Tower of Babel Theme
+- **NEW:** Pieter Bruegel the Elder's Tower of Babel painting as background
+- Thematically represents humanity's ambition to build great civilizations
+- Applied consistently across all pages (landing, login, teacher dashboard)
+- Semi-transparent overlays ensure text readability
