@@ -336,36 +336,6 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
       }
     }
     
-    // Broadcast timeline advance to all connected students via WebSocket
-    try {
-      const period = await db.prepare(
-        'SELECT * FROM periods WHERE id = (SELECT period_id FROM simulations WHERE id = ?)'
-      ).bind(simulationId).first()
-      
-      if (period) {
-        const periodId = (period as any).id
-        const wsRoomId = c.env.WEBSOCKET_ROOM.idFromName(periodId)
-        const wsRoom = c.env.WEBSOCKET_ROOM.get(wsRoomId)
-        
-        // Send broadcast message to WebSocket room (fire and forget)
-        wsRoom.fetch(new Request('https://internal/broadcast', {
-          method: 'POST',
-          body: JSON.stringify({
-            type: 'timeline_advance',
-            data: {
-              year: nextEvent.year,
-              index: nextIndex,
-              event: nextEvent
-            },
-            timestamp: Date.now()
-          })
-        })).catch(err => console.error('WebSocket broadcast error:', err))
-      }
-    } catch (wsError) {
-      console.error('WebSocket notification error:', wsError)
-      // Don't fail the whole request if WebSocket broadcast fails
-    }
-    
     return c.json({
       success: true,
       event: nextEvent,

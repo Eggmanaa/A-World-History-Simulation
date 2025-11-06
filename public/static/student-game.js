@@ -1359,112 +1359,67 @@ function closeHistoricalContext() {
   if (modal) modal.remove();
 }
 
-// Real-time WebSocket updates
-let websocket = null;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_DELAY = 3000; // 3 seconds
+// Auto-refresh polling for simulation updates (every 5 seconds)
+let lastKnownYear = null;
+let lastKnownIndustryLeft = null;
+let autoRefreshInterval = null;
 
-function connectWebSocket() {
-  if (!currentStudent || !simulation || !civilization) {
-    console.log('Waiting for game data before connecting WebSocket...');
-    return;
-  }
-
-  // Determine WebSocket protocol (ws:// or wss://)
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}/ws/${currentStudent.period_id}?studentId=${currentStudent.id}&civilizationId=${civilization.id}`;
-
-  console.log('Connecting to WebSocket:', wsUrl);
-
-  try {
-    websocket = new WebSocket(wsUrl);
-
-    websocket.onopen = () => {
-      console.log('✅ WebSocket connected');
-      reconnectAttempts = 0;
-      notifySuccess('🔌 Real-time updates connected', 2000);
-    };
-
-    websocket.onmessage = async (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        console.log('📨 WebSocket message:', message);
-
-        switch (message.type) {
-          case 'timeline_advance':
-            // Timeline was advanced by teacher
-            notifyInfo('⏰ Timeline advanced! Reloading game...', 3000);
-            await loadGame();
-            break;
-
-          case 'industry_change':
-            // Another student built something
-            const civResponse = await axios.get(`/api/student/civilization/${currentStudent.id}`);
-            civilization = civResponse.data.civilization;
-            renderGame();
-            break;
-
-          case 'civilization_update':
-            // General civilization update
-            await loadGame();
-            break;
-
-          case 'student_join':
-            console.log('Student joined:', message.data);
-            break;
-
-          case 'student_leave':
-            console.log('Student left:', message.data);
-            break;
-
-          default:
-            console.log('Unknown message type:', message.type);
-        }
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
+function startAutoRefresh() {
+  // Poll every 5 seconds
+  autoRefreshInterval = setInterval(async () => {
+    if (!currentStudent || !simulation || !civilization) return;
+    
+    try {
+      // Check simulation state
+      const simResponse = await axios.get(`/api/student/simulation/${currentStudent.id}`);
+      const newSimulation = simResponse.data.simulation;
+      
+      // Check if year changed (timeline advanced)
+      if (newSimulation.current_year !== lastKnownYear) {
+        lastKnownYear = newSimulation.current_year;
+        
+        // Reload everything
+        await loadGame();
+        notifyInfo('Timeline advanced! Page updated automatically.', 3000);
+        return;
       }
-    };
-
-    websocket.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-    };
-
-    websocket.onclose = (event) => {
-      console.log('🔌 WebSocket closed:', event.code, event.reason);
-      websocket = null;
-
-      // Attempt to reconnect
-      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        reconnectAttempts++;
-        console.log(`Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-        setTimeout(connectWebSocket, RECONNECT_DELAY);
-      } else {
-        console.error('Max reconnect attempts reached. Please refresh the page.');
-        notifyError('Connection lost. Please refresh the page.', 10000);
+      
+      // Check civilization state for industry changes
+      const civResponse = await axios.get(`/api/student/civilization/${currentStudent.id}`);
+      const newCivilization = civResponse.data.civilization;
+      
+      // Check if industry_left changed (someone built something)
+      if (newCivilization.industry_left !== lastKnownIndustryLeft) {
+        lastKnownIndustryLeft = newCivilization.industry_left;
+        
+        // Update just the civilization data without full reload
+        civilization = newCivilization;
+        renderGame();
       }
-    };
-  } catch (error) {
-    console.error('Failed to create WebSocket:', error);
+    } catch (error) {
+      // Silently fail, will retry on next interval
+      console.log('Auto-refresh check:', error.message);
+    }
+  }, 5000); // Poll every 5 seconds
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
   }
 }
 
-function disconnectWebSocket() {
-  if (websocket) {
-    console.log('Disconnecting WebSocket...');
-    websocket.close();
-    websocket = null;
-  }
-}
-
-// Connect WebSocket after initial load
+// Start auto-refresh after initial load
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (civilization) {
-      connectWebSocket();
+      lastKnownYear = simulation?.current_year;
+      lastKnownIndustryLeft = civilization?.industry_left;
+      startAutoRefresh();
     }
-  }, 2000); // Connect after 2 seconds
+  }, 2000); // Start after 2 seconds
 });
 
-// Disconnect WebSocket when page unloads
-window.addEventListener('beforeunload', disconnectWebSocket);
+// Stop auto-refresh when page unloads
+window.addEventListener('beforeunload', stopAutoRefresh);

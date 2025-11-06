@@ -2,7 +2,6 @@
 
 export type Bindings = {
   DB: D1Database
-  WEBSOCKET_ROOM: DurableObjectNamespace
 }
 
 // Teacher

@@ -28,21 +28,6 @@
       "database_id": "5294248c-5295-4d5f-a965-f95131e75031"
     }
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "WEBSOCKET_ROOM",
-        "class_name": "WebSocketRoom",
-        "script_name": "webapp"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_classes": ["WebSocketRoom"]
-    }
-  ]
   // "ai": {
   //   "binding": "AI"
   // }
