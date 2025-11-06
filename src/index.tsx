@@ -209,7 +209,6 @@ app.get('/student/game', (c) => {
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/historical-contexts.js"></script>
         <script src="/static/notifications.js"></script>
-        <script src="/static/hex-map.js"></script>
         <script src="/static/hex-map-v2.js"></script>
         <script src="/static/student-game.js"></script>
     </body>

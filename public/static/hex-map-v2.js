@@ -486,5 +486,42 @@ class HexMapV2 {
   }
 }
 
+// Helper function to get terrain bonuses
+function getTerrainBonuses(terrain) {
+  const bonuses = {
+    plains: { defense: 0, industry: 0 },
+    grassland: { defense: 0, industry: 0 },
+    forest: { defense: 1, industry: 3 },
+    mountains: { defense: 10, industry: 4 },
+    high_mountains: { defense: 15, industry: 2 },
+    desert: { defense: 4, industry: 0 },
+    marsh: { defense: -2, industry: 0 },
+    river: { defense: 1, industry: 0 },
+    ocean: { defense: 0, industry: 0 }
+  };
+  return bonuses[terrain] || { defense: 0, industry: 0 };
+}
+
+// Calculate total terrain bonuses for all tiles
+function calculateTotalTerrainBonuses(tiles, isIsland = false) {
+  let totalDefense = 0;
+  let totalIndustry = 0;
+  
+  for (const tile of tiles) {
+    const bonuses = getTerrainBonuses(tile.terrain);
+    totalDefense += bonuses.defense;
+    totalIndustry += bonuses.industry;
+  }
+  
+  if (isIsland) {
+    totalDefense += 7;
+  }
+  
+  return { defense: totalDefense, industry: totalIndustry };
+}
+
 // Make it globally available
 window.HexMapV2 = HexMapV2;
+window.getTerrainBonuses = getTerrainBonuses;
+window.calculateTotalTerrainBonuses = calculateTotalTerrainBonuses;
+window.TERRAIN_CONFIG = TERRAIN_CONFIG;
