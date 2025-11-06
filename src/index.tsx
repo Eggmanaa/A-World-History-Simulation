@@ -27,6 +27,29 @@ app.route('/api/game', gameRoutes)
 app.route('/api/wonders', wonderRoutes)
 app.route('/api/religion', religionRoutes)
 
+// WebSocket route for real-time updates
+app.get('/ws/:periodId', async (c) => {
+  const { periodId } = c.req.param()
+  const studentId = c.req.query('studentId')
+  const civilizationId = c.req.query('civilizationId')
+
+  // Validate WebSocket upgrade
+  if (c.req.header('Upgrade') !== 'websocket') {
+    return c.text('Expected WebSocket', 426)
+  }
+
+  if (!studentId || !civilizationId) {
+    return c.text('Missing studentId or civilizationId', 400)
+  }
+
+  // Get Durable Object for this period (room)
+  const id = c.env.WEBSOCKET_ROOM.idFromName(periodId)
+  const stub = c.env.WEBSOCKET_ROOM.get(id)
+
+  // Forward the WebSocket upgrade request to the Durable Object
+  return stub.fetch(c.req.raw)
+})
+
 // Root route - Main landing page
 app.get('/', (c) => {
   return c.html(`
@@ -341,3 +364,6 @@ app.get('/student/login', (c) => {
 })
 
 export default app
+
+// Export Durable Object for WebSocket rooms
+export { WebSocketRoom } from './websocket-room'
