@@ -98,6 +98,7 @@ export interface Civilization {
   water_resource?: string // Type of water resource (river, lake, lake_brackish, marsh, ocean, none)
   terrain_data?: string // stored as JSON string - hex map with coordinates and terrain types
   is_island?: boolean // Island bonus: +7 defense
+  houses_built_this_turn?: number // Track houses built this turn for fertility limit
   
   // Flags
   conquered: boolean

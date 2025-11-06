@@ -305,8 +305,10 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
               faith = ?,
               science = ?,
               industry = ?,
+              industry_left = ?,
               fertility = ?,
               population_capacity = ?,
+              houses_built_this_turn = 0,
               cultural_bonuses = ?,
               achievements = ?,
               writing = ?,
@@ -322,6 +324,7 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
           civ.faith,
           civ.science,
           civ.industry,
+          civ.industry, // Reset industry_left to industry value
           civ.fertility,
           civ.population_capacity,
           JSON.stringify(typeof civ.cultural_bonuses === 'string' ? JSON.parse(civ.cultural_bonuses) : (civ.cultural_bonuses || [])),

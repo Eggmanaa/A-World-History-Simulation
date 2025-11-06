@@ -1358,3 +1358,68 @@ function closeHistoricalContext() {
   const modal = document.getElementById('historicalContextModal');
   if (modal) modal.remove();
 }
+
+// Auto-refresh polling for simulation updates (every 5 seconds)
+let lastKnownYear = null;
+let lastKnownIndustryLeft = null;
+let autoRefreshInterval = null;
+
+function startAutoRefresh() {
+  // Poll every 5 seconds
+  autoRefreshInterval = setInterval(async () => {
+    if (!currentStudent || !simulation || !civilization) return;
+    
+    try {
+      // Check simulation state
+      const simResponse = await axios.get(`/api/student/simulation/${currentStudent.id}`);
+      const newSimulation = simResponse.data.simulation;
+      
+      // Check if year changed (timeline advanced)
+      if (newSimulation.current_year !== lastKnownYear) {
+        lastKnownYear = newSimulation.current_year;
+        
+        // Reload everything
+        await loadGame();
+        notifyInfo('Timeline advanced! Page updated automatically.', 3000);
+        return;
+      }
+      
+      // Check civilization state for industry changes
+      const civResponse = await axios.get(`/api/student/civilization/${currentStudent.id}`);
+      const newCivilization = civResponse.data.civilization;
+      
+      // Check if industry_left changed (someone built something)
+      if (newCivilization.industry_left !== lastKnownIndustryLeft) {
+        lastKnownIndustryLeft = newCivilization.industry_left;
+        
+        // Update just the civilization data without full reload
+        civilization = newCivilization;
+        renderGame();
+      }
+    } catch (error) {
+      // Silently fail, will retry on next interval
+      console.log('Auto-refresh check:', error.message);
+    }
+  }, 5000); // Poll every 5 seconds
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
+
+// Start auto-refresh after initial load
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    if (civilization) {
+      lastKnownYear = simulation?.current_year;
+      lastKnownIndustryLeft = civilization?.industry_left;
+      startAutoRefresh();
+    }
+  }, 2000); // Start after 2 seconds
+});
+
+// Stop auto-refresh when page unloads
+window.addEventListener('beforeunload', stopAutoRefresh);

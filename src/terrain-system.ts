@@ -370,33 +370,103 @@ export function generateHexMap(regions: string[], hexRadius: number = 3): HexTil
     }
   }
   
-  // Generate hex grid (radius 3 = 37 hexes, similar coverage to 10x10)
+  // Generate hex grid structure (radius 3 = 37 hexes)
+  const allCoords: HexCoordinate[] = [];
   for (let q = -hexRadius; q <= hexRadius; q++) {
     const r1 = Math.max(-hexRadius, -q - hexRadius);
     const r2 = Math.min(hexRadius, -q + hexRadius);
     
     for (let r = r1; r <= r2; r++) {
       const s = -q - r;
-      const coord = { q, r, s };
-      
-      // Select terrain based on weighted distribution
-      const terrain = selectWeightedTerrain(template.terrainDistribution);
-      
-      tiles.push({
-        coord,
-        terrain
-      });
+      allCoords.push({ q, r, s });
     }
   }
   
-  // Add guaranteed features
-  if (template.guaranteedFeatures) {
-    for (const feature of template.guaranteedFeatures) {
-      addGuaranteedTerrain(tiles, feature.terrain, feature.count);
-    }
+  // Identify edge hexes (outermost ring)
+  const edgeHexes = allCoords.filter(coord => {
+    return Math.abs(coord.q) === hexRadius || 
+           Math.abs(coord.r) === hexRadius || 
+           Math.abs(coord.s) === hexRadius;
+  });
+  
+  // Identify center hexes (everything else)
+  const centerHexes = allCoords.filter(coord => {
+    return Math.abs(coord.q) < hexRadius && 
+           Math.abs(coord.r) < hexRadius && 
+           Math.abs(coord.s) < hexRadius;
+  });
+  
+  // Create biomes on edges: mountains, forests, deserts
+  const biomeTypes: TerrainType[] = ['mountains', 'forest', 'desert'];
+  const biomes = assignBiomesToEdges(edgeHexes, biomeTypes);
+  
+  // Find barbarian entrance (between two biomes)
+  const barbarianEntrance = findBarbarianEntrance(edgeHexes, biomes);
+  if (barbarianEntrance) {
+    biomes[`${barbarianEntrance.q},${barbarianEntrance.r},${barbarianEntrance.s}`] = 'plains';
+  }
+  
+  // Fill center with plains/grassland
+  for (const coord of centerHexes) {
+    const key = `${coord.q},${coord.r},${coord.s}`;
+    tiles.push({
+      coord,
+      terrain: Math.random() < 0.5 ? 'plains' : 'grassland'
+    });
+  }
+  
+  // Add edge hexes with biomes
+  for (const coord of edgeHexes) {
+    const key = `${coord.q},${coord.r},${coord.s}`;
+    tiles.push({
+      coord,
+      terrain: biomes[key] || 'plains'
+    });
   }
   
   return tiles;
+}
+
+// Assign biomes to edge hexes in contiguous groups
+function assignBiomesToEdges(edgeHexes: HexCoordinate[], biomeTypes: TerrainType[]): Record<string, TerrainType> {
+  const biomes: Record<string, TerrainType> = {};
+  const hexesPerBiome = Math.floor(edgeHexes.length / biomeTypes.length);
+  
+  // Sort edge hexes by angle around the center for contiguous assignment
+  const sortedEdges = edgeHexes.sort((a, b) => {
+    const angleA = Math.atan2(a.r, a.q);
+    const angleB = Math.atan2(b.r, b.q);
+    return angleA - angleB;
+  });
+  
+  // Assign biomes in contiguous chunks
+  for (let i = 0; i < sortedEdges.length; i++) {
+    const biomeIndex = Math.floor(i / hexesPerBiome) % biomeTypes.length;
+    const coord = sortedEdges[i];
+    const key = `${coord.q},${coord.r},${coord.s}`;
+    biomes[key] = biomeTypes[biomeIndex];
+  }
+  
+  return biomes;
+}
+
+// Find a hex between two biomes for barbarian entrance
+function findBarbarianEntrance(edgeHexes: HexCoordinate[], biomes: Record<string, TerrainType>): HexCoordinate | null {
+  for (let i = 0; i < edgeHexes.length; i++) {
+    const current = edgeHexes[i];
+    const next = edgeHexes[(i + 1) % edgeHexes.length];
+    
+    const currentKey = `${current.q},${current.r},${current.s}`;
+    const nextKey = `${next.q},${next.r},${next.s}`;
+    
+    // If biomes are different at the boundary, this is a good entrance spot
+    if (biomes[currentKey] !== biomes[nextKey]) {
+      return current;
+    }
+  }
+  
+  // Fallback: return first edge hex
+  return edgeHexes[0] || null;
 }
 
 // Select terrain based on weighted random
@@ -426,16 +496,25 @@ function addGuaranteedTerrain(tiles: HexTile[], terrain: TerrainType, count: num
   }
 }
 
-// Calculate total defense from terrain
+// Calculate total defense from terrain (boolean check - applies once if present anywhere)
 export function calculateTerrainDefense(tiles: HexTile[], isIsland: boolean = false): number {
   let totalDefense = 0;
   
-  for (const tile of tiles) {
-    if (tile.building) {
-      // Only count terrain where buildings are placed
-      totalDefense += TERRAIN_BONUSES[tile.terrain].defense;
-    }
-  }
+  // Check if each terrain type exists anywhere on the map (boolean)
+  const hasForest = tiles.some(t => t.terrain === 'forest');
+  const hasMountains = tiles.some(t => t.terrain === 'mountains');
+  const hasHighMountains = tiles.some(t => t.terrain === 'high_mountains');
+  const hasDesert = tiles.some(t => t.terrain === 'desert');
+  const hasMarsh = tiles.some(t => t.terrain === 'marsh');
+  const hasRiver = tiles.some(t => t.terrain === 'river');
+  
+  // Apply bonus once if terrain type exists anywhere
+  if (hasForest) totalDefense += TERRAIN_BONUSES.forest.defense;
+  if (hasMountains) totalDefense += TERRAIN_BONUSES.mountains.defense;
+  if (hasHighMountains) totalDefense += TERRAIN_BONUSES.high_mountains.defense;
+  if (hasDesert) totalDefense += TERRAIN_BONUSES.desert.defense;
+  if (hasMarsh) totalDefense += TERRAIN_BONUSES.marsh.defense;
+  if (hasRiver) totalDefense += TERRAIN_BONUSES.river.defense;
   
   if (isIsland) {
     totalDefense += 7;  // Island map bonus
@@ -444,16 +523,19 @@ export function calculateTerrainDefense(tiles: HexTile[], isIsland: boolean = fa
   return totalDefense;
 }
 
-// Calculate total industry from terrain
+// Calculate total industry from terrain (boolean check - applies once if present anywhere)
 export function calculateTerrainIndustry(tiles: HexTile[]): number {
-  let totalIndustry = 1;  // Base industry
+  let totalIndustry = 0;
   
-  for (const tile of tiles) {
-    if (tile.building) {
-      // Only count terrain where buildings are placed
-      totalIndustry += TERRAIN_BONUSES[tile.terrain].industry;
-    }
-  }
+  // Check if each terrain type exists anywhere on the map (boolean)
+  const hasForest = tiles.some(t => t.terrain === 'forest');
+  const hasMountains = tiles.some(t => t.terrain === 'mountains');
+  const hasHighMountains = tiles.some(t => t.terrain === 'high_mountains');
+  
+  // Apply bonus once if terrain type exists anywhere
+  if (hasForest) totalIndustry += TERRAIN_BONUSES.forest.industry;
+  if (hasMountains) totalIndustry += TERRAIN_BONUSES.mountains.industry;
+  if (hasHighMountains) totalIndustry += TERRAIN_BONUSES.high_mountains.industry;
   
   return totalIndustry;
 }

@@ -214,6 +214,8 @@ export function applyGrowthPhase(civ: Civilization, housesDoublePopulation: bool
 // Calculate cost for building
 export function getBuildingCost(building: string): number {
   switch (building.toLowerCase()) {
+    case 'house':
+      return 0  // Houses cost 0 industry
     case 'temple':
     case 'amphitheater':
     case 'wall':
@@ -227,14 +229,36 @@ export function getBuildingCost(building: string): number {
 }
 
 // Check if building can be built
-export function canBuild(civ: Civilization, building: string): { can: boolean; reason?: string } {
+export function canBuild(civ: Civilization, building: string, selectedHexTerrain?: string): { can: boolean; reason?: string } {
+  const buildingType = building.toLowerCase()
   const cost = getBuildingCost(building)
   
+  // Houses have special rules
+  if (buildingType === 'house') {
+    // Check fertility limit (houses built this turn)
+    const housesBuiltThisTurn = (civ as any).houses_built_this_turn || 0
+    if (housesBuiltThisTurn >= civ.fertility) {
+      return { can: false, reason: `Maximum ${civ.fertility} houses per advancement (fertility limit)` }
+    }
+    
+    // Check terrain restrictions for houses
+    if (selectedHexTerrain) {
+      const restrictedTerrains = ['ocean', 'river', 'forest', 'mountains', 'high_mountains', 'desert']
+      if (restrictedTerrains.includes(selectedHexTerrain)) {
+        // TODO: Check for cultural or science bonuses that allow building on these terrains
+        return { can: false, reason: `Cannot build houses on ${selectedHexTerrain}` }
+      }
+    }
+    
+    return { can: true }
+  }
+  
+  // Other buildings cost industry
   if (civ.industry_left < cost) {
     return { can: false, reason: `Not enough industry points. Need ${cost}, have ${civ.industry_left}` }
   }
   
-  if (building.toLowerCase().includes('archimedes')) {
+  if (buildingType.includes('archimedes')) {
     if (civ.science < 30) {
       return { can: false, reason: 'Archimedes Tower requires Science >= 30' }
     }
