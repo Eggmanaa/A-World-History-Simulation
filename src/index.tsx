@@ -40,12 +40,28 @@ app.get('/', (c) => {
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
           body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg/2560px-Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             min-height: 100vh;
+            position: relative;
+          }
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
           }
           .card {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.97);
             backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 1;
           }
         </style>
     </head>
@@ -183,9 +199,27 @@ app.get('/teacher/register', (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Teacher Registration - Through History</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          body {
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg/2560px-Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+          }
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+          }
+        </style>
     </head>
-    <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8">
+    <body class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8 relative z-10">
             <h1 class="text-3xl font-bold text-gray-800 mb-6">Teacher Registration</h1>
             <form id="registerForm" class="space-y-4">
                 <div>
@@ -226,9 +260,27 @@ app.get('/student/register', (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Student Registration - Through History</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          body {
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg/2560px-Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+          }
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+          }
+        </style>
     </head>
-    <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8">
+    <body class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8 relative z-10">
             <h1 class="text-3xl font-bold text-gray-800 mb-6">Student Registration</h1>
             <form id="registerForm" class="space-y-4">
                 <div>
@@ -273,9 +325,27 @@ app.get('/teacher/login', (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Teacher Login - Through History</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          body {
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg/2560px-Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+          }
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+          }
+        </style>
     </head>
-    <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8">
+    <body class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8 relative z-10">
             <h1 class="text-3xl font-bold text-gray-800 mb-6">Teacher Login</h1>
             <form id="loginForm" class="space-y-4">
                 <div>
@@ -311,9 +381,27 @@ app.get('/student/login', (c) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Student Login - Through History</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          body {
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg/2560px-Pieter_Bruegel_the_Elder_-_The_Tower_of_Babel_%28Vienna%29_-_Google_Art_Project_-_edited.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+          }
+          body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+          }
+        </style>
     </head>
-    <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8">
+    <body class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-xl shadow-lg max-w-md w-full p-8 relative z-10">
             <h1 class="text-3xl font-bold text-gray-800 mb-6">Student Login</h1>
             <form id="loginForm" class="space-y-4">
                 <div>
