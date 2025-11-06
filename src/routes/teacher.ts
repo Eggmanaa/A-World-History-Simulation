@@ -456,4 +456,59 @@ teacher.get('/simulation/:simulationId/overview', async (c) => {
   }
 })
 
+// Delete a period and all associated data
+teacher.delete('/periods/:periodId', async (c) => {
+  try {
+    const periodId = c.req.param('periodId')
+    const { teacherId } = await c.req.json()
+    
+    if (!teacherId) {
+      return c.json({ error: 'Teacher ID required' }, 400)
+    }
+    
+    const db = c.env.DB
+    
+    // Verify the period belongs to this teacher
+    const periodCheck = await db.prepare(
+      'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
+    ).bind(periodId, teacherId).first()
+    
+    if (!periodCheck) {
+      return c.json({ error: 'Period not found or unauthorized' }, 404)
+    }
+    
+    // Start a transaction to delete all related data
+    // Note: D1 doesn't support transactions yet, so we'll do this in order
+    
+    // 1. Delete event logs
+    await db.prepare('DELETE FROM event_log WHERE simulation_id IN (SELECT id FROM simulations WHERE period_id = ?)').bind(periodId).run()
+    
+    // 2. Delete wars
+    await db.prepare('DELETE FROM wars WHERE simulation_id IN (SELECT id FROM simulations WHERE period_id = ?)').bind(periodId).run()
+    
+    // 3. Delete alliances
+    await db.prepare('DELETE FROM alliances WHERE simulation_id IN (SELECT id FROM simulations WHERE period_id = ?)').bind(periodId).run()
+    
+    // 4. Delete civilizations
+    await db.prepare('DELETE FROM civilizations WHERE simulation_id IN (SELECT id FROM simulations WHERE period_id = ?)').bind(periodId).run()
+    
+    // 5. Delete simulations
+    await db.prepare('DELETE FROM simulations WHERE period_id = ?').bind(periodId).run()
+    
+    // 6. Delete students (this will free them to join a new period)
+    await db.prepare('DELETE FROM students WHERE period_id = ?').bind(periodId).run()
+    
+    // 7. Finally, delete the period itself
+    await db.prepare('DELETE FROM periods WHERE id = ?').bind(periodId).run()
+    
+    return c.json({
+      success: true,
+      message: 'Period and all associated data deleted successfully'
+    })
+  } catch (error) {
+    console.error('Delete period error:', error)
+    return c.json({ error: 'Failed to delete period' }, 500)
+  }
+})
+
 export default teacher

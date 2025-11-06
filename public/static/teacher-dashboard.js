@@ -32,9 +32,9 @@ async function loadDashboard() {
 // Render header
 function renderHeader() {
   document.getElementById('app').innerHTML = `
-    <div class="min-h-screen bg-gray-100">
+    <div class="min-h-screen">
       <!-- Header -->
-      <header class="bg-white shadow-md">
+      <header class="dashboard-card shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div class="flex justify-between items-center">
             <div>
@@ -54,7 +54,7 @@ function renderHeader() {
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Period Management Section -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="dashboard-card rounded-lg shadow-lg p-6 mb-6">
           <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-bold text-gray-800">
               <i class="fas fa-users mr-2"></i>Class Periods
@@ -124,9 +124,14 @@ function renderPeriodsList() {
               Status: ${period.paused ? 'Paused' : 'Active'}
             </p>
           </div>
-          <button onclick="event.stopPropagation(); viewPeriodDetails('${period.id}')" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition">
-            View Details
-          </button>
+          <div class="mt-4 flex gap-2">
+            <button onclick="event.stopPropagation(); viewPeriodDetails('${period.id}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition">
+              <i class="fas fa-eye mr-1"></i>View
+            </button>
+            <button onclick="event.stopPropagation(); confirmDeletePeriod('${period.id}', '${period.name.replace(/'/g, "\\'")}')" class="bg-gray-600 hover:bg-red-800 text-white px-4 py-2 rounded transition" title="Delete Period">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
         </div>
       `).join('')}
     </div>
@@ -176,14 +181,19 @@ function renderPeriodDetails(data) {
   const civs = data.civilizations || [];
   
   container.innerHTML = `
-    <div class="bg-white rounded-lg shadow-md p-6">
+    <div class="dashboard-card rounded-lg shadow-lg p-6">
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-bold text-gray-800">
           <i class="fas fa-gamepad mr-2"></i>${selectedPeriod.name} - Game Control
         </h2>
-        <button onclick="closePeriodDetails()" class="text-gray-500 hover:text-gray-700">
-          <i class="fas fa-times text-2xl"></i>
-        </button>
+        <div class="flex gap-2">
+          <button onclick="confirmDeletePeriod('${selectedPeriod.id}', '${selectedPeriod.name.replace(/'/g, "\\'")}')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition" title="Delete This Period">
+            <i class="fas fa-trash mr-2"></i>Delete Period
+          </button>
+          <button onclick="closePeriodDetails()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times text-2xl"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Timeline Controls -->
@@ -602,7 +612,7 @@ function showCreatePeriodModal() {
   const modal = document.getElementById('modalContainer');
   modal.innerHTML = `
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="closeModal()">
-      <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-8" onclick="event.stopPropagation()">
+      <div class="dashboard-card rounded-xl shadow-2xl max-w-md w-full p-8" onclick="event.stopPropagation()">
         <h2 class="text-2xl font-bold text-gray-800 mb-6">Create New Period</h2>
         <form id="createPeriodForm" class="space-y-4">
           <div>
@@ -1075,4 +1085,80 @@ function getTerrainCompositionDisplay(terrainData) {
   }
   
   return parts.join(' ') || 'Mixed terrain';
+}
+
+// Confirm delete period
+function confirmDeletePeriod(periodId, periodName) {
+  const modal = document.getElementById('modalContainer');
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="closeModal()">
+      <div class="dashboard-card rounded-xl shadow-2xl max-w-md w-full p-8" onclick="event.stopPropagation()">
+        <h2 class="text-2xl font-bold text-red-600 mb-4">
+          <i class="fas fa-exclamation-triangle mr-2"></i>Delete Period
+        </h2>
+        <p class="text-gray-700 mb-6">
+          Are you sure you want to delete <strong>"${periodName}"</strong>?
+        </p>
+        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
+          <p class="text-sm text-yellow-800">
+            <strong>⚠️ Warning:</strong> This action will:
+          </p>
+          <ul class="list-disc list-inside text-sm text-yellow-800 mt-2">
+            <li>Delete all student accounts in this period</li>
+            <li>Remove all civilizations and game progress</li>
+            <li>Delete all historical event logs</li>
+            <li>Allow students to join a new game with a different code</li>
+          </ul>
+        </div>
+        <div class="flex gap-4">
+          <button onclick="deletePeriod('${periodId}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition font-bold">
+            <i class="fas fa-trash mr-2"></i>Delete Period
+          </button>
+          <button onclick="closeModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 px-6 py-3 rounded-lg transition">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Delete period
+async function deletePeriod(periodId) {
+  try {
+    // Show loading state
+    const modal = document.getElementById('modalContainer');
+    modal.innerHTML = `
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="dashboard-card rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
+          <i class="fas fa-spinner fa-spin text-4xl text-red-600 mb-4"></i>
+          <p class="text-gray-700">Deleting period and all associated data...</p>
+        </div>
+      </div>
+    `;
+    
+    const response = await axios.delete(`/api/teacher/periods/${periodId}`, {
+      data: { teacherId: currentTeacher.id }
+    });
+    
+    if (response.data.success) {
+      alert('Period deleted successfully. Students can now join a new game with a different invite code.');
+      
+      // If the deleted period was selected, clear it
+      if (selectedPeriod?.id === periodId) {
+        selectedPeriod = null;
+        document.getElementById('periodDetails').innerHTML = '';
+      }
+      
+      // Reload periods list
+      await loadPeriods();
+      renderPeriodsList();
+    }
+    
+    closeModal();
+  } catch (error) {
+    console.error('Failed to delete period:', error);
+    alert(error.response?.data?.error || 'Failed to delete period. Please try again.');
+    closeModal();
+  }
 }
