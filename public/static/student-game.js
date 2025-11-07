@@ -9,6 +9,7 @@ let availableWonders = [];
 let availableTenets = [];
 let builtWonders = [];
 let civilizationsInSim = [];
+let pollingInterval = null; // For auto-refresh
 
 // Loading spinner utilities
 function showLoading(message = 'Loading...') {
@@ -668,7 +669,6 @@ function renderActionsPanel() {
 // Setup map click handlers
 // Global hex map instance
 let hexMapInstance = null;
-let pollingInterval = null; // For auto-refresh
 
 function setupMapHandlers() {
   // Initialize hex map
