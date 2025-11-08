@@ -12,7 +12,7 @@ A comprehensive multiplayer web-based civilization management game for high scho
 ## 🚀 Live Demo
 
 **🚀 PRODUCTION (Live):** https://worldhistorysim.pages.dev  
-**Latest Deployment:** https://366d7f1d.worldhistorysim.pages.dev *(Deployed: 2025-01-06)*
+**Latest Deployment:** https://5112e58e.worldhistorysim.pages.dev *(Deployed: 2025-01-08)*
 
 **GitHub Repository:** https://github.com/Eggmanaa/A-World-History-Simulation
 
@@ -518,7 +518,7 @@ Built with ❤️ for history teachers and students everywhere.
 
 ---
 
-**Current Status**: ✅ All Core Phases Complete (1-6) | 🚀 **DEPLOYED TO PRODUCTION** | 🎉 Latest Update: January 6, 2025
+**Current Status**: ✅ All Core Phases Complete (1-6) | 🚀 **DEPLOYED TO PRODUCTION** | 🎉 Latest Update: January 8, 2025
 
 **Implemented Features**:
 ✅ Phase 1: Backend Systems (Authentication, Timeline, Wars, Alliances, Buildings, Religions)
@@ -528,7 +528,16 @@ Built with ❤️ for history teachers and students everywhere.
 ✅ Phase 5: Polish Features (Notifications, Loading States, Historical Context, Mobile Responsive)
 ✅ Phase 6: Terrain System (Hex Grids, Water Resources, Terrain Bonuses, Region Templates)
 
-**Latest Deployment (January 6, 2025) - Three Major Updates**:
+**Latest Deployment (January 8, 2025) - Database Seeding & Critical Fixes**:
+
+**🔧 Database Fix (CRITICAL)**:
+   - **Seeded production database** with 18 civilization presets
+   - Fixed "failure to load game" error when students tried to start playing
+   - Verified both local and production D1 databases have complete preset data
+   - Added `db:seed:prod` npm script for future maintenance
+   - Created DATABASE_SETUP.md documentation for troubleshooting
+
+**Previous Major Updates (January 6, 2025)**:
 
 1. **🏠 Housing System Overhaul**:
    - Houses now cost **0 industry** (changed from 5)
