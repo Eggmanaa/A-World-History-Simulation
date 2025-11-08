@@ -311,4 +311,32 @@ student.post('/civilization/:civId/update', async (c) => {
   }
 })
 
+// Save map data (building positions on hex grid)
+student.post('/civilization/:civId/map', async (c) => {
+  try {
+    const civId = c.req.param('civId')
+    const { map_data } = await c.req.json()
+    
+    if (!civId || !map_data) {
+      return c.json({ error: 'Civilization ID and map data required' }, 400)
+    }
+    
+    const db = c.env.DB
+    const now = Date.now()
+    
+    // Update map data
+    await db.prepare(
+      'UPDATE civilizations SET map_data = ?, updated_at = ? WHERE id = ?'
+    ).bind(map_data, now, civId).run()
+    
+    return c.json({
+      success: true,
+      message: 'Map data saved successfully'
+    })
+  } catch (error) {
+    console.error('Save map error:', error)
+    return c.json({ error: 'Failed to save map data' }, 500)
+  }
+})
+
 export default student

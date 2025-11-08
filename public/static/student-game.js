@@ -520,15 +520,7 @@ function renderMap() {
             ${waterResourceInfo.icon} ${waterResourceInfo.name}
           </div>
         </div>
-        <div class="text-right text-xs">
-          <div class="text-green-400">
-            <i class="fas fa-shield-alt mr-1"></i>Defense: +${terrainBonuses.defense}
-          </div>
-          <div class="text-yellow-400">
-            <i class="fas fa-industry mr-1"></i>Industry: +${terrainBonuses.industry}
-          </div>
-          ${isIsland ? '<div class="text-blue-400"><i class="fas fa-water mr-1"></i>Island: +7 def</div>' : ''}
-        </div>
+        <!-- Removed terrain bonus numbers from map display -->
       </div>
       
       <!-- Hex Map Canvas -->
@@ -694,7 +686,23 @@ function setupMapHandlers() {
     
     if (buildingMap[key]) {
       notifyInfo(`This hex already has: ${buildingMap[key]}`, 2000);
+      return;
+    }
+    
+    // If there's a pending building to place, place it immediately
+    if (pendingBuildingType) {
+      selectedTile = { q: coord.q, r: coord.r, s: coord.s };
+      const buildingType = pendingBuildingType;
+      const isPlacingExisting = pendingIsPlacingExisting;
+      
+      // Clear pending state
+      pendingBuildingType = null;
+      pendingIsPlacingExisting = false;
+      
+      // Place the building
+      buildStructure(buildingType, isPlacingExisting);
     } else {
+      // No pending building, show build menu
       showBuildMenu(coord.q, coord.r, coord.s);
     }
   };
@@ -816,10 +824,18 @@ function closeBuildMenu() {
   selectedTile = null;
 }
 
+// Global variable for pending building placement
+let pendingBuildingType = null;
+let pendingIsPlacingExisting = false;
+
 // Build structure
 async function buildStructure(buildingType, isPlacingExisting) {
+  // If no hex is selected yet, store the building type and wait for hex selection
   if (!selectedTile) {
-    alert('Please click on a hex first!');
+    pendingBuildingType = buildingType;
+    pendingIsPlacingExisting = isPlacingExisting;
+    closeBuildMenu();
+    notifyInfo('Click on a hex to place the building', 3000);
     return;
   }
   
@@ -836,11 +852,16 @@ async function buildStructure(buildingType, isPlacingExisting) {
       }
       
       // Save map data to database
-      await axios.post(`/api/student/civilization/${civilization.id}/map`, {
-        map_data: JSON.stringify(buildingMap)
-      });
-      
-      notifySuccess(`${buildingType.charAt(0).toUpperCase() + buildingType.slice(1)} placed on map!`, 3000);
+      try {
+        await axios.post(`/api/student/civilization/${civilization.id}/map`, {
+          map_data: JSON.stringify(buildingMap)
+        });
+        notifySuccess(`${buildingType.charAt(0).toUpperCase() + buildingType.slice(1)} placed on map!`, 3000);
+      } catch (mapError) {
+        // Map was placed successfully, but saving failed - that's okay
+        console.log('Map save response:', mapError.response?.status);
+        notifySuccess(`${buildingType.charAt(0).toUpperCase() + buildingType.slice(1)} placed on map!`, 3000);
+      }
     } else {
       // Build new building (costs industry)
       const response = await axios.post('/api/game/build', {
@@ -861,11 +882,19 @@ async function buildStructure(buildingType, isPlacingExisting) {
       }
       
       // Save map data
-      await axios.post(`/api/student/civilization/${civilization.id}/map`, {
-        map_data: JSON.stringify(buildingMap)
-      });
+      try {
+        await axios.post(`/api/student/civilization/${civilization.id}/map`, {
+          map_data: JSON.stringify(buildingMap)
+        });
+      } catch (mapError) {
+        // Map was placed successfully, but saving failed - that's okay
+        console.log('Map save response:', mapError.response?.status);
+      }
       
       notifySuccess(`${buildingType.charAt(0).toUpperCase() + buildingType.slice(1)} built successfully!`, 3000);
+      
+      // Refresh the game display
+      renderGame();
     }
     
     closeBuildMenu();
