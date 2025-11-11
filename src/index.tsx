@@ -211,6 +211,7 @@ app.get('/student/game', (c) => {
         <script src="/static/historical-contexts.js"></script>
         <script src="/static/notifications.js"></script>
         <script src="/static/hex-map-3d.js"></script>
+        <script src="/static/hex-map-v2.js"></script>
         <script src="/static/student-game.js"></script>
     </body>
     </html>

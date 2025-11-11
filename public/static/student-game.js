@@ -673,7 +673,36 @@ function setupMapHandlers() {
   
   // Create 3D isometric hex map instance
   // Use new HexMap3D with Ian O'Toole style 3D rendering
-  hexMapInstance = new HexMap3D('hexMapContainer', terrainTiles);
+  // Fallback to HexMapV2 if HexMap3D is not available
+  try {
+    if (typeof HexMap3D !== 'undefined') {
+      hexMapInstance = new HexMap3D('hexMapContainer', terrainTiles);
+      console.log('Using 3D hex map');
+    } else if (typeof HexMapV2 !== 'undefined') {
+      hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
+      console.log('Fallback to 2D hex map');
+    } else {
+      console.error('No hex map implementation found');
+      notifyError('Map system not loaded. Please refresh the page.', 5000);
+      return;
+    }
+  } catch (error) {
+    console.error('Error creating hex map:', error);
+    // Try fallback to HexMapV2
+    try {
+      if (typeof HexMapV2 !== 'undefined') {
+        hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
+        console.log('Using fallback 2D hex map after error');
+      } else {
+        notifyError('Map system failed to load. Please refresh the page.', 5000);
+        return;
+      }
+    } catch (fallbackError) {
+      console.error('Fallback map also failed:', fallbackError);
+      notifyError('Map system error. Please refresh the page.', 5000);
+      return;
+    }
+  }
   
   // Load existing buildings onto hex map
   if (buildingMap) {
