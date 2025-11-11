@@ -523,13 +523,13 @@ function renderMap() {
         <!-- Removed terrain bonus numbers from map display -->
       </div>
       
-      <!-- Hex Map Canvas -->
-      <div id="hexMapContainer" class="bg-gray-900 rounded relative" style="height: 500px; width: 100%;">
-        <!-- Canvas will be inserted here by HexMap class -->
+      <!-- 3D Isometric Hex Map Canvas -->
+      <div id="hexMapContainer" class="bg-gray-100 rounded relative border-2 border-gray-800" style="height: 500px; width: 100%;">
+        <!-- 3D Canvas will be inserted here by HexMap3D class -->
       </div>
       
-      <div class="mt-3 text-xs text-gray-400 text-center">
-        Click a hex to place a building · Hover to see terrain bonuses
+      <div class="mt-3 text-xs text-gray-700 text-center font-semibold">
+        Click a hex to place a building · Hover to see terrain info
       </div>
       
       <!-- Terrain Legend -->
@@ -671,9 +671,9 @@ function setupMapHandlers() {
     return;
   }
   
-  // Create hex map instance
-  // Use new HexMapV2 with fixed rendering
-  hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
+  // Create 3D isometric hex map instance
+  // Use new HexMap3D with Ian O'Toole style 3D rendering
+  hexMapInstance = new HexMap3D('hexMapContainer', terrainTiles);
   
   // Load existing buildings onto hex map
   if (buildingMap) {

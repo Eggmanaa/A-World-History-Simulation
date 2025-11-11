@@ -1,0 +1,447 @@
+/* Ian O'Toole Inspired Board Game Design System */
+/* Clean geometric patterns, limited color palette, strong visual hierarchy */
+
+:root {
+  /* Color Palette */
+  --color-charcoal: #2a2a2a;
+  --color-ivory: #f4f1e8;
+  --color-warm-gray: #8b8379;
+  
+  --color-teal: #2a9d8f;
+  --color-ochre: #e9c46a;
+  --color-rust: #e76f51;
+  --color-deep-blue: #264653;
+  --color-sage: #8ab17d;
+  
+  --color-red: #a20927;
+  --color-light-gray: #DDDDDD;
+  
+  /* Typography */
+  --font-primary: 'Arial', 'Helvetica Neue', sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-bold: 700;
+  
+  /* Spacing */
+  --spacing-unit: 8px;
+  
+  /* Borders */
+  --border-width: 2px;
+  --border-radius: 4px;
+}
+
+/* Global Resets */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ian O'Toole Panel Style */
+.otoole-panel {
+  background: var(--color-ivory);
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  position: relative;
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
+}
+
+.otoole-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--color-ochre);
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.otoole-panel-teal::before {
+  background: var(--color-teal);
+}
+
+.otoole-panel-rust::before {
+  background: var(--color-rust);
+}
+
+.otoole-panel-blue::before {
+  background: var(--color-deep-blue);
+}
+
+.otoole-panel-red::before {
+  background: var(--color-red);
+}
+
+/* Panel Content */
+.otoole-panel-content {
+  padding: calc(var(--spacing-unit) * 3);
+  padding-top: calc(var(--spacing-unit) * 4);
+}
+
+/* Typography */
+.otoole-heading {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-charcoal);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: calc(var(--spacing-unit) * 2);
+}
+
+.otoole-subheading {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-charcoal);
+  margin-bottom: var(--spacing-unit);
+}
+
+.otoole-text {
+  color: var(--color-charcoal);
+  line-height: 1.5;
+}
+
+.otoole-label {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-warm-gray);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Buttons */
+.otoole-button {
+  background: var(--color-ochre);
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 1.5) calc(var(--spacing-unit) * 3);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-charcoal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.875rem;
+}
+
+.otoole-button:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2);
+}
+
+.otoole-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0px 0px 0px rgba(0, 0, 0, 0.2);
+}
+
+.otoole-button-teal {
+  background: var(--color-teal);
+  color: white;
+}
+
+.otoole-button-rust {
+  background: var(--color-rust);
+  color: white;
+}
+
+.otoole-button-red {
+  background: var(--color-red);
+  color: white;
+}
+
+.otoole-button-gray {
+  background: var(--color-warm-gray);
+  color: white;
+}
+
+/* Stat Box */
+.otoole-stat-box {
+  background: white;
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 2);
+  text-align: center;
+  position: relative;
+}
+
+.otoole-stat-value {
+  font-size: 2rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-charcoal);
+  line-height: 1;
+}
+
+.otoole-stat-label {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-warm-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--spacing-unit);
+}
+
+/* Icon Containers */
+.otoole-icon-box {
+  background: var(--color-ochre);
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.otoole-icon-box-teal {
+  background: var(--color-teal);
+}
+
+.otoole-icon-box-rust {
+  background: var(--color-rust);
+}
+
+/* Grid System */
+.otoole-grid {
+  display: grid;
+  gap: calc(var(--spacing-unit) * 2);
+}
+
+.otoole-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.otoole-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.otoole-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Dividers */
+.otoole-divider {
+  height: 2px;
+  background: var(--color-charcoal);
+  margin: calc(var(--spacing-unit) * 3) 0;
+}
+
+.otoole-divider-light {
+  height: 1px;
+  background: var(--color-light-gray);
+  margin: calc(var(--spacing-unit) * 2) 0;
+}
+
+/* List Items */
+.otoole-list-item {
+  background: white;
+  border: 1px solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 2);
+  margin-bottom: var(--spacing-unit);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing-unit) * 2);
+}
+
+/* Badge */
+.otoole-badge {
+  background: var(--color-ochre);
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: 999px;
+  padding: calc(var(--spacing-unit) * 0.5) calc(var(--spacing-unit) * 2);
+  font-weight: var(--font-weight-bold);
+  font-size: 0.75rem;
+  color: var(--color-charcoal);
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.otoole-badge-teal {
+  background: var(--color-teal);
+  color: white;
+}
+
+.otoole-badge-rust {
+  background: var(--color-rust);
+  color: white;
+}
+
+/* Input Fields */
+.otoole-input {
+  background: white;
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 1.5);
+  font-family: var(--font-primary);
+  font-size: 1rem;
+  color: var(--color-charcoal);
+  width: 100%;
+}
+
+.otoole-input:focus {
+  outline: none;
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.2);
+}
+
+/* Select Dropdown */
+.otoole-select {
+  background: white;
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 1.5);
+  font-family: var(--font-primary);
+  font-size: 1rem;
+  color: var(--color-charcoal);
+  width: 100%;
+  cursor: pointer;
+}
+
+/* Tooltip */
+.otoole-tooltip {
+  background: var(--color-charcoal);
+  color: var(--color-ivory);
+  border: var(--border-width) solid var(--color-ochre);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 1.5) calc(var(--spacing-unit) * 2);
+  font-size: 0.875rem;
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.3);
+  max-width: 250px;
+}
+
+/* Modal */
+.otoole-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(42, 42, 42, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: calc(var(--spacing-unit) * 2);
+}
+
+.otoole-modal {
+  background: var(--color-ivory);
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.otoole-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: var(--color-ochre);
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.otoole-modal-content {
+  padding: calc(var(--spacing-unit) * 4);
+  padding-top: calc(var(--spacing-unit) * 5);
+}
+
+/* Progress Bar */
+.otoole-progress-container {
+  background: white;
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  height: 24px;
+  overflow: hidden;
+}
+
+.otoole-progress-bar {
+  background: var(--color-teal);
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  color: white;
+}
+
+/* Card */
+.otoole-card {
+  background: white;
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  padding: calc(var(--spacing-unit) * 3);
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.1);
+}
+
+.otoole-card-header {
+  background: var(--color-ochre);
+  border-bottom: var(--border-width) solid var(--color-charcoal);
+  padding: calc(var(--spacing-unit) * 2);
+  margin: calc(var(--spacing-unit) * -3);
+  margin-bottom: calc(var(--spacing-unit) * 2);
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.otoole-card-title {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-charcoal);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 1rem;
+}
+
+/* Table */
+.otoole-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: var(--border-width) solid var(--color-charcoal);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.otoole-table th {
+  background: var(--color-ochre);
+  border-bottom: var(--border-width) solid var(--color-charcoal);
+  padding: calc(var(--spacing-unit) * 1.5);
+  text-align: left;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-charcoal);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.875rem;
+}
+
+.otoole-table td {
+  background: white;
+  border-bottom: 1px solid var(--color-light-gray);
+  padding: calc(var(--spacing-unit) * 1.5);
+  color: var(--color-charcoal);
+}
+
+.otoole-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .otoole-grid-2,
+  .otoole-grid-3,
+  .otoole-grid-4 {
+    grid-template-columns: 1fr;
+  }
+  
+  .otoole-panel-content {
+    padding: calc(var(--spacing-unit) * 2);
+  }
+}

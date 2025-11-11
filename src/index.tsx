@@ -203,13 +203,14 @@ app.get('/student/game', (c) => {
         <title>My Civilization - Through History</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="/static/otoole-style.css" rel="stylesheet">
     </head>
-    <body class="bg-gray-900 text-white">
+    <body class="bg-gray-100 text-gray-900" style="background-color: #f4f1e8;">
         <div id="app"></div>
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/historical-contexts.js"></script>
         <script src="/static/notifications.js"></script>
-        <script src="/static/hex-map-v2.js"></script>
+        <script src="/static/hex-map-3d.js"></script>
         <script src="/static/student-game.js"></script>
     </body>
     </html>
