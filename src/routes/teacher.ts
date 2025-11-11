@@ -199,7 +199,8 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
       
       // Apply growth to each
       for (const civRow of civs.results || []) {
-        let civ = parseCivilization(civRow)
+        try {
+          let civ = parseCivilization(civRow)
         
         // === PHASE 3: AUTO-APPLY SYSTEMS ===
         
@@ -248,9 +249,14 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
         // === STANDARD GROWTH CALCULATIONS ===
         
         // Basic growth: add fertility to houses (capped at capacity)
+        // Add safety checks for null/undefined values
+        const currentHouses = civ.houses || 0
+        const currentFertility = civ.fertility || 0
+        const currentCapacity = civ.population_capacity || 0
+        
         const newHouses = Math.min(
-          civ.houses + civ.fertility,
-          civ.population_capacity
+          currentHouses + currentFertility,
+          currentCapacity
         )
         
         // Update population based on year (after 480 BCE, houses support 2 population)
@@ -294,45 +300,49 @@ teacher.post('/simulation/:simulationId/advance', async (c) => {
         
         civ.achievements = currentAchievements as any
         
-        // Update civilization with all changes
-        await db.prepare(`
-          UPDATE civilizations 
-          SET houses = ?, 
-              population = ?, 
-              martial = ?,
-              defense = ?,
-              culture = ?,
-              faith = ?,
-              science = ?,
-              industry = ?,
-              industry_left = ?,
-              fertility = ?,
-              population_capacity = ?,
-              houses_built_this_turn = 0,
-              cultural_bonuses = ?,
-              achievements = ?,
-              writing = ?,
-              advance_count = advance_count + 1, 
-              updated_at = ?
-          WHERE id = ?
-        `).bind(
-          newHouses, 
-          newPopulation,
-          civ.martial,
-          civ.defense,
-          civ.culture,
-          civ.faith,
-          civ.science,
-          civ.industry,
-          civ.industry, // Reset industry_left to industry value
-          civ.fertility,
-          civ.population_capacity,
-          JSON.stringify(typeof civ.cultural_bonuses === 'string' ? JSON.parse(civ.cultural_bonuses) : (civ.cultural_bonuses || [])),
-          JSON.stringify(typeof civ.achievements === 'string' ? JSON.parse(civ.achievements) : (civ.achievements || [])),
-          civ.writing || null,
-          now, 
-          civ.id
-        ).run()
+          // Update civilization with all changes
+          await db.prepare(`
+            UPDATE civilizations 
+            SET houses = ?, 
+                population = ?, 
+                martial = ?,
+                defense = ?,
+                culture = ?,
+                faith = ?,
+                science = ?,
+                industry = ?,
+                industry_left = ?,
+                fertility = ?,
+                population_capacity = ?,
+                houses_built_this_turn = 0,
+                cultural_bonuses = ?,
+                achievements = ?,
+                writing = ?,
+                advance_count = advance_count + 1, 
+                updated_at = ?
+            WHERE id = ?
+          `).bind(
+            newHouses, 
+            newPopulation,
+            civ.martial || 0,
+            civ.defense || 0,
+            civ.culture || 0,
+            civ.faith || 0,
+            civ.science || 0,
+            civ.industry || 0,
+            civ.industry || 0, // Reset industry_left to industry value
+            civ.fertility || 0,
+            civ.population_capacity || 0,
+            JSON.stringify(typeof civ.cultural_bonuses === 'string' ? JSON.parse(civ.cultural_bonuses) : (civ.cultural_bonuses || [])),
+            JSON.stringify(typeof civ.achievements === 'string' ? JSON.parse(civ.achievements) : (civ.achievements || [])),
+            civ.writing || null,
+            now, 
+            civ.id
+          ).run()
+        } catch (civError) {
+          console.error(`Error processing civilization ${civRow.id}:`, civError)
+          // Continue with other civilizations instead of failing entire advance
+        }
       }
     }
     
