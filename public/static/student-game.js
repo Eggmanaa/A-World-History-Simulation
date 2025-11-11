@@ -523,13 +523,13 @@ function renderMap() {
         <!-- Removed terrain bonus numbers from map display -->
       </div>
       
-      <!-- 3D Isometric Hex Map Canvas -->
-      <div id="hexMapContainer" class="bg-gray-100 rounded relative border-2 border-gray-800" style="height: 500px; width: 100%;">
-        <!-- 3D Canvas will be inserted here by HexMap3D class -->
+      <!-- Hex Map Canvas -->
+      <div id="hexMapContainer" class="bg-gray-900 rounded relative" style="height: 500px; width: 100%;">
+        <!-- Canvas will be inserted here by HexMap class -->
       </div>
       
-      <div class="mt-3 text-xs text-gray-700 text-center font-semibold">
-        Click a hex to place a building · Hover to see terrain info
+      <div class="mt-3 text-xs text-gray-400 text-center">
+        Click a hex to place a building · Hover to see terrain bonuses
       </div>
       
       <!-- Terrain Legend -->
@@ -671,38 +671,9 @@ function setupMapHandlers() {
     return;
   }
   
-  // Create 3D isometric hex map instance
-  // Use new HexMap3D with Ian O'Toole style 3D rendering
-  // Fallback to HexMapV2 if HexMap3D is not available
-  try {
-    if (typeof HexMap3D !== 'undefined') {
-      hexMapInstance = new HexMap3D('hexMapContainer', terrainTiles);
-      console.log('Using 3D hex map');
-    } else if (typeof HexMapV2 !== 'undefined') {
-      hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
-      console.log('Fallback to 2D hex map');
-    } else {
-      console.error('No hex map implementation found');
-      notifyError('Map system not loaded. Please refresh the page.', 5000);
-      return;
-    }
-  } catch (error) {
-    console.error('Error creating hex map:', error);
-    // Try fallback to HexMapV2
-    try {
-      if (typeof HexMapV2 !== 'undefined') {
-        hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
-        console.log('Using fallback 2D hex map after error');
-      } else {
-        notifyError('Map system failed to load. Please refresh the page.', 5000);
-        return;
-      }
-    } catch (fallbackError) {
-      console.error('Fallback map also failed:', fallbackError);
-      notifyError('Map system error. Please refresh the page.', 5000);
-      return;
-    }
-  }
+  // Create hex map instance
+  // Use HexMapV2 with fixed rendering
+  hexMapInstance = new HexMapV2('hexMapContainer', terrainTiles);
   
   // Load existing buildings onto hex map
   if (buildingMap) {
