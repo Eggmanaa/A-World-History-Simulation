@@ -15,23 +15,27 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
 
   return (
     <div className="w-full h-full bg-slate-900 rounded-lg overflow-hidden shadow-inner border border-slate-700 relative">
-      <Canvas shadows camera={{ position: [0, 14, 10], fov: 45 }}>
+      <Canvas shadows camera={{ position: [0, 45, 35], fov: 45 }}>
         <color attach="background" args={['#0f172a']} />
-        <fog attach="fog" args={['#0f172a', 15, 35]} />
+        <fog attach="fog" args={['#0f172a', 50, 90]} />
         
         {/* Enhanced Studio Lighting for Board Game Look */}
         <ambientLight intensity={0.6} />
         
         <directionalLight 
-            position={[8, 12, 8]} 
+            position={[20, 40, 20]} 
             intensity={1.8} 
             castShadow 
-            shadow-mapSize={[2048, 2048]}
+            shadow-mapSize={[4096, 4096]}
             shadow-bias={-0.0005}
+            shadow-camera-left={-40}
+            shadow-camera-right={40}
+            shadow-camera-top={40}
+            shadow-camera-bottom={-40}
         />
         
-        <pointLight position={[-5, 5, -5]} intensity={0.5} color="#bfdbfe" />
-        <pointLight position={[5, 2, -5]} intensity={0.3} color="#fef3c7" />
+        <pointLight position={[-15, 15, -15]} intensity={0.5} color="#bfdbfe" />
+        <pointLight position={[15, 10, -15]} intensity={0.3} color="#fef3c7" />
 
         <group position={[0, 0, 0]}> 
           {tiles.map((tile) => (
@@ -55,14 +59,14 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
           ))}
         </group>
 
-        <SoftShadows size={8} samples={12} focus={0.5} />
+        <SoftShadows size={10} samples={12} focus={0.5} />
         
         <OrbitControls 
             target={[0, 0, 0]}
             enablePan={true} 
             enableZoom={true} 
             minDistance={5} 
-            maxDistance={30} 
+            maxDistance={100} 
             maxPolarAngle={Math.PI / 2.2}
         />
       </Canvas>
