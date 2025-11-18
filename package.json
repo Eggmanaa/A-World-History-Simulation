@@ -5,20 +5,22 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node build.mjs",
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name worldhistorysimulation",
     "preview": "vite preview"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
-    "react": "^19.2.0",
     "@react-three/fiber": "^9.4.0",
-    "three": "^0.181.1",
     "lucide-react": "^0.554.0",
-    "react-dom": "^19.2.0"
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.181.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "esbuild": "^0.27.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
