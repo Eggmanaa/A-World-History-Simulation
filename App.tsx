@@ -30,7 +30,7 @@ const checkSavingThrow = (civ: GameState['civilization'], trait?: string, stat?:
     return false;
 };
 
-const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any) => {
+const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, neighbors: NeighborCiv[]) => {
     // 1. Terrain Bonuses
     const terrainTypes = new Set(tiles.map(t => t.terrain));
     let terrainDefense = 0;
@@ -86,6 +86,29 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any) => 
     let fertility = civData.baseStats.fertility;
     let industry = civData.baseStats.industry + terrainIndustry;
     let diplomacy = civData.stats.diplomacy || 0;
+
+    // Apply Religion Tenets
+    if (civData.religion && civData.religion.tenets && civData.religion.tenets.length > 0) {
+        const tenets = civData.religion.tenets;
+        
+        if (tenets.includes('monotheism')) {
+            faith += 5;
+        }
+        if (tenets.includes('polytheism')) {
+            // +2 Faith per temple
+            const templeCount = tiles.filter(t => t.building === BuildingType.Temple).length;
+            faith += (templeCount * 2);
+        }
+        if (tenets.includes('holy_war')) {
+            // +2 Martial per converted neighbor
+            const convertedCount = neighbors.filter(n => n.religion === civData.religion.name).length;
+            martial += (convertedCount * 2);
+        }
+        if (tenets.includes('christianity')) {
+            faith += 1;
+            culture += 1;
+        }
+    }
 
     // Apply Traits
     if (civData.traits.includes('Strength')) martial *= 2;
@@ -222,10 +245,6 @@ const App: React.FC = () => {
 
                   if (action.isPercent) {
                       newVal += Math.floor(currentVal * (modValue / 100));
-                      // If it's a decline event, value might be negative logic handled by calling function, 
-                      // but here assume positive values mean positive change unless we want to handle negatives.
-                      // Actually for Assyrian decline, we might use negative percent? Or just set logic.
-                      // For now assuming additions.
                   } else {
                       newVal += modValue;
                   }
@@ -303,7 +322,7 @@ const App: React.FC = () => {
       const event = TIMELINE_EVENTS[nextIndex];
       
       // 1. Calculate Base Stats for this Turn
-      const currentStats = calculateStats(tiles, gameState.civilization, bonus);
+      const currentStats = calculateStats(tiles, gameState.civilization, bonus, gameState.neighbors);
       
       // 2. Apply Event Logic
       const eventResult = processTimelineEvent(event, { ...gameState.civilization, stats: { ...gameState.civilization.stats, ...currentStats } }, gameState.gameFlags, gameState.neighbors);
@@ -333,10 +352,7 @@ const App: React.FC = () => {
       };
       
       // Assyrian Decline Special Logic (Halve All Stats) - applied after merge if needed
-      // If this is the Assyrian Decline event (560 BC) and we are Assyria
       if (event.year === -560 && gameState.civilization.name.includes('Assyria')) {
-          // This is handled partially in processTimelineEvent if configured, 
-          // but strictly "Halve all stats" is safer here if processTimelineEvent only does generic mods
           const statsToHalve: StatKey[] = ['martial', 'defense', 'faith', 'industry', 'science', 'culture', 'capacity'];
           statsToHalve.forEach(key => {
               if (key === 'capacity') mergedStats.capacity = Math.floor(mergedStats.capacity / 2);
@@ -568,7 +584,11 @@ const App: React.FC = () => {
       if (!neighbor) return;
       
       if (gameState.civilization.stats.faith > neighbor.faith + 2) {
-          addMessage(`Spread religion to ${neighbor.name}! (+1 Faith/Turn logic would apply)`);
+          setGameState(prev => ({
+            ...prev,
+            neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, religion: prev.civilization.religion.name || 'Our Faith' } : n),
+            messages: [`Spread religion to ${neighbor.name}! They now follow your faith.`, ...prev.messages]
+          }));
       } else {
           addMessage(`Failed to convert ${neighbor.name} (Their Faith: ${neighbor.faith} vs Your Faith: ${gameState.civilization.stats.faith})`);
       }
@@ -938,10 +958,15 @@ const App: React.FC = () => {
                                             <button 
                                                 key={n.id} 
                                                 onClick={() => spreadReligion(n.id)}
-                                                className="w-full p-2 mb-1 bg-slate-700 hover:bg-slate-600 text-xs rounded flex justify-between"
+                                                disabled={n.religion === civ.religion.name}
+                                                className="w-full p-2 mb-1 bg-slate-700 hover:bg-slate-600 text-xs rounded flex justify-between disabled:opacity-50"
                                             >
                                                 <span>{n.name}</span>
-                                                <span className="text-amber-300">{n.faith} Faith</span>
+                                                {n.religion === civ.religion.name ? (
+                                                    <span className="text-green-400 flex items-center gap-1"><Check size={12}/> Converted</span>
+                                                ) : (
+                                                    <span className="text-amber-300">{n.faith} Faith</span>
+                                                )}
                                             </button>
                                         ))}
                                    </div>

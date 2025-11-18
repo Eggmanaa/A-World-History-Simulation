@@ -98,6 +98,7 @@ export interface NeighborCiv {
     faith: number;
     isConquered: boolean;
     relationship: Relationship;
+    religion?: string;
 }
 
 // New Event System Types
