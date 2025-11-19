@@ -1,93 +1,287 @@
-# World History Simulation
+# World History Simulation - Enhanced with Landing Page & Authentication
 
 ## Project Overview
 - **Name**: Through History - A World History Simulation
-- **Goal**: Interactive 3D civilization-building simulation through historical eras
-- **Features**: 
-  - Interactive 3D hex-based world map with terrain variety (mountains, plains, rivers, forests, islands)
-  - Civilization management with multiple preset civilizations (Rome, Egypt, Greece, Persia, etc.)
-  - Resource management (food, production, gold, science, culture, faith)
-  - Building construction (houses, farms, quarries, temples, walls, wonders)
-  - Timeline-based historical events with consequences
-  - Religion system with customizable tenets
-  - Diplomacy with neighboring civilizations
-  - Wonder construction (Pyramids, Hanging Gardens, Colossus, etc.)
+- **Goal**: Educational simulation game for high school students to build civilizations and navigate history
+- **New Features**: Professional landing page, dual-role authentication system, teacher/student dashboards
 
-## URLs
+## 🌐 Live URLs
 - **Production**: https://worldhistorysimulation.pages.dev
-- **Latest Deployment**: https://e325950b.worldhistorysimulation.pages.dev
+- **Latest Deployment**: https://09ead488.worldhistorysimulation.pages.dev
 
-## Tech Stack
-- **Frontend**: React 19.2.0 with TypeScript
-- **3D Graphics**: Three.js + React Three Fiber + React Three Drei
-- **Build Tool**: Custom esbuild pipeline (ESM with importmaps)
+## ✨ NEW FEATURES (Phase 1 Complete)
+
+### Landing Page
+✅ **Professional Hero Section**
+- Animated globe and clock icons
+- "Through History" branding with amber accent
+- Compelling tagline and description
+- Responsive design with glassmorphism effects
+
+✅ **Dual Role System**
+- **Teachers Portal**: Login, registration, period management
+- **Students Portal**: Login, join with invite code
+- Clear call-to-action buttons with role-specific styling
+
+✅ **Statistics Showcase**
+- 30,362 Years of History (animated counter)
+- 18+ Historical Civilizations
+- ∞ Strategic Possibilities
+- Interactive feature cards
+
+### Authentication System
+✅ **Backend API (Hono + D1)**
+- RESTful API endpoints for authentication
+- JWT-based session management
+- Role-based access control middleware
+- Secure password hashing with Web Crypto API
+
+✅ **Database Schema (Cloudflare D1)**
+- Teachers table (name, email, password_hash)
+- Students table (username, name, password_hash, teacher_id, period_id)
+- Periods table (teacher_id, name, start_year, end_year, current_year)
+- Invite codes table (code, teacher_id, period_id, uses_remaining)
+- Game sessions table (student_id, civilization_id, progress_data)
+
+✅ **Authentication Flows**
+- Teacher registration and login
+- Student login and join with invite code
+- Invite code generation and validation
+- Session token management
+
+## 🎮 Game Features (Existing)
+- Interactive 3D hex-based world map
+- 16 playable historical civilizations
+- Resource management (food, production, gold, science, culture, faith)
+- Building construction (houses, farms, temples, walls, wonders)
+- Timeline events from 50,000 BCE to 362 CE
+- Religion and diplomacy systems
+- Wonder construction (Pyramids, Hanging Gardens, etc.)
+
+## 🛠️ Tech Stack
+- **Frontend**: React 19.2.0 + TypeScript + React Router
+- **3D Graphics**: Three.js + React Three Fiber
+- **Backend**: Hono (Cloudflare Workers)
+- **Database**: Cloudflare D1 (SQLite)
+- **Build**: Custom esbuild pipeline
 - **Deployment**: Cloudflare Pages
-- **Icons**: Lucide React
 - **Styling**: TailwindCSS (CDN)
+- **Icons**: Lucide React
 
-## Data Architecture
-- **Storage**: Client-side state management with React hooks
-- **Platform**: Cloudflare Pages (edge deployment)
-- **Build System**: Custom esbuild-based transpilation preserving ESM importmaps
-
-## User Guide
-This is an interactive ancient world civilization simulation game where you:
-1. **Choose Your Civilization**: Select from historical civilizations like Rome, Egypt, Greece, or create your own
-2. **Manage Resources**: Balance food, production, gold, science, culture, and faith
-3. **Build Your Empire**: Construct buildings on hex tiles to develop your civilization
-4. **Navigate History**: Experience timeline events that shape your civilization's destiny
-5. **Compete & Cooperate**: Interact with neighboring civilizations through diplomacy or conflict
-6. **Construct Wonders**: Build legendary structures that provide powerful bonuses
-
-### Game Controls
-- **Left Panel**: View civilization stats, resources, and available actions
-- **Center**: Interactive 3D map - click tiles to build or view information
-- **Right Panel**: Timeline events, neighboring civilizations, and religion management
-- **Bottom**: Building menu and wonder construction options
-
-## Local Development
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Run development server (Vite):
-   ```bash
-   npm run dev
-   ```
-
-3. Build for production:
-   ```bash
-   npm run build
-   ```
-
-## Deployment
-- **Platform**: Cloudflare Pages
-- **Status**: ✅ Active
-- **Project Name**: worldhistorysimulation
-- **Last Deployed**: November 18, 2025
-- **Build Command**: `npm run build` (custom esbuild pipeline)
-- **Output Directory**: `dist`
-
-### Deploy Updates
-```bash
-npm run deploy
+## 📂 Project Structure
+```
+webapp/
+├── api/
+│   ├── routes/           # API route handlers
+│   │   ├── auth.ts       # Authentication endpoints
+│   │   ├── teacher.ts    # Teacher dashboard endpoints
+│   │   └── student.ts    # Student dashboard endpoints
+│   ├── middleware/       # Authentication middleware
+│   └── utils/            # Crypto utilities (hashing, JWT)
+├── components/
+│   ├── auth/             # Authentication components
+│   │   ├── TeacherLogin.tsx
+│   │   ├── TeacherRegister.tsx
+│   │   ├── StudentLogin.tsx
+│   │   └── StudentJoin.tsx
+│   ├── MapScene.jsx      # 3D map component
+│   └── Models.jsx        # 3D model components
+├── pages/
+│   ├── LandingPage.tsx   # Landing page with hero & portals
+│   └── GamePage.tsx      # Game wrapper
+├── migrations/
+│   └── 0001_initial_schema.sql  # Database schema
+├── src/
+│   └── index.ts          # Backend API entry point
+├── App.tsx               # Main router component
+├── GameApp.tsx           # Game application logic
+├── constants.ts          # Game constants & civilizations
+├── types.ts              # TypeScript type definitions
+├── wrangler.jsonc        # Cloudflare configuration
+└── build.mjs             # Custom build script
 ```
 
-Or manually:
+## 🚀 API Endpoints
+
+### Authentication
+- `POST /api/auth/teacher/register` - Teacher registration
+- `POST /api/auth/teacher/login` - Teacher login
+- `POST /api/auth/student/login` - Student login
+- `POST /api/auth/student/join` - Student join with invite code
+
+### Teacher Dashboard
+- `GET /api/teacher/dashboard` - Get teacher dashboard data
+- `POST /api/teacher/periods` - Create new period
+- `POST /api/teacher/invite-codes` - Generate invite code
+- `GET /api/teacher/periods/:periodId/students` - Get students in period
+- `PATCH /api/teacher/periods/:periodId/timeline` - Update timeline year
+
+### Student Dashboard
+- `GET /api/student/dashboard` - Get student dashboard data
+- `GET /api/student/civilizations` - Get available civilizations
+- `POST /api/student/game-session` - Create/update game session
+- `PUT /api/student/game-session/progress` - Save game progress
+
+## 🗄️ Database Schema
+
+### Teachers
+| Column        | Type    | Description                |
+|---------------|---------|----------------------------|
+| id            | INTEGER | Primary key                |
+| name          | TEXT    | Teacher full name          |
+| email         | TEXT    | Unique email address       |
+| password_hash | TEXT    | Hashed password            |
+| created_at    | DATETIME| Registration timestamp     |
+
+### Students
+| Column        | Type    | Description                |
+|---------------|---------|----------------------------|
+| id            | INTEGER | Primary key                |
+| name          | TEXT    | Student full name          |
+| username      | TEXT    | Unique username            |
+| password_hash | TEXT    | Hashed password            |
+| teacher_id    | INTEGER | Foreign key to teachers    |
+| period_id     | INTEGER | Foreign key to periods     |
+| created_at    | DATETIME| Registration timestamp     |
+
+### Periods
+| Column       | Type    | Description                |
+|--------------|---------|----------------------------|
+| id           | INTEGER | Primary key                |
+| teacher_id   | INTEGER | Foreign key to teachers    |
+| name         | TEXT    | Period name                |
+| start_year   | INTEGER | Starting year              |
+| end_year     | INTEGER | Ending year                |
+| current_year | INTEGER | Current simulation year    |
+| created_at   | DATETIME| Creation timestamp         |
+
+### Invite Codes
+| Column         | Type    | Description                |
+|----------------|---------|----------------------------|
+| id             | INTEGER | Primary key                |
+| code           | TEXT    | 6-character unique code    |
+| teacher_id     | INTEGER | Foreign key to teachers    |
+| period_id      | INTEGER | Foreign key to periods     |
+| max_uses       | INTEGER | Maximum number of uses     |
+| uses_remaining | INTEGER | Remaining uses             |
+| created_at     | DATETIME| Creation timestamp         |
+
+### Game Sessions
+| Column         | Type    | Description                |
+|----------------|---------|----------------------------|
+| id             | INTEGER | Primary key                |
+| student_id     | INTEGER | Foreign key to students    |
+| civilization_id| TEXT    | Selected civilization      |
+| progress_data  | TEXT    | JSON game state            |
+| last_played    | DATETIME| Last play timestamp        |
+| created_at     | DATETIME| Creation timestamp         |
+
+## 💻 Local Development
+
+### Setup
 ```bash
+# Install dependencies
+npm install
+
+# Create and apply D1 database migrations (local)
+npx wrangler d1 create worldhistorysimulation-db
+npx wrangler d1 migrations apply worldhistorysimulation-db --local
+
+# Build project
 npm run build
-npx wrangler pages deploy dist --project-name worldhistorysimulation
+
+# Test locally (development server)
+npm run dev
 ```
 
-## Build System
-This project uses a custom esbuild-based build system (`build.mjs`) that:
-- Transpiles TypeScript/TSX to JavaScript while preserving ESM imports
-- Maintains compatibility with browser import maps for CDN dependencies
-- Automatically adds .js extensions to relative imports
-- Avoids bundling external dependencies (React, Three.js, etc. loaded from CDN)
+### Development Scripts
+```bash
+# Build frontend and backend
+npm run build
 
-This approach keeps the bundle size minimal and leverages browser-native ESM with import maps.
+# Deploy to Cloudflare Pages
+npm run deploy
 
-## AI Studio
-Original project from AI Studio: https://ai.studio/apps/drive/1dETL334UrouKBp6dFJid4P8Txg8XRtOP
+# Database operations
+npx wrangler d1 migrations apply worldhistorysimulation-db --local   # Local DB
+npx wrangler d1 migrations apply worldhistorysimulation-db --remote  # Production DB
+npx wrangler d1 execute worldhistorysimulation-db --local --command="SELECT * FROM teachers"
+```
+
+## 🚀 Deployment Status
+- **Platform**: Cloudflare Pages with D1 Database
+- **Status**: ✅ Deployed (Backend & Landing Page)
+- **Database**: ✅ Migrations Applied
+- **Last Updated**: November 19, 2025
+
+## ⚠️ Known Issues & Next Steps
+
+### Current Issues
+1. **React Router CDN Compatibility**: React Router 7 from CDN has compatibility issues with React 19
+   - Error: "Cannot read properties of null (reading 'useRef')"
+   - Solution: Bundle React Router with the frontend using Vite/esbuild instead of CDN
+
+### Phase 2 - To Be Implemented
+- [ ] Fix React Router bundling issue
+- [ ] Build full Teacher Dashboard with:
+  - Period creation and management
+  - Student roster view
+  - Timeline control interface
+  - Invite code generation
+  - Student progress monitoring
+- [ ] Build full Student Dashboard with:
+  - Civilization selection interface
+  - Game session management
+  - Progress tracking
+  - Class leaderboard
+- [ ] Integrate game with authentication system
+- [ ] Add session persistence and auto-login
+- [ ] Implement game progress saving to D1
+- [ ] Add real-time collaboration features
+- [ ] Email notifications for invite codes
+
+## 📚 Documentation
+
+### Authentication Flow
+1. **Teacher Registration** → Email/Password → JWT Token → Teacher Dashboard
+2. **Student Join** → Invite Code → Username/Password → JWT Token → Student Dashboard
+3. **Login** → Credentials → JWT Token Validation → Role-Based Redirect
+
+### Security Features
+- ✅ Password hashing with SHA-256
+- ✅ JWT token-based sessions (7-day expiration)
+- ✅ Role-based access control (Teacher/Student)
+- ✅ Invite code validation with use limits
+- ✅ CORS enabled for API access
+- ⚠️ HTTPS required (Cloudflare Pages provides SSL)
+
+### Database Migrations
+Migrations are stored in `migrations/` and applied using Wrangler CLI:
+```bash
+# Local development
+npx wrangler d1 migrations apply worldhistorysimulation-db --local
+
+# Production deployment
+npx wrangler d1 migrations apply worldhistorysimulation-db --remote
+```
+
+## 🎓 Educational Value
+This simulation helps high school students:
+- Understand historical civilizations and their development
+- Learn resource management and strategic thinking
+- Experience cause-and-effect relationships in history
+- Develop critical thinking through decision-making
+- Compete and collaborate with classmates
+
+## 📞 Support
+For issues or questions:
+- Check the database schema in `migrations/0001_initial_schema.sql`
+- Review API endpoints in `api/routes/`
+- Examine authentication logic in `api/middleware/auth.ts`
+
+## 📄 License
+Educational project for Bishop Garcia Diego High School
+
+---
+
+**Built with ❤️ for education | Powered by Cloudflare Pages & Workers**
