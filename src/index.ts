@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serveStatic } from 'hono/cloudflare-workers';
 import { api } from '../api';
 
 // Define bindings for Cloudflare Workers
 type Bindings = {
   DB: D1Database;
+  ASSETS: any;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -19,10 +19,9 @@ app.use('*', cors({
 // Mount API routes
 app.route('/api', api);
 
-// Serve static files from dist directory
-app.use('/*', serveStatic({ root: './' }));
-
-// Fallback to index.html for client-side routing
-app.get('*', serveStatic({ path: './index.html' }));
+// Serve static assets for everything else
+app.get('*', async (c) => {
+  return c.env.ASSETS.fetch(c.req.raw);
+});
 
 export default app;

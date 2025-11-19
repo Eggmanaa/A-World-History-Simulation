@@ -1,17 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "worldhistorysimulation",
-  "main": "src/index.ts",
   "compatibility_date": "2024-01-01",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist",
   
   // D1 Database Configuration
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "worldhistorysimulation-db",
-      "database_id": "PLACEHOLDER_DATABASE_ID"
+      "database_id": "ab05c467-ae98-4d3a-b526-6ac2a5a9261a"
     }
   ]
 }
