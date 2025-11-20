@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, SoftShadows, Environment } from '@react-three/drei';
+import { OrbitControls, SoftShadows } from '@react-three/drei';
 import { TileData, BuildingType } from '../types';
 import { HexTile3D, House3D, Temple3D, Wall3D, Amphitheatre3D, Wonder3D } from './Models';
 
