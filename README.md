@@ -7,7 +7,7 @@
 
 ## 🌐 Live URLs
 - **Production**: https://worldhistorysimulation.pages.dev
-- **Latest Deployment**: https://09ead488.worldhistorysimulation.pages.dev
+- **Latest Deployment**: https://0733ae5a.worldhistorysimulation.pages.dev
 
 ## ✨ NEW FEATURES (Phase 1 Complete)
 
@@ -210,19 +210,21 @@ npx wrangler d1 execute worldhistorysimulation-db --local --command="SELECT * FR
 
 ## 🚀 Deployment Status
 - **Platform**: Cloudflare Pages with D1 Database
-- **Status**: ✅ Deployed (Backend & Landing Page)
+- **Status**: ✅ Deployed and Working (Backend & Frontend)
 - **Database**: ✅ Migrations Applied
-- **Last Updated**: November 19, 2025
+- **Last Updated**: November 20, 2025
 
-## ⚠️ Known Issues & Next Steps
+## ✅ Recent Fixes (November 20, 2025)
+- ✅ **React Router Compatibility Issue RESOLVED**
+  - Fixed "Cannot read properties of null (reading 'useRef')" error
+  - React Router is now bundled with the application instead of loaded from CDN
+  - Landing page now displays correctly
+  - Navigation between pages working properly
+  - Build process updated to use `build-new.mjs` script
 
-### Current Issues
-1. **React Router CDN Compatibility**: React Router 7 from CDN has compatibility issues with React 19
-   - Error: "Cannot read properties of null (reading 'useRef')"
-   - Solution: Bundle React Router with the frontend using Vite/esbuild instead of CDN
+## ⚠️ Next Steps
 
 ### Phase 2 - To Be Implemented
-- [ ] Fix React Router bundling issue
 - [ ] Build full Teacher Dashboard with:
   - Period creation and management
   - Student roster view
