@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node build.mjs",
+    "build": "node build-new.mjs",
+    "build:old": "node build.mjs",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name worldhistorysimulation",
     "preview": "vite preview"
   },
