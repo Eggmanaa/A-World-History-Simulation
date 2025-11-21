@@ -14,6 +14,7 @@ studentRouter.use('/*', studentAuthMiddleware);
 studentRouter.get('/dashboard', async (c) => {
   try {
     const user = c.get('user');
+    console.log(`[Dashboard] Fetching data for student ${user.id} (${user.username})`);
     
     // Get student info
     const student = await c.env.DB.prepare(`
@@ -25,7 +26,14 @@ studentRouter.get('/dashboard', async (c) => {
     `).bind(user.id).first();
     
     if (!student) {
-      return c.json({ message: 'Student not found' }, 404);
+      console.error(`[Dashboard] Student not found or period missing for ID ${user.id}`);
+      // Check if student exists but period is missing (orphan)
+      const rawStudent = await c.env.DB.prepare('SELECT * FROM students WHERE id = ?').bind(user.id).first();
+      if (rawStudent) {
+          console.error(`[Dashboard] ORPHAN STUDENT DETECTED: Student ${user.id} exists but JOIN failed. Period ID: ${rawStudent.period_id}`);
+          return c.json({ message: 'Class period not found. Please contact your teacher.' }, 404);
+      }
+      return c.json({ message: 'Student account not found' }, 404);
     }
     
     // Get game session if exists
@@ -34,6 +42,8 @@ studentRouter.get('/dashboard', async (c) => {
       FROM game_sessions
       WHERE student_id = ?
     `).bind(user.id).first();
+
+    console.log(`[Dashboard] Success. Session found: ${!!gameSession}`);
     
     return c.json({
       student,
@@ -41,8 +51,8 @@ studentRouter.get('/dashboard', async (c) => {
     });
     
   } catch (error) {
-    console.error('Student dashboard error:', error);
-    return c.json({ message: 'Internal server error' }, 500);
+    console.error('[Dashboard] CRITICAL ERROR:', error);
+    return c.json({ message: 'Failed to load dashboard data. Please try again.' }, 500);
   }
 });
 
@@ -76,9 +86,13 @@ studentRouter.get('/civilizations', async (c) => {
 studentRouter.post('/game-session', async (c) => {
   try {
     const user = c.get('user');
-    const { civilizationId, progressData } = await c.req.json();
+    const body = await c.req.json();
+    const { civilizationId, progressData } = body;
     
+    console.log(`[GameSession] Update request for student ${user.id}. Civ: ${civilizationId}`);
+
     if (!civilizationId) {
+      console.warn('[GameSession] Missing civilizationId');
       return c.json({ message: 'Civilization ID is required' }, 400);
     }
     
@@ -95,6 +109,7 @@ studentRouter.post('/game-session', async (c) => {
         WHERE student_id = ?
       `).bind(civilizationId, JSON.stringify(progressData || {}), user.id).run();
       
+      console.log(`[GameSession] Updated session ${existing.id}`);
       return c.json({ message: 'Game session updated' });
     } else {
       // Create new session
@@ -103,6 +118,7 @@ studentRouter.post('/game-session', async (c) => {
         VALUES (?, ?, ?)
       `).bind(user.id, civilizationId, JSON.stringify(progressData || {})).run();
       
+      console.log(`[GameSession] Created new session ${result.meta.last_row_id}`);
       return c.json({ 
         message: 'Game session created',
         sessionId: result.meta.last_row_id
@@ -110,8 +126,8 @@ studentRouter.post('/game-session', async (c) => {
     }
     
   } catch (error) {
-    console.error('Game session error:', error);
-    return c.json({ message: 'Internal server error' }, 500);
+    console.error('[GameSession] CRITICAL ERROR:', error);
+    return c.json({ message: 'Failed to save game session' }, 500);
   }
 });
 
