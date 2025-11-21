@@ -1,4 +1,4 @@
-# World History Simulation - Enhanced with Landing Page & Authentication
+# World History Simulation - Enhanced with Landing Page & Authentication 
 
 ## Project Overview
 - **Name**: Through History - A World History Simulation
