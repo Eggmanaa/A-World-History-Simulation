@@ -8,7 +8,7 @@ type Bindings = {
 export const studentRouter = new Hono<{ Bindings: Bindings }>();
 
 // Apply authentication middleware to all student routes
-studentRouter.use('/*', studentAuthMiddleware);
+studentRouter.use('/*', studentAuthMiddleware());
 
 // Get dashboard data
 studentRouter.get('/dashboard', async (c) => {

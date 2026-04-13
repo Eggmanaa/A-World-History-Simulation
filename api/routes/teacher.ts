@@ -9,7 +9,7 @@ type Bindings = {
 export const teacherRouter = new Hono<{ Bindings: Bindings }>();
 
 // Apply authentication middleware to all teacher routes
-teacherRouter.use('/*', teacherAuthMiddleware);
+teacherRouter.use('/*', teacherAuthMiddleware());
 
 // Get dashboard data
 teacherRouter.get('/dashboard', async (c) => {

@@ -61,13 +61,16 @@ export const StudentDashboard: React.FC = () => {
           }
         }
 
+        // API returns { student: {...}, gameSession: {...} }
+        const student = dashData.student || dashData;
+        const gameSession = dashData.gameSession;
         setStudentInfo({
-          id: dashData.id || 'unknown',
-          name: dashData.name || 'Student',
-          period: dashData.period || 'Unknown Period',
-          year: dashData.currentYear || -3000,
-          selectedCivId: dashData.selectedCivId || null,
-          gameStatus: dashData.gameStatus || 'waiting',
+          id: student.id || 'unknown',
+          name: student.name || 'Student',
+          period: student.period_name || student.period || 'Unknown Period',
+          year: student.current_year || student.currentYear || -3000,
+          selectedCivId: gameSession?.civilization_id || student.selectedCivId || null,
+          gameStatus: student.gameStatus || 'waiting',
         });
 
         setTakenCivs(takenCivsSet);
@@ -94,7 +97,7 @@ export const StudentDashboard: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ civId }),
+        body: JSON.stringify({ civilizationId: civId }),
       });
 
       if (!response.ok) throw new Error('Failed to select civilization');

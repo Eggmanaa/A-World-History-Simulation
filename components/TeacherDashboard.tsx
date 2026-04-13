@@ -93,7 +93,15 @@ const TeacherDashboard: React.FC = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch periods');
       const data = await response.json();
-      const periodsList = data.periods || data || [];
+      const rawPeriods = data.periods || data || [];
+      const periodsList = rawPeriods.map((p: any) => ({
+        ...p,
+        joinedStudents: p.joinedStudents || [],
+        inviteCode: p.inviteCode || '',
+        currentYear: p.currentYear ?? p.start_year ?? -50000,
+        timelineIndex: p.timelineIndex ?? 0,
+        isActive: p.isActive ?? false,
+      }));
       setPeriods(periodsList);
       // Set first active period if exists
       if (periodsList.length > 0) setActivePeriod(periodsList[0]);
@@ -122,7 +130,15 @@ const TeacherDashboard: React.FC = () => {
       });
       if (!response.ok) throw new Error('Failed to create period');
       const data = await response.json();
-      const newPeriod = data.period || data;
+      const rawPeriod = data.period || data;
+      const newPeriod = {
+        ...rawPeriod,
+        joinedStudents: rawPeriod.joinedStudents || [],
+        inviteCode: rawPeriod.inviteCode || '',
+        currentYear: rawPeriod.currentYear ?? rawPeriod.startYear ?? -50000,
+        timelineIndex: rawPeriod.timelineIndex ?? 0,
+        isActive: rawPeriod.isActive ?? false,
+      };
       setPeriods([...periods, newPeriod]);
       setActivePeriod(newPeriod);
       setNewPeriodName('');
@@ -168,7 +184,7 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const startGame = async () => {
-    if (!activePeriod || activePeriod.joinedStudents.length < 2) {
+    if (!activePeriod || (activePeriod.joinedStudents || []).length < 2) {
       setError('At least 2 students must have joined');
       return;
     }
@@ -580,12 +596,12 @@ const TeacherDashboard: React.FC = () => {
 
                 {/* Joined Students */}
                 <div className="mb-8">
-                  <h3 className="text-lg font-semibold mb-4">Joined Students ({activePeriod.joinedStudents.length})</h3>
-                  {activePeriod.joinedStudents.length === 0 ? (
+                  <h3 className="text-lg font-semibold mb-4">Joined Students ({(activePeriod.joinedStudents || []).length})</h3>
+                  {(activePeriod.joinedStudents || []).length === 0 ? (
                     <p className="text-slate-400">No students have joined yet.</p>
                   ) : (
                     <div className="space-y-2">
-                      {activePeriod.joinedStudents.map((student) => {
+                      {(activePeriod.joinedStudents || []).map((student) => {
                         const civ = getCivPreset(student.civId);
                         return (
                           <div
@@ -614,10 +630,10 @@ const TeacherDashboard: React.FC = () => {
                 {/* Start Game Button */}
                 <button
                   onClick={startGame}
-                  disabled={loading || activePeriod.joinedStudents.length < 2}
+                  disabled={loading || (activePeriod.joinedStudents || []).length < 2}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:bg-slate-600 disabled:text-slate-400 text-white font-bold py-4 px-6 rounded-lg transition-colors text-lg"
                 >
-                  {loading ? 'Starting...' : `Start Game (${activePeriod.joinedStudents.length}/2+ Students)`}
+                  {loading ? 'Starting...' : `Start Game (${(activePeriod.joinedStudents || []).length}/2+ Students)`}
                 </button>
               </div>
             )}
