@@ -93,10 +93,10 @@ const TeacherDashboard: React.FC = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch periods');
       const data = await response.json();
-      setPeriods(data);
+      const periodsList = data.periods || data || [];
+      setPeriods(periodsList);
       // Set first active period if exists
-      const active = data.find((p: GamePeriod) => p.isActive);
-      if (active) setActivePeriod(active);
+      if (periodsList.length > 0) setActivePeriod(periodsList[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -121,7 +121,8 @@ const TeacherDashboard: React.FC = () => {
         body: JSON.stringify({ name: newPeriodName }),
       });
       if (!response.ok) throw new Error('Failed to create period');
-      const newPeriod = await response.json();
+      const data = await response.json();
+      const newPeriod = data.period || data;
       setPeriods([...periods, newPeriod]);
       setActivePeriod(newPeriod);
       setNewPeriodName('');
@@ -147,7 +148,8 @@ const TeacherDashboard: React.FC = () => {
       });
       if (!response.ok) throw new Error('Failed to generate code');
       const data = await response.json();
-      const updated = { ...activePeriod, inviteCode: data.code };
+      const code = data.inviteCode?.code || data.code;
+      const updated = { ...activePeriod, inviteCode: code };
       setActivePeriod(updated);
       setPeriods(periods.map((p) => (p.id === activePeriod.id ? updated : p)));
     } catch (err) {

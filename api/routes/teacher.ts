@@ -53,15 +53,14 @@ teacherRouter.get('/dashboard', async (c) => {
 teacherRouter.post('/periods', async (c) => {
   try {
     const user = c.get('user');
-    const { name, startYear, endYear } = await c.req.json();
-    
-    if (!name || !startYear || !endYear) {
-      return c.json({ message: 'All fields are required' }, 400);
+    const { name, startYear: rawStart, endYear: rawEnd } = await c.req.json();
+
+    if (!name) {
+      return c.json({ message: 'Period name is required' }, 400);
     }
-    
-    if (startYear >= endYear) {
-      return c.json({ message: 'Start year must be before end year' }, 400);
-    }
+
+    const startYear = rawStart || -50000;
+    const endYear = rawEnd || 362;
     
     const result = await c.env.DB.prepare(`
       INSERT INTO periods (teacher_id, name, start_year, end_year, current_year) 
