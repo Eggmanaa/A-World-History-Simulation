@@ -27,38 +27,82 @@ export const StudentDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate fetching student info and taken civilizations
-    const timer = setTimeout(() => {
-      // Mock student data
-      setStudentInfo({
-        id: 'student_123',
-        name: 'Alex Chen',
-        period: 'Period 3',
-        year: -3000,
-        selectedCivId: null,
-        gameStatus: 'waiting',
-      });
+    const fetchDashboard = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const periodId = localStorage.getItem('periodId');
 
-      // Mock taken civilizations (from other students)
-      setTakenCivs(new Set(['rome', 'greece']));
-      setLoading(false);
-    }, 300);
+        if (!token) {
+          navigate('/student/login');
+          return;
+        }
 
-    return () => clearTimeout(timer);
-  }, []);
+        // Fetch student dashboard data
+        const dashResponse = await fetch('/api/student/dashboard', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!dashResponse.ok) throw new Error('Failed to fetch dashboard');
+        const dashData = await dashResponse.json();
+
+        // Fetch taken civilizations from game state
+        let takenCivsSet = new Set<string>();
+        if (periodId) {
+          const stateResponse = await fetch(`/api/game/student/${periodId}/state`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (stateResponse.ok) {
+            const stateData = await stateResponse.json();
+            // Extract taken civs from other students
+            if (stateData.adjacentCivs) {
+              takenCivsSet = new Set(stateData.adjacentCivs.map((c: any) => c.civilizationId));
+            }
+          }
+        }
+
+        setStudentInfo({
+          id: dashData.id || 'unknown',
+          name: dashData.name || 'Student',
+          period: dashData.period || 'Unknown Period',
+          year: dashData.currentYear || -3000,
+          selectedCivId: dashData.selectedCivId || null,
+          gameStatus: dashData.gameStatus || 'waiting',
+        });
+
+        setTakenCivs(takenCivsSet);
+      } catch (error) {
+        console.error('Failed to fetch dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, [navigate]);
 
   const handleCivSelection = async (civId: string) => {
     if (takenCivs.has(civId)) return;
 
     try {
-      // Simulate API call to select civilization
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/student/game-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ civId }),
+      });
+
+      if (!response.ok) throw new Error('Failed to select civilization');
+
       setSelectedCivForGame(civId);
       setStudentInfo((prev) =>
         prev ? { ...prev, selectedCivId: civId, gameStatus: 'waiting' } : null
       );
-
-      // In a real app, save to backend
-      // await api.selectCivilization(studentInfo.id, civId);
     } catch (error) {
       console.error('Failed to select civilization:', error);
     }

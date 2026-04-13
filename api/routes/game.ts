@@ -591,3 +591,50 @@ gameRouter.post('/student/:periodId/action', async (c) => {
     return c.json({ message: 'Internal server error' }, 500);
   }
 });
+
+// POST /student/:periodId/save - Student saves their game state
+gameRouter.post('/student/:periodId/save', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+    const { progressData } = await c.req.json();
+
+    if (!progressData) {
+      return c.json({ message: 'Progress data is required' }, 400);
+    }
+
+    // Verify student and period
+    const student = await c.env.DB.prepare(
+      'SELECT id FROM students WHERE id = ? AND period_id = ?'
+    ).bind(user.id, periodId).first();
+
+    if (!student) {
+      return c.json({ message: 'Student not found in this period' }, 404);
+    }
+
+    // Get or create game session
+    const session = await c.env.DB.prepare(
+      'SELECT id FROM game_sessions WHERE student_id = ?'
+    ).bind(user.id).first();
+
+    if (session) {
+      // Update existing session
+      await c.env.DB.prepare(
+        'UPDATE game_sessions SET progress_data = ?, updated_at = datetime("now") WHERE student_id = ?'
+      ).bind(JSON.stringify(progressData), user.id).run();
+    } else {
+      // Create new session
+      await c.env.DB.prepare(
+        'INSERT INTO game_sessions (student_id, progress_data) VALUES (?, ?)'
+      ).bind(user.id, JSON.stringify(progressData)).run();
+    }
+
+    return c.json({
+      message: 'Game state saved successfully',
+      studentId: user.id
+    }, 200);
+  } catch (error) {
+    console.error('Save game state error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});

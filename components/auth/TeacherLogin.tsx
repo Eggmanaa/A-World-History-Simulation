@@ -24,7 +24,7 @@ const TeacherLogin: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('token', data.token);
         localStorage.setItem('user_role', 'teacher');
         navigate('/teacher/dashboard');
       } else {

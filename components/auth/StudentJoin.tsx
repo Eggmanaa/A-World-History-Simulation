@@ -45,8 +45,11 @@ const StudentJoin: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('token', data.token);
         localStorage.setItem('user_role', 'student');
+        if (data.periodId) {
+          localStorage.setItem('periodId', data.periodId);
+        }
         navigate('/student/dashboard');
       } else {
         setError(data.message || 'Failed to join with invite code');

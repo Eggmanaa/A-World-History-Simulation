@@ -1,5 +1,5 @@
 
-import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent } from './types';
+import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock } from './types';
 
 export const HEX_SIZE = 1.0;
 export const MAP_RADIUS = 9;
@@ -230,13 +230,18 @@ export const generateMap = (preset: CivPreset): TileData[] => {
 };
 
 export const TIMELINE_EVENTS: TimelineEvent[] = [
-    { year: -50000, name: "Paleolithic Era", desc: "Early human migration and tool use." },
     { year: -8500, name: "Mesolithic Period", desc: "Population growth begins." },
-    { 
+    {
         year: -4500, name: "Agricultural Revolution", desc: "Farming allows permanent settlements.",
         actions: [
             { type: 'MODIFY_STAT', targetRegions: ['Egypt'], stat: 'industry', isPercent: true, value: 30, message: "Egypt gains 30% Industry bonus." },
             { type: 'MODIFY_STAT', targetRegions: ['Fertile Crescent', 'Mesopotamia'], stat: 'fertility', value: 2, message: "Fertile Crescent gains +2 Fertility." }
+        ]
+    },
+    {
+        year: -3500, name: "First Cities", desc: "Urban centers emerge. All civs gain starter houses.",
+        actions: [
+            { type: 'MODIFY_STAT', targetRegions: ['Egypt', 'Mesopotamia', 'India', 'China', 'Greece', 'Persia', 'Anatolia', 'Fertile Crescent', 'Europe', 'Asia', 'Africa'], stat: 'fertility', value: 3, message: "Urbanization: All civilizations begin with established settlements." }
         ]
     },
     { year: -2750, name: "Early Bronze Age", desc: "Trade networks develop." },
@@ -389,6 +394,20 @@ export const RELIGION_TENETS: ReligionTenet[] = [
     { id: 'medicine', name: 'Medicine', description: '+5 Population Capacity.' },
     { id: 'evangelism', name: 'Evangelism', description: 'Religion spreads faster (UI-level effect).' },
     { id: 'christianity', name: 'Christianity', description: '+1 Faith, +1 Culture.' }
+];
+
+export const SCIENCE_UNLOCKS: ScienceUnlock[] = [
+    { level: 1, effect: 'Can attack through marsh', unlocks: 'attack_marsh' },
+    { level: 2, effect: 'Can attack through forests', unlocks: 'attack_forest' },
+    { level: 4, effect: '+2 Martial', statBonus: { martial: 2 } },
+    { level: 5, effect: '+2 Industry, Can attack over rivers', statBonus: { industry: 2 }, unlocks: 'attack_river' },
+    { level: 7, effect: '+2 Housing Capacity', statBonus: { capacity: 2 } },
+    { level: 9, effect: '+5 Martial, +5 Industry', statBonus: { martial: 5, industry: 5 } },
+    { level: 10, effect: '+5 Faith, Can attack over ocean', statBonus: { faith: 5 }, unlocks: 'attack_ocean' },
+    { level: 12, effect: '+10 Martial', statBonus: { martial: 10 } },
+    { level: 15, effect: '+10 Industry', statBonus: { industry: 10 } },
+    { level: 16, effect: '+5 Housing Capacity', statBonus: { capacity: 5 } },
+    { level: 30, effect: 'Can build Archimedes Tower', unlocks: 'archimedes_tower' },
 ];
 
 export const GENERATE_NEIGHBORS = (year: number): NeighborCiv[] => {

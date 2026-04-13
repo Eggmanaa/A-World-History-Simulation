@@ -64,7 +64,7 @@ interface StudentCiv {
 
 const TeacherDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'setup' | 'timeline' | 'civs' | 'war' | 'scoreboard'>('setup');
-  const [authToken] = useState<string | null>(localStorage.getItem('teacherToken'));
+  const [authToken] = useState<string | null>(localStorage.getItem('token'));
   const [periods, setPeriods] = useState<GamePeriod[]>([]);
   const [activePeriod, setActivePeriod] = useState<GamePeriod | null>(null);
   const [newPeriodName, setNewPeriodName] = useState('');
@@ -88,7 +88,7 @@ const TeacherDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/periods', {
+      const response = await fetch('/api/teacher/dashboard', {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to fetch periods');
@@ -112,7 +112,7 @@ const TeacherDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/periods', {
+      const response = await fetch('/api/teacher/periods', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,9 +137,13 @@ const TeacherDashboard: React.FC = () => {
     if (!activePeriod) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/invite-code`, {
+      const response = await fetch(`/api/teacher/invite-codes`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ periodId: activePeriod.id, maxUses: 30 }),
       });
       if (!response.ok) throw new Error('Failed to generate code');
       const data = await response.json();
@@ -168,7 +172,7 @@ const TeacherDashboard: React.FC = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/start`, {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/start`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
       });
@@ -187,7 +191,7 @@ const TeacherDashboard: React.FC = () => {
     if (!activePeriod) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/next-event`, {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/advance`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
       });
@@ -210,7 +214,7 @@ const TeacherDashboard: React.FC = () => {
     if (!activePeriod) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/skip-event`, {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/advance`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
       });
@@ -228,7 +232,7 @@ const TeacherDashboard: React.FC = () => {
     if (!activePeriod) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/civilizations`, {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/overview`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to fetch civilizations');
@@ -244,7 +248,7 @@ const TeacherDashboard: React.FC = () => {
     if (!activePeriod) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/wars`, {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/overview`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to fetch wars');
@@ -271,13 +275,13 @@ const TeacherDashboard: React.FC = () => {
     if (!activePeriod) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/periods/${activePeriod.id}/wars/${warId}/resolve`, {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/resolve-war`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ diceRolls }),
+        body: JSON.stringify({ actionId: warId, result: 'attacker_wins' }),
       });
       if (!response.ok) throw new Error('Failed to resolve war');
       const updated = await response.json();
@@ -595,6 +599,41 @@ const TeacherDashboard: React.FC = () => {
                     </ul>
                   </div>
                 )}
+
+                {/* Event Preview Card */}
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-6">
+                  <h3 className="text-sm font-bold text-amber-300 mb-3">Event Preview</h3>
+
+                  <div className="space-y-2 text-sm text-slate-300">
+                    <div>
+                      <span className="text-slate-500">Year:</span>
+                      <span className="ml-2 text-white">{currentEvent.year < 0 ? `${Math.abs(currentEvent.year)} BCE` : `${currentEvent.year} CE`}</span>
+                    </div>
+
+                    {currentEvent.actions && currentEvent.actions.length > 0 && (
+                      <div>
+                        <span className="text-slate-500">Stat Changes:</span>
+                        <ul className="ml-4 mt-1 space-y-1 text-xs">
+                          {currentEvent.actions.filter(a => a.stat).map((action, idx) => (
+                            <li key={idx} className="text-slate-400">
+                              {action.targetRegions && action.targetRegions.length > 0 ? (
+                                <span>{action.targetRegions.join(', ')}: {action.stat} {action.isPercent ? `${action.value}%` : `+${action.value}`}</span>
+                              ) : (
+                                <span>All: {action.stat} {action.isPercent ? `${action.value}%` : `+${action.value}`}</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {currentEvent.actions && currentEvent.actions.some(a => a.saveTrait || a.saveStat) && (
+                      <div className="text-amber-300 text-xs flex items-center gap-1">
+                        <Dice6 size={14} /> Some civilizations may roll saving throws
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 <div className="flex gap-4">
                   <button

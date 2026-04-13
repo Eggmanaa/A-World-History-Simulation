@@ -5,7 +5,9 @@ import {
     FlaskConical, Palette, Scroll, History, Play, BrickWall, Landmark, Star, Crown, X, Check, Handshake, TowerControl, Globe, MapPin
 } from 'lucide-react';
 import MapScene from './components/MapScene';
-import { generateMap, CIV_PRESETS, TIMELINE_EVENTS, WONDERS_LIST, RELIGION_TENETS, GENERATE_NEIGHBORS } from './constants';
+import { useGameSync } from './hooks/useGameSync';
+import { useAutoSave } from './hooks/useAutoSave';
+import { generateMap, CIV_PRESETS, TIMELINE_EVENTS, WONDERS_LIST, RELIGION_TENETS, GENERATE_NEIGHBORS, SCIENCE_UNLOCKS } from './constants';
 import { TileData, TerrainType, BuildingType, BUILDING_COSTS, TERRAIN_BONUSES, GameState, CivPreset, WATER_CAPACITIES, WonderDefinition, TimelineEventAction, StatKey, NeighborCiv } from './types';
 import { getAdjacentCivs, areAdjacent } from './adjacency';
 
@@ -143,6 +145,18 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
     if (civData.traits.includes('Beauty')) diplomacy += 1;
     if (civData.traits.includes('Creativity')) culture *= 2;
 
+    // Apply Science Level Unlocks
+    SCIENCE_UNLOCKS.forEach(unlock => {
+        if (science >= unlock.level && unlock.statBonus) {
+            Object.entries(unlock.statBonus).forEach(([key, val]) => {
+                if (key === 'martial') martial += val;
+                if (key === 'industry') industry += val;
+                if (key === 'faith') faith += val;
+                if (key === 'capacity') populationCapacity += val;
+            });
+        }
+    });
+
     // Apply Turn Bonus (Cultural Choice)
     if (activeBonuses.martial) martial = Math.floor(martial * 1.5);
     if (activeBonuses.fertility) fertility = Math.floor(fertility * 1.5);
@@ -185,23 +199,40 @@ const App: React.FC = () => {
   // Temporary storage for the active turn bonus
   const [turnBonus, setTurnBonus] = useState<any>({});
 
+  // Mobile responsive state
+  const [showPanel, setShowPanel] = useState<'stats' | 'actions' | null>(null);
+
+  // --- SYNC HOOKS ---
+  const { syncState } = useGameSync(gameState.hasStarted ? gameState.civilization?.presetId : null);
+  useAutoSave(gameState, gameState.hasStarted ? gameState.civilization?.presetId : null);
+
+  // When teacher advances timeline, trigger local advance
+  useEffect(() => {
+    if (syncState.serverTimelineIndex !== null &&
+        syncState.serverTimelineIndex > gameState.timelineIndex &&
+        gameState.hasStarted) {
+      // Teacher has advanced - trigger local advance
+      initiateAdvance();
+    }
+  }, [syncState.serverTimelineIndex]);
+
   // --- ACTIONS ---
 
   const startGame = (preset: CivPreset) => {
       const newTiles = generateMap(preset);
-      
+
       setTiles(newTiles);
       setGameState({
           simulationId: 'sim-1',
-          year: -50000,
+          year: -8500,
           timelineIndex: 0,
           hasStarted: true,
           selectedAction: null,
           placingWonder: false,
           pendingTurnChoice: false,
           currentEventPopup: null,
-          messages: [`Welcome to ${preset.name}. The year is 50,000 BCE.`],
-          neighbors: GENERATE_NEIGHBORS(-50000),
+          messages: [`Welcome to ${preset.name}. The year is 8500 BCE.`],
+          neighbors: GENERATE_NEIGHBORS(-8500),
           gameFlags: { warUnlocked: false, religionUnlocked: false },
           civilization: {
               presetId: preset.id,
@@ -634,34 +665,63 @@ const App: React.FC = () => {
   };
 
   const attackNeighbor = (neighborId: string) => {
-      const { gameFlags } = gameState;
-      if (!gameFlags.warUnlocked && gameState.year < -670) { addMessage("Warfare not unlocked until 670 BCE or Event."); return; }
+    const { gameFlags } = gameState;
+    if (!gameFlags.warUnlocked && gameState.year < -670) { addMessage("Warfare not unlocked until 670 BCE or Event."); return; }
 
-      const neighbor = gameState.neighbors.find(n => n.id === neighborId);
-      if (!neighbor || neighbor.isConquered) return;
-      if (neighbor.relationship === 'Ally') { addMessage("Cannot attack an ally!"); return; }
-      
-      const myMartial = gameState.civilization.stats.martial;
-      const enemyStr = neighbor.martial + neighbor.defense;
+    const neighbor = gameState.neighbors.find(n => n.id === neighborId);
+    if (!neighbor || neighbor.isConquered) return;
+    if (neighbor.relationship === 'Ally') { addMessage("Cannot attack an ally!"); return; }
 
-      if (myMartial < 1) { addMessage("You have no martial strength."); return; }
+    const civ = gameState.civilization;
+    if (civ.stats.martial < 1) { addMessage("You have no martial strength."); return; }
 
-      const win = myMartial > enemyStr;
-      
-      if (win) {
-          setGameState(prev => ({
-              ...prev,
-              neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, isConquered: true } : n),
-              messages: [`Victory against ${neighbor.name}!`, ...prev.messages],
-              civilization: {
-                  ...prev.civilization,
-                  stats: { ...prev.civilization.stats, martial: prev.civilization.stats.martial + 5 }
-              }
-          }));
-      } else {
-          addMessage(`Defeat! ${neighbor.name} (Str: ${enemyStr}) was too strong.`);
-      }
+    // Attack score = Martial + d20 roll
+    const attackRoll = Math.floor(Math.random() * 20) + 1;
+    const attackScore = civ.stats.martial + attackRoll;
+
+    // Defense score = (Martial + Defense + Wall bonus) + d20 roll
+    const defenseRoll = Math.floor(Math.random() * 20) + 1;
+    const wallBonus = 0; // TODO: get from defender's walls if implemented
+    const defenseScore = neighbor.martial + neighbor.defense + wallBonus + defenseRoll;
+
+    const margin = attackScore - defenseScore;
+
+    let resultMsg = '';
+    if (margin > 15) {
+        // Decisive Victory
+        resultMsg = `DECISIVE VICTORY! (${attackScore} vs ${defenseScore}) You conquered ${neighbor.name}!`;
+        setGameState(prev => ({
+            ...prev,
+            neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, isConquered: true } : n),
+            civilization: { ...prev.civilization, stats: { ...prev.civilization.stats, martial: prev.civilization.stats.martial + 5 } },
+            messages: [resultMsg, ...prev.messages]
+        }));
+    } else if (margin > 0) {
+        // Narrow Victory
+        const lostHouses = Math.max(1, Math.floor(civ.stats.houses * 0.1));
+        resultMsg = `Narrow Victory! (${attackScore} vs ${defenseScore}) You defeated ${neighbor.name} but lost ${lostHouses} houses.`;
+        setGameState(prev => ({
+            ...prev,
+            neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, isConquered: true } : n),
+            civilization: { ...prev.civilization, stats: { ...prev.civilization.stats, houses: Math.max(1, prev.civilization.stats.houses - lostHouses) } },
+            messages: [resultMsg, ...prev.messages]
+        }));
+    } else if (margin > -10) {
+        // Stalemate
+        resultMsg = `Stalemate! (${attackScore} vs ${defenseScore}) Neither side gained ground.`;
+        addMessage(resultMsg);
+    } else {
+        // Defeat - attacker loses houses
+        const lostHouses = Math.max(1, Math.floor(civ.stats.houses * 0.2));
+        resultMsg = `DEFEAT! (${attackScore} vs ${defenseScore}) ${neighbor.name} repelled your attack! Lost ${lostHouses} houses.`;
+        setGameState(prev => ({
+            ...prev,
+            civilization: { ...prev.civilization, stats: { ...prev.civilization.stats, houses: Math.max(1, prev.civilization.stats.houses - lostHouses) } },
+            messages: [resultMsg, ...prev.messages]
+        }));
+    }
   };
+
 
   const addMessage = (msg: string) => {
       setGameState(prev => ({
@@ -682,17 +742,25 @@ const App: React.FC = () => {
                   <p className="text-slate-400 mb-8">Select a Civilization to begin the simulation.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
                       {CIV_PRESETS.map(civ => (
-                          <button key={civ.id} onClick={() => startGame(civ)} className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600 hover:border-orange-500/50 p-5 rounded-xl text-left transition-all">
-                              <div className="flex justify-between items-start mb-2">
-                                <h3 className="text-xl font-bold text-slate-100">{civ.name}</h3>
-                                {civ.isIsland && <span className="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">Island</span>}
-                              </div>
-                              <div className="flex flex-wrap gap-2 mb-4">
-                                  {civ.traits.map(t => <span key={t} className="text-xs font-mono bg-slate-800 text-orange-300 px-2 py-1 rounded border border-slate-600">{t}</span>)}
-                              </div>
-                              <div className="grid grid-cols-2 gap-y-1 text-sm text-slate-400">
-                                  <span>Martial: <b className="text-slate-200">{civ.baseStats.martial}</b></span>
-                                  <span>Industry: <b className="text-slate-200">{civ.baseStats.industry}</b></span>
+                          <button key={civ.id} onClick={() => startGame(civ)} className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600 hover:border-orange-500/50 rounded-xl text-left transition-all overflow-hidden flex flex-col">
+                              <div className="h-1 w-full" style={{ backgroundColor: civ.colors.base }} />
+                              <div className="p-5 flex-1 flex flex-col">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <h3 className="text-xl font-bold text-slate-100">{civ.name}</h3>
+                                    {civ.isIsland && <span className="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">Island</span>}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 mb-4">
+                                      {civ.traits.map(t => <span key={t} className="text-xs font-mono bg-slate-800 text-orange-300 px-2 py-1 rounded border border-slate-600">{t}</span>)}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-y-1 text-sm text-slate-400 mb-4">
+                                      <span>Martial: <b className="text-slate-200">{civ.baseStats.martial}</b></span>
+                                      <span>Industry: <b className="text-slate-200">{civ.baseStats.industry}</b></span>
+                                  </div>
+                                  <div className="flex gap-2 text-xs text-slate-500 mt-auto">
+                                      <span>{civ.waterResource} water</span>
+                                      <span>|</span>
+                                      <span>{getAdjacentCivs(civ.id).length} neighbor{getAdjacentCivs(civ.id).length !== 1 ? 's' : ''}</span>
+                                  </div>
                               </div>
                           </button>
                       ))}
@@ -809,15 +877,21 @@ const App: React.FC = () => {
             <div className="text-xs text-slate-500 border-l border-slate-700 pl-4 hidden md:block">
                 {TIMELINE_EVENTS[gameState.timelineIndex]?.name}
             </div>
+            {syncState.isOnline && (
+              <div className="flex items-center gap-1 text-xs text-green-400 border-l border-slate-700 pl-4">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                Synced
+              </div>
+            )}
         </div>
         <button onClick={initiateAdvance} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-indigo-900/20">
             <Play size={16} fill="currentColor" /> Advance Turn
         </button>
       </header>
 
-      <main className="flex-1 flex overflow-hidden">
-          {/* LEFT STATS */}
-          <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl">
+      <main className="flex-1 flex overflow-hidden pb-[52px] md:pb-0">
+          {/* LEFT STATS - Hidden on mobile */}
+          <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 flex-col z-10 shadow-xl">
               <div className="p-4 border-b border-slate-800 space-y-4">
                   <div>
                       <div className="flex justify-between text-sm mb-1"><span className="text-orange-400 flex items-center gap-2"><Home size={14}/> Houses ({civ.flags.housesSupportTwoPop ? '2x' : '1x'} Pop)</span><span>{civ.stats.houses}/{civ.stats.capacity}</span></div>
@@ -825,16 +899,16 @@ const App: React.FC = () => {
                       <div className="text-xs text-slate-500 mt-1 text-right">Built this turn: {civ.stats.housesBuiltThisTurn}/{civ.stats.fertility}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-slate-800 p-2 rounded border border-slate-700"><div className="text-xs text-slate-400">Industry</div><div className="text-lg font-bold text-amber-400">{civ.stats.industryLeft}</div></div>
-                      <div className="bg-slate-800 p-2 rounded border border-slate-700"><div className="text-xs text-slate-400">Fertility</div><div className="text-lg font-bold text-green-400">{civ.stats.fertility}</div></div>
+                      <div className="bg-slate-800 p-2 rounded border border-slate-700" title="Building and manufacturing power. Spend to construct buildings."><div className="text-xs text-slate-400">Industry</div><div className="text-lg font-bold text-amber-400">{civ.stats.industryLeft}</div></div>
+                      <div className="bg-slate-800 p-2 rounded border border-slate-700" title="How many new houses you can build each turn."><div className="text-xs text-slate-400">Fertility</div><div className="text-lg font-bold text-green-400">{civ.stats.fertility}</div></div>
                   </div>
                   <div className="space-y-1 text-sm">
-                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-red-400">Martial</span><b>{civ.stats.martial}</b></div>
-                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-blue-400">Defense</span><b>{civ.stats.defense}</b></div>
-                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-yellow-400">Faith</span><b>{civ.stats.faith}</b></div>
-                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-pink-400">Culture</span><b>{civ.stats.culture}</b></div>
-                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-purple-400">Science</span><b>{civ.stats.science}</b></div>
-                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-cyan-400">Diplomacy</span><b>{civ.stats.diplomacy}</b></div>
+                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-red-400" title="Your offensive fighting power. Used to attack other civilizations.">Martial</span><b>{civ.stats.martial}</b></div>
+                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-blue-400" title="Your ability to protect your people. Includes terrain bonuses.">Defense</span><b>{civ.stats.defense}</b></div>
+                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-yellow-400" title="Spiritual power. Build temples and found religions.">Faith</span><b>{civ.stats.faith}</b></div>
+                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-pink-400" title="Arts and customs. Determines your cultural stage.">Culture</span><b>{civ.stats.culture}</b></div>
+                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-purple-400" title="Technological advancement. Unlocks new abilities at higher levels.">Science</span><b>{civ.stats.science}</b></div>
+                      <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-cyan-400" title="Ability to form alliances and conduct trade.">Diplomacy</span><b>{civ.stats.diplomacy}</b></div>
                   </div>
               </div>
               {civ.religion.name && (
@@ -859,14 +933,14 @@ const App: React.FC = () => {
               </div>
           </section>
 
-          {/* RIGHT TABBED PANEL */}
-          <aside className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col z-10 shadow-xl">
+          {/* RIGHT TABBED PANEL - Hidden on mobile */}
+          <aside className="hidden md:flex w-80 bg-slate-900 border-l border-slate-800 flex-col z-10 shadow-xl">
                <div className="flex border-b border-slate-800">
                    {['build', 'world', 'wonders', 'religion', 'war'].map(tab => (
                        <button
                            key={tab}
                            onClick={() => setActiveTab(tab as any)}
-                           className={`flex-1 py-3 flex justify-center items-center text-slate-400 hover:bg-slate-800 transition-colors ${activeTab === tab ? 'border-b-2 border-orange-500 text-orange-500 bg-slate-800' : ''}`}
+                           className={`flex-1 py-4 flex justify-center items-center text-slate-400 hover:bg-slate-800 transition-colors ${activeTab === tab ? 'border-b-2 border-orange-500 text-orange-500 bg-slate-800' : ''}`}
                        >
                            {tab === 'build' && <Hammer size={18} />}
                            {tab === 'world' && <Globe size={18} />}
@@ -882,23 +956,23 @@ const App: React.FC = () => {
                    {activeTab === 'build' && (
                        <div className="space-y-3">
                            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Structures</h2>
-                           <button onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.House }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 ${gameState.selectedAction === BuildingType.House ? 'bg-orange-900/30 border-orange-500' : 'bg-slate-800 border-slate-700'}`}>
+                           <button onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.House }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.House ? 'bg-orange-900/30 border-orange-500' : 'bg-slate-800 border-slate-700'}`}>
                                <div className="p-2 bg-orange-600 rounded text-white"><Home size={18}/></div>
                                <div><div className="font-bold text-sm">House</div><div className="text-xs text-slate-400">Cost: Fertility ({civ.stats.fertility - civ.stats.housesBuiltThisTurn} left)</div></div>
                            </button>
-                           <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Temple }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 ${gameState.selectedAction === BuildingType.Temple ? 'bg-blue-900/30 border-blue-500' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
+                           <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Temple }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Temple ? 'bg-blue-900/30 border-blue-500' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
                                <div className="p-2 bg-blue-600 rounded text-white"><Landmark size={18}/></div>
                                <div><div className="font-bold text-sm">Temple</div><div className="text-xs text-slate-400">Cost: 10 Ind</div></div>
                            </button>
-                           <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Wall }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 ${gameState.selectedAction === BuildingType.Wall ? 'bg-slate-700 border-slate-400' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
+                           <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Wall }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Wall ? 'bg-slate-700 border-slate-400' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
                                <div className="p-2 bg-slate-500 rounded text-white"><BrickWall size={18}/></div>
                                <div><div className="font-bold text-sm">Wall</div><div className="text-xs text-slate-400">Cost: 10 Ind</div></div>
                            </button>
-                           <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Amphitheatre }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 ${gameState.selectedAction === BuildingType.Amphitheatre ? 'bg-pink-900/30 border-pink-500' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
+                           <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Amphitheatre }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Amphitheatre ? 'bg-pink-900/30 border-pink-500' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
                                <div className="p-2 bg-pink-600 rounded text-white"><Users size={18}/></div>
                                <div><div className="font-bold text-sm">Amphitheatre</div><div className="text-xs text-slate-400">Cost: 10 Ind</div></div>
                            </button>
-                            <button disabled={civ.stats.industryLeft < 20 || civ.stats.science < 30} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.ArchimedesTower }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 ${gameState.selectedAction === BuildingType.ArchimedesTower ? 'bg-purple-900/30 border-purple-500' : 'bg-slate-800 border-slate-700'} ${(civ.stats.industryLeft < 20 || civ.stats.science < 30) ? 'opacity-50' : ''}`}>
+                            <button disabled={civ.stats.industryLeft < 20 || civ.stats.science < 30} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.ArchimedesTower }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.ArchimedesTower ? 'bg-purple-900/30 border-purple-500' : 'bg-slate-800 border-slate-700'} ${(civ.stats.industryLeft < 20 || civ.stats.science < 30) ? 'opacity-50' : ''}`}>
                                <div className="p-2 bg-purple-600 rounded text-white"><TowerControl size={18}/></div>
                                <div><div className="font-bold text-sm">Archimedes Tower</div><div className="text-xs text-slate-400">Cost: 20 Ind, 30 Sci</div></div>
                            </button>
@@ -1118,6 +1192,79 @@ const App: React.FC = () => {
                    ))}
                </div>
           </aside>
+
+          {/* MOBILE BOTTOM BAR - visible only on small screens */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-700 flex">
+              <button onClick={() => setShowPanel(showPanel === 'stats' ? null : 'stats')}
+                      className={`flex-1 py-4 text-center text-sm font-bold transition-colors ${showPanel === 'stats' ? 'text-amber-400 bg-slate-800' : 'text-slate-400'}`}>
+                  Stats
+              </button>
+              <button onClick={() => setShowPanel(showPanel === 'actions' ? null : 'actions')}
+                      className={`flex-1 py-4 text-center text-sm font-bold transition-colors ${showPanel === 'actions' ? 'text-amber-400 bg-slate-800' : 'text-slate-400'}`}>
+                  Actions
+              </button>
+          </div>
+
+          {/* MOBILE PANEL OVERLAY - visible on small screens when showPanel is set */}
+          {showPanel && (
+              <div className="md:hidden fixed inset-x-0 bottom-[52px] z-30 bg-slate-900 border-t border-slate-700 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                  {showPanel === 'stats' && (
+                      <div className="p-4 space-y-4">
+                          <div>
+                              <div className="flex justify-between text-sm mb-1"><span className="text-orange-400 flex items-center gap-2"><Home size={14}/> Houses ({civ.flags.housesSupportTwoPop ? '2x' : '1x'} Pop)</span><span>{civ.stats.houses}/{civ.stats.capacity}</span></div>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden"><div className="bg-orange-500 h-full" style={{ width: `${(civ.stats.houses / civ.stats.capacity) * 100}%` }}></div></div>
+                              <div className="text-xs text-slate-500 mt-1 text-right">Built this turn: {civ.stats.housesBuiltThisTurn}/{civ.stats.fertility}</div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-slate-800 p-2 rounded border border-slate-700"><div className="text-xs text-slate-400">Industry</div><div className="text-lg font-bold text-amber-400">{civ.stats.industryLeft}</div></div>
+                              <div className="bg-slate-800 p-2 rounded border border-slate-700"><div className="text-xs text-slate-400">Fertility</div><div className="text-lg font-bold text-green-400">{civ.stats.fertility}</div></div>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                              <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-red-400" title="Your offensive fighting power. Used to attack other civilizations.">Martial</span><b>{civ.stats.martial}</b></div>
+                              <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-blue-400" title="Your ability to protect your people. Includes terrain bonuses.">Defense</span><b>{civ.stats.defense}</b></div>
+                              <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-yellow-400" title="Spiritual power. Build temples and found religions.">Faith</span><b>{civ.stats.faith}</b></div>
+                              <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-pink-400" title="Arts and customs. Determines your cultural stage.">Culture</span><b>{civ.stats.culture}</b></div>
+                              <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-purple-400" title="Technological advancement. Unlocks new abilities at higher levels.">Science</span><b>{civ.stats.science}</b></div>
+                              <div className="flex justify-between border-b border-slate-800 pb-1"><span className="text-cyan-400" title="Ability to form alliances and conduct trade.">Diplomacy</span><b>{civ.stats.diplomacy}</b></div>
+                          </div>
+                          {civ.religion.name && (
+                              <div className="p-4 bg-yellow-900/20 rounded border border-yellow-700/30">
+                                  <div className="text-xs text-yellow-500 uppercase font-bold">State Religion</div>
+                                  <div className="text-sm font-bold text-yellow-100">{civ.religion.name}</div>
+                              </div>
+                          )}
+                      </div>
+                  )}
+                  {showPanel === 'actions' && (
+                      <div className="p-4 flex-1 overflow-y-auto">
+                          {/* BUILD TAB CONTENT */}
+                          <div className="space-y-3">
+                              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Structures</h2>
+                              <button onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.House }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.House ? 'bg-orange-900/30 border-orange-500' : 'bg-slate-800 border-slate-700'}`}>
+                                  <div className="p-2 bg-orange-600 rounded text-white"><Home size={18}/></div>
+                                  <div><div className="font-bold text-sm">House</div><div className="text-xs text-slate-400">Cost: Fertility ({civ.stats.fertility - civ.stats.housesBuiltThisTurn} left)</div></div>
+                              </button>
+                              <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Temple }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Temple ? 'bg-blue-900/30 border-blue-500' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
+                                  <div className="p-2 bg-blue-600 rounded text-white"><Landmark size={18}/></div>
+                                  <div><div className="font-bold text-sm">Temple</div><div className="text-xs text-slate-400">Cost: 10 Ind</div></div>
+                              </button>
+                              <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Wall }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Wall ? 'bg-slate-700 border-slate-400' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
+                                  <div className="p-2 bg-slate-500 rounded text-white"><BrickWall size={18}/></div>
+                                  <div><div className="font-bold text-sm">Wall</div><div className="text-xs text-slate-400">Cost: 10 Ind</div></div>
+                              </button>
+                              <button disabled={civ.stats.industryLeft < 10} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.Amphitheatre }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Amphitheatre ? 'bg-pink-900/30 border-pink-500' : 'bg-slate-800 border-slate-700'} ${civ.stats.industryLeft < 10 ? 'opacity-50' : ''}`}>
+                                  <div className="p-2 bg-pink-600 rounded text-white"><Users size={18}/></div>
+                                  <div><div className="font-bold text-sm">Amphitheatre</div><div className="text-xs text-slate-400">Cost: 10 Ind</div></div>
+                              </button>
+                              <button disabled={civ.stats.industryLeft < 20 || civ.stats.science < 30} onClick={() => setGameState(p => ({ ...p, selectedAction: BuildingType.ArchimedesTower }))} className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.ArchimedesTower ? 'bg-purple-900/30 border-purple-500' : 'bg-slate-800 border-slate-700'} ${(civ.stats.industryLeft < 20 || civ.stats.science < 30) ? 'opacity-50' : ''}`}>
+                                  <div className="p-2 bg-purple-600 rounded text-white"><TowerControl size={18}/></div>
+                                  <div><div className="font-bold text-sm">Archimedes Tower</div><div className="text-xs text-slate-400">Cost: 20 Ind, 30 Sci</div></div>
+                              </button>
+                          </div>
+                      </div>
+                  )}
+              </div>
+          )}
       </main>
     </div>
   );

@@ -88,6 +88,13 @@ export interface ReligionTenet {
     description: string;
 }
 
+export interface ScienceUnlock {
+    level: number;
+    effect: string;
+    statBonus?: Partial<Record<StatKey, number>>;
+    unlocks?: string; // e.g., 'attack_through_marsh', 'bronze_working'
+}
+
 export type Relationship = 'Neutral' | 'Ally' | 'Enemy';
 
 export interface NeighborCiv {
