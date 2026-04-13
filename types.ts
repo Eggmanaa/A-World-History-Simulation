@@ -96,6 +96,13 @@ export interface ScienceUnlock {
 }
 
 export type Relationship = 'Neutral' | 'Ally' | 'Enemy';
+export type TreatyType = 'peace' | 'trade' | 'military' | 'cultural';
+
+export interface Treaty {
+    neighborId: string;
+    type: TreatyType;
+    turnsRemaining: number;
+}
 
 export interface NeighborCiv {
     id: string;
@@ -249,6 +256,10 @@ export interface GameState {
   religionSpread: number;
   wondersBuilt: WonderDefinition[];
   gameEnded: boolean;
+  treaties: Treaty[];
+  tradedThisTurn: string[];
+  fogOfWar: boolean;
+  pendingTreaty: string | null;
 }
 
 export interface VictoryCondition {

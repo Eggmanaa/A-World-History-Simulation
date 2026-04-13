@@ -85,27 +85,29 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
       <Canvas
         ref={canvasRef}
         shadows
-        camera={{ position: [20, 20, 20], fov: 30, near: 1, far: 1000 }}
+        camera={{ position: [0, 45, 35], fov: 45, near: 1, far: 1000 }}
         dpr={dpr}
       >
-        <color attach="background" args={['#1e293b']} /> {/* Slate-900ish background */}
-        <fog attach="fog" args={['#1e293b', 30, 80]} />
+        <color attach="background" args={['#0f172a']} /> {/* Darker, more dramatic background */}
+        <fog attach="fog" args={['#0f172a', 50, 90]} />
 
         {/* Studio Lighting for Board Game Look */}
-        <ambientLight intensity={0.4} color="#cbd5e1" />
+        <ambientLight intensity={0.6} />
 
         <directionalLight
-          position={[10, 20, 5]}
-          intensity={1.5}
+          position={[20, 40, 20]}
+          intensity={1.8}
           castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-bias={-0.0001}
-        >
-          <orthographicCamera attach="shadow-camera" args={[-20, 20, 20, -20]} />
-        </directionalLight>
+          shadow-mapSize={[4096, 4096]}
+          shadow-bias={-0.0005}
+          shadow-camera-left={-40}
+          shadow-camera-right={40}
+          shadow-camera-top={40}
+          shadow-camera-bottom={-40}
+        />
 
-        <pointLight position={[-10, 10, -10]} intensity={0.5} color="#a78bfa" /> {/* Violet tint */}
-        <pointLight position={[10, 5, 10]} intensity={0.3} color="#fbbf24" /> {/* Amber tint */}
+        <pointLight position={[-15, 15, -15]} intensity={0.5} color="#bfdbfe" />
+        <pointLight position={[15, 10, -15]} intensity={0.3} color="#fef3c7" />
 
         <group position={[0, -2, 0]} rotation={[0, Math.PI / 6, 0]}>
           {tiles.map((tile) => (

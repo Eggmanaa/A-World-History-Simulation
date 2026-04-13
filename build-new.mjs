@@ -1,5 +1,6 @@
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, writeFileSync, existsSync } from 'fs';
+import { copyFileSync, mkdirSync, writeFileSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 console.log('🔨 Starting build process...');
 
@@ -80,6 +81,21 @@ try {
   console.error('❌ Backend build error:', error);
   throw error;
 }
+
+// Copy public assets to dist
+console.log('🖼️ Copying public assets...');
+function copyDir(src, dest) {
+  if (!existsSync(src)) return;
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) copyDir(srcPath, destPath);
+    else copyFileSync(srcPath, destPath);
+  }
+}
+copyDir('public', 'dist');
+console.log('✅ Public assets copied!');
 
 console.log('✅ Build complete!');
 console.log('📊 Output directory: dist/');

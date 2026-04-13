@@ -52,6 +52,8 @@ import {
   NeighborCiv,
   TurnState,
   TurnDecision,
+  Treaty,
+  TreatyType,
 } from "./types";
 import { getAdjacentCivs, areAdjacent } from "./adjacency";
 
@@ -87,6 +89,7 @@ const calculateStats = (
   civData: any,
   activeBonuses: any,
   neighbors: NeighborCiv[],
+  treaties?: Treaty[],
 ) => {
   // 1. Terrain Bonuses
   const terrainTypes = new Set(tiles.map((t) => t.terrain));
@@ -263,6 +266,19 @@ const calculateStats = (
   if (activeBonuses.faith) faith = Math.floor(faith * 1.5);
   if (activeBonuses.industry) industry = Math.floor(industry * 1.5);
 
+  // Apply Treaty Bonuses (Feature 1)
+  if (treaties && treaties.length > 0) {
+    const tradeTreatyCount = treaties.filter((t) => t.type === "trade").length;
+    const culturalTreatyCount = treaties.filter((t) => t.type === "cultural").length;
+    const militaryTreatyCount = treaties.filter((t) => t.type === "military").length;
+    const peaceTreatyCount = treaties.filter((t) => t.type === "peace").length;
+
+    industry += tradeTreatyCount * 2;
+    culture += culturalTreatyCount * 2;
+    martial += militaryTreatyCount * 3;
+    defense += peaceTreatyCount * 1;
+  }
+
   return {
     martial: Math.floor(martial),
     defense: Math.floor(defense),
@@ -299,6 +315,10 @@ const App: React.FC = () => {
     religionSpread: 0,
     wondersBuilt: [],
     gameEnded: false,
+    treaties: [],
+    tradedThisTurn: [],
+    fogOfWar: true,
+    pendingTreaty: null,
   });
 
   // Temporary storage for the active turn bonus
@@ -356,6 +376,14 @@ const App: React.FC = () => {
       messages: [`Welcome to ${preset.name}. The year is 8500 BCE.`],
       neighbors: GENERATE_NEIGHBORS(-8500),
       gameFlags: { warUnlocked: false, religionUnlocked: false },
+      warsWon: 0,
+      religionSpread: 0,
+      wondersBuilt: [],
+      gameEnded: false,
+      treaties: [],
+      tradedThisTurn: [],
+      fogOfWar: true,
+      pendingTreaty: null,
       civilization: {
         presetId: preset.id,
         name: preset.name,
@@ -554,6 +582,7 @@ const App: React.FC = () => {
       gameState.civilization,
       bonus,
       gameState.neighbors,
+      gameState.treaties,
     );
 
     // 2. Apply Event Logic
@@ -622,6 +651,16 @@ const App: React.FC = () => {
     if (mergedStats.culture > 20 && stage === "Barbarism") stage = "Classical";
     if (mergedStats.culture > 50 && stage === "Classical") stage = "Imperial";
 
+    // Decrement treaty timers and remove expired ones (Feature 1)
+    const updatedTreaties = gameState.treaties
+      .map((t) => ({ ...t, turnsRemaining: t.turnsRemaining - 1 }))
+      .filter((t) => t.turnsRemaining > 0);
+
+    // Reset expiring treaties' neighbors back to Neutral
+    const expiredTreatyNeighborIds = gameState.treaties
+      .filter((t) => t.turnsRemaining <= 1)
+      .map((t) => t.neighborId);
+
     setGameState((prev) => ({
       ...prev,
       year: event.year,
@@ -633,7 +672,14 @@ const App: React.FC = () => {
         description: event.desc,
         effects: eventResult.messages,
       },
-      neighbors: [...prev.neighbors, ...eventResult.neighborsToAdd],
+      neighbors: [
+        ...prev.neighbors.map((n) =>
+          expiredTreatyNeighborIds.includes(n.id)
+            ? { ...n, relationship: "Neutral" as const }
+            : n,
+        ),
+        ...eventResult.neighborsToAdd,
+      ] as NeighborCiv[],
       messages: [
         `Focus: ${choice.toUpperCase()}.`,
         ...eventResult.messages,
@@ -641,6 +687,8 @@ const App: React.FC = () => {
         ...prev.messages,
       ],
       gameFlags: eventResult.newGameFlags,
+      treaties: updatedTreaties,
+      tradedThisTurn: [], // Reset trade counter on advance
       civilization: {
         ...prev.civilization,
         culturalStage: stage,
@@ -956,32 +1004,82 @@ const App: React.FC = () => {
     const neighbor = gameState.neighbors.find((n) => n.id === neighborId);
     if (!neighbor) return;
 
-    // Diplomacy bonus calculation
-    const neighborDiplomacy = 3; // Base neighbor diplomacy
-    const diplomacyDiff = Math.max(
-      0,
-      civilization.stats.diplomacy - neighborDiplomacy,
-    );
-    const alliedBonus = Math.min(diplomacyDiff, 5); // Cap at 5 stats per point
+    // Show treaty selection modal (Feature 1)
+    setGameState((prev) => ({
+      ...prev,
+      pendingTreaty: neighborId,
+    }));
+  };
+
+  const completeTreaty = (treatyType: TreatyType) => {
+    if (!gameState.pendingTreaty) return;
+
+    const neighborId = gameState.pendingTreaty;
+    const neighbor = gameState.neighbors.find((n) => n.id === neighborId);
+    if (!neighbor) return;
 
     setGameState((prev) => ({
       ...prev,
+      pendingTreaty: null,
       neighbors: prev.neighbors.map((n) =>
         n.id === neighborId ? { ...n, relationship: "Ally" } : n,
       ),
+      treaties: [
+        ...prev.treaties,
+        {
+          neighborId,
+          type: treatyType,
+          turnsRemaining: 3,
+        },
+      ],
+      messages: [
+        `Formed ${treatyType} treaty with ${neighbor.name}!`,
+        ...prev.messages,
+      ],
+    }));
+  };
+
+  const tradeWithNeighbor = (neighborId: string) => {
+    const { civilization } = gameState;
+
+    // Check if already traded this turn (Feature 2)
+    if (gameState.tradedThisTurn.includes(neighborId)) {
+      addMessage("You can only trade with this neighbor once per timeline advance.");
+      return;
+    }
+
+    // Cost check
+    if (civilization.stats.industry < 2) {
+      addMessage("Trading costs 2 Industry.");
+      return;
+    }
+
+    const neighbor = gameState.neighbors.find((n) => n.id === neighborId);
+    if (!neighbor) return;
+
+    // Random stat bonus: faith, science, culture, or martial
+    const statOptions: Array<"faith" | "science" | "culture" | "martial"> = [
+      "faith",
+      "science",
+      "culture",
+      "martial",
+    ];
+    const randomStat = statOptions[Math.floor(Math.random() * statOptions.length)];
+
+    setGameState((prev) => ({
+      ...prev,
+      tradedThisTurn: [...prev.tradedThisTurn, neighborId],
       civilization: {
         ...prev.civilization,
         stats: {
           ...prev.civilization.stats,
-          martial: prev.civilization.stats.martial + alliedBonus,
-          defense: prev.civilization.stats.defense + alliedBonus,
-          faith: prev.civilization.stats.faith + alliedBonus,
-          industry: prev.civilization.stats.industry + alliedBonus,
-          science: prev.civilization.stats.science + alliedBonus,
+          industry: prev.civilization.stats.industry - 2,
+          industryLeft: prev.civilization.stats.industryLeft - 2,
+          [randomStat]: (prev.civilization.stats as any)[randomStat] + 3,
         },
       },
       messages: [
-        `Formed alliance with ${neighbor.name}! (+${alliedBonus} to all stats from diplomacy)`,
+        `Traded with ${neighbor.name}! Gained +3 ${randomStat}.`,
         ...prev.messages,
       ],
     }));
@@ -1007,9 +1105,20 @@ const App: React.FC = () => {
       return;
     }
 
-    // Attack score = Martial + d20 roll
+    // Check for peace treaty (Feature 1 - Peace Treaty Violation)
+    const peaceTreaty = gameState.treaties.find(
+      (t) => t.neighborId === neighborId && t.type === "peace",
+    );
+    let treatyViolationPenalty = 0;
+    let treatyViolationMsg = "";
+    if (peaceTreaty) {
+      treatyViolationPenalty = -5;
+      treatyViolationMsg = " Treaty Violation: -5 to attack roll.";
+    }
+
+    // Attack score = Martial + d20 roll (+ treaty penalty)
     const attackRoll = Math.floor(Math.random() * 20) + 1;
-    const attackScore = civ.stats.martial + attackRoll;
+    const attackScore = civ.stats.martial + attackRoll + treatyViolationPenalty;
 
     // Count defender's walls
     const wallCount = civ.buildings.walls;
@@ -1040,14 +1149,23 @@ const App: React.FC = () => {
       wallCount > 0
         ? ` Enemy walls added +${wallCount * 3} defense (${wallCount} walls × 3)${wallNote}.`
         : "";
+
+    // Remove peace treaty if violated
+    const treatiesAfterViolation = peaceTreaty
+      ? gameState.treaties.filter(
+          (t) => !(t.neighborId === neighborId && t.type === "peace"),
+        )
+      : gameState.treaties;
+
     if (margin > 15) {
       // Decisive Victory
-      resultMsg = `DECISIVE VICTORY! (${attackScore} vs ${defenseScore}) You conquered ${neighbor.name}!${wallEffectMsg}`;
+      resultMsg = `DECISIVE VICTORY! (${attackScore} vs ${defenseScore}) You conquered ${neighbor.name}!${wallEffectMsg}${treatyViolationMsg}`;
       setGameState((prev) => ({
         ...prev,
         neighbors: prev.neighbors.map((n) =>
           n.id === neighborId ? { ...n, isConquered: true } : n,
         ),
+        treaties: treatiesAfterViolation,
         civilization: {
           ...prev.civilization,
           stats: {
@@ -1060,12 +1178,13 @@ const App: React.FC = () => {
     } else if (margin > 0) {
       // Narrow Victory
       const lostHouses = Math.max(1, Math.floor(civ.stats.houses * 0.1));
-      resultMsg = `Narrow Victory! (${attackScore} vs ${defenseScore}) You defeated ${neighbor.name} but lost ${lostHouses} houses.${wallEffectMsg}`;
+      resultMsg = `Narrow Victory! (${attackScore} vs ${defenseScore}) You defeated ${neighbor.name} but lost ${lostHouses} houses.${wallEffectMsg}${treatyViolationMsg}`;
       setGameState((prev) => ({
         ...prev,
         neighbors: prev.neighbors.map((n) =>
           n.id === neighborId ? { ...n, isConquered: true } : n,
         ),
+        treaties: treatiesAfterViolation,
         civilization: {
           ...prev.civilization,
           stats: {
@@ -1345,6 +1464,89 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* TREATY SELECTION MODAL (Feature 1) */}
+      {gameState.pendingTreaty && (
+        <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-600 p-8 rounded-2xl max-w-lg w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-2">
+              Choose Treaty Type
+            </h2>
+            <p className="text-slate-400 mb-6">
+              Select which type of treaty to form with{" "}
+              {gameState.neighbors.find((n) => n.id === gameState.pendingTreaty)
+                ?.name || "this neighbor"}
+              .
+            </p>
+
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                onClick={() => completeTreaty("peace")}
+                className="p-4 bg-cyan-900/40 border border-cyan-500 hover:bg-cyan-900/60 rounded-xl flex items-center gap-4 text-left"
+              >
+                <div className="bg-cyan-500 p-3 rounded-full">
+                  <Scroll className="text-white" />
+                </div>
+                <div>
+                  <div className="font-bold text-lg">Peace Treaty</div>
+                  <div className="text-sm text-slate-300">
+                    Cannot attack for 3 turns. +1 Defense.
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => completeTreaty("trade")}
+                className="p-4 bg-amber-900/40 border border-amber-500 hover:bg-amber-900/60 rounded-xl flex items-center gap-4 text-left"
+              >
+                <div className="bg-amber-500 p-3 rounded-full">
+                  <Warehouse className="text-white" />
+                </div>
+                <div>
+                  <div className="font-bold text-lg">Trade Pact</div>
+                  <div className="text-sm text-slate-300">
+                    +2 Industry per turn while active.
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => completeTreaty("military")}
+                className="p-4 bg-red-900/40 border border-red-500 hover:bg-red-900/60 rounded-xl flex items-center gap-4 text-left"
+              >
+                <div className="bg-red-500 p-3 rounded-full">
+                  <Sword className="text-white" />
+                </div>
+                <div>
+                  <div className="font-bold text-lg">Military Alliance</div>
+                  <div className="text-sm text-slate-300">
+                    +3 Martial when fighting their enemies.
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => completeTreaty("cultural")}
+                className="p-4 bg-pink-900/40 border border-pink-500 hover:bg-pink-900/60 rounded-xl flex items-center gap-4 text-left"
+              >
+                <div className="bg-pink-500 p-3 rounded-full">
+                  <Palette className="text-white" />
+                </div>
+                <div>
+                  <div className="font-bold text-lg">Cultural Exchange</div>
+                  <div className="text-sm text-slate-300">
+                    +2 Culture per turn while active.
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setGameState((prev) => ({ ...prev, pendingTreaty: null }))}
+              className="mt-4 w-full p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TOP BAR */}
       <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-3 md:px-6 shrink-0 shadow-md z-20">
         <div className="flex items-center gap-2 md:gap-4">
@@ -1367,13 +1569,23 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-        <button
-          onClick={initiateAdvance}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-indigo-900/20 min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap"
-        >
-          <Play size={16} fill="currentColor" /> <span className="hidden sm:inline">Advance</span>{" "}
-          Turn
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setGameState((prev) => ({ ...prev, fogOfWar: !prev.fogOfWar }))}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold text-sm min-h-[40px] md:min-h-[44px] transition-colors ${gameState.fogOfWar ? "bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-900/20" : "bg-slate-700 hover:bg-slate-600 text-slate-300"}`}
+            title={gameState.fogOfWar ? "Fog of War ON" : "Fog of War OFF"}
+          >
+            <MapPin size={16} />
+            <span className="hidden sm:inline">Fog</span>
+          </button>
+          <button
+            onClick={initiateAdvance}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-indigo-900/20 min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap"
+          >
+            <Play size={16} fill="currentColor" /> <span className="hidden sm:inline">Advance</span>{" "}
+            Turn
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 flex overflow-hidden pb-[56px] md:pb-0">
@@ -1565,6 +1777,15 @@ const App: React.FC = () => {
         {/* MAP */}
         <section className="flex-1 relative bg-slate-950">
           <MapScene tiles={tiles} onTileClick={handleTileClick} />
+          {gameState.fogOfWar && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle at 50% 50%, transparent 30%, rgba(15,23,42,0.7) 70%, rgba(15,23,42,0.95) 100%)",
+              }}
+            />
+          )}
           {gameState.placingWonder && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-amber-600 text-white px-6 py-3 rounded-full font-bold shadow-xl z-20 animate-bounce">
               CLICK A TILE TO PLACE YOUR WONDER
@@ -2045,6 +2266,15 @@ const App: React.FC = () => {
                           </button>
                         )}
                       </div>
+                      {!n.isConquered && n.relationship === "Ally" && (
+                        <button
+                          onClick={() => tradeWithNeighbor(n.id)}
+                          disabled={civ.stats.industry < 2 || gameState.tradedThisTurn.includes(n.id)}
+                          className="w-full py-2 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded shadow-lg shadow-green-900/20 disabled:opacity-50"
+                        >
+                          {gameState.tradedThisTurn.includes(n.id) ? "TRADED" : "TRADE"}
+                        </button>
+                      )}
                       {!n.isConquered && n.relationship !== "Ally" && (
                         <button
                           onClick={() => attackNeighbor(n.id)}
