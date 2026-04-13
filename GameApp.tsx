@@ -7,8 +7,8 @@ import {
 import MapScene from './components/MapScene';
 import { useGameSync } from './hooks/useGameSync';
 import { useAutoSave } from './hooks/useAutoSave';
-import { generateMap, CIV_PRESETS, TIMELINE_EVENTS, WONDERS_LIST, RELIGION_TENETS, GENERATE_NEIGHBORS, SCIENCE_UNLOCKS } from './constants';
-import { TileData, TerrainType, BuildingType, BUILDING_COSTS, TERRAIN_BONUSES, GameState, CivPreset, WATER_CAPACITIES, WonderDefinition, TimelineEventAction, StatKey, NeighborCiv } from './types';
+import { generateMap, CIV_PRESETS, TIMELINE_EVENTS, WONDERS_LIST, RELIGION_TENETS, GENERATE_NEIGHBORS, SCIENCE_UNLOCKS, TECHNOLOGIES, CULTURAL_STAGE_MULTIPLIERS } from './constants';
+import { TileData, TerrainType, BuildingType, BUILDING_COSTS, TERRAIN_BONUSES, GameState, CivPreset, WATER_CAPACITIES, WonderDefinition, TimelineEventAction, StatKey, NeighborCiv, TurnState, TurnDecision } from './types';
 import { getAdjacentCivs, areAdjacent } from './adjacency';
 
 // --- HELPER LOGIC ---
@@ -157,6 +157,36 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
         }
     });
 
+    // Apply Technology Bonuses
+    if (civData.technologies) {
+        civData.technologies.forEach((techId: string) => {
+            const tech = TECHNOLOGIES.find(t => t.id === techId);
+            if (!tech) return;
+
+            if (tech.effect === 'martial_2x') martial *= 2;
+            if (tech.effect === 'martial_3x') martial *= 3;
+            if (tech.effect === 'science_bonus_3') science += 3;
+            if (tech.effect === 'science_bonus_5') science += 5;
+            if (tech.effect === 'industry_bonus_5') industry += 5;
+            if (tech.effect === 'faith_to_science') {
+                const faithConvert = Math.floor(faith * 0.25);
+                science += faithConvert;
+                faith -= faithConvert;
+            }
+        });
+    }
+
+    // Apply Cultural Stage Multipliers
+    const stageKey = civData.culturalStage?.toLowerCase() as keyof typeof CULTURAL_STAGE_MULTIPLIERS || 'barbarism';
+    const stageMultipliers = CULTURAL_STAGE_MULTIPLIERS[stageKey];
+    if (stageMultipliers) {
+        martial = Math.floor(martial * stageMultipliers.martial);
+        fertility = Math.floor(fertility * stageMultipliers.fertility);
+        science = Math.floor(science * stageMultipliers.science);
+        faith = Math.floor(faith * stageMultipliers.faith);
+        industry = Math.floor(industry * stageMultipliers.industry);
+    }
+
     // Apply Turn Bonus (Cultural Choice)
     if (activeBonuses.martial) martial = Math.floor(martial * 1.5);
     if (activeBonuses.fertility) fertility = Math.floor(fertility * 1.5);
@@ -202,8 +232,18 @@ const App: React.FC = () => {
   // Mobile responsive state
   const [showPanel, setShowPanel] = useState<'stats' | 'actions' | null>(null);
 
+  // Turn system state
+  const turnState = syncState.turnState; // Get turn state from sync
+  const [pendingDecision, setPendingDecision] = useState<TurnDecision>({
+    culturalFocus: null,
+    buildActions: [],
+    warDeclarations: [],
+    allianceOffers: [],
+    submitted: false
+  });
+
   // --- SYNC HOOKS ---
-  const { syncState } = useGameSync(gameState.hasStarted ? gameState.civilization?.presetId : null);
+  const { syncState, submitTurn } = useGameSync(gameState.hasStarted ? gameState.civilization?.presetId : null);
   useAutoSave(gameState, gameState.hasStarted ? gameState.civilization?.presetId : null);
 
   // When teacher advances timeline, trigger local advance
@@ -240,16 +280,17 @@ const App: React.FC = () => {
               regions: preset.regions,
               culturalStage: 'Barbarism',
               traits: preset.traits,
+              technologies: [],
               baseStats: preset.baseStats,
-              flags: { 
-                  conquered: false, 
-                  religionFound: false, 
-                  housesSupportTwoPop: false, 
-                  israelBonus: false, 
-                  troyWallDouble: false, 
-                  romanSplit: false, 
+              flags: {
+                  conquered: false,
+                  religionFound: false,
+                  housesSupportTwoPop: false,
+                  israelBonus: false,
+                  troyWallDouble: false,
+                  romanSplit: false,
                   alexandrianBonus: false,
-                  chinaWallDiscount: false 
+                  chinaWallDiscount: false
               },
               builtWonderId: null,
               religion: { name: null, tenets: [] },
@@ -280,6 +321,19 @@ const App: React.FC = () => {
       const newGameFlags = { ...gameFlags };
       const neighborsToAdd: NeighborCiv[] = [];
       let housesLost = 0;
+      let newTechnologies = [...(currentCiv.technologies || [])];
+
+      // Auto-unlock technologies based on timeline year
+      TECHNOLOGIES.forEach(tech => {
+          if (event.year >= tech.year && !newTechnologies.includes(tech.id)) {
+              // Check prerequisites
+              if (tech.requires && !newTechnologies.includes(tech.requires)) {
+                  return; // Skip if prerequisite not met
+              }
+              newTechnologies.push(tech.id);
+              messages.push(`Your civilization has discovered ${tech.name}! ${tech.description}`);
+          }
+      });
 
       if (event.actions) {
           event.actions.forEach((action: TimelineEventAction) => {
@@ -355,7 +409,7 @@ const App: React.FC = () => {
           });
       }
 
-      return { changes, newFlags, newGameFlags, messages, housesLost, neighborsToAdd };
+      return { changes, newFlags, newGameFlags, messages, housesLost, neighborsToAdd, newTechnologies };
   };
 
   // Triggered by clicking "Advance Timeline"
@@ -432,12 +486,13 @@ const App: React.FC = () => {
               description: event.desc,
               effects: eventResult.messages
           },
-          neighbors: [...prev.neighbors, ...eventResult.neighborsToAdd], 
+          neighbors: [...prev.neighbors, ...eventResult.neighborsToAdd],
           messages: [`Focus: ${choice.toUpperCase()}.`, ...eventResult.messages, `TIMELINE ADVANCED: ${event.name}`, ...prev.messages],
           gameFlags: eventResult.newGameFlags,
           civilization: {
               ...prev.civilization,
               culturalStage: stage,
+              technologies: eventResult.newTechnologies,
               flags: eventResult.newFlags,
               stats: {
                   ...prev.civilization.stats,
@@ -449,18 +504,30 @@ const App: React.FC = () => {
 
   const handleTileClick = (tileId: string) => {
       const { selectedAction, civilization, placingWonder } = gameState;
-      
+
       // Handle Wonder Placement
       if (placingWonder && civilization.builtWonderId) {
           const tileIndex = tiles.findIndex(t => t.id === tileId);
           if (tileIndex === -1) return;
           const tile = tiles[tileIndex];
-          
+
           if (tile.building !== BuildingType.None || [TerrainType.Ocean, TerrainType.Mountain, TerrainType.HighMountain].includes(tile.terrain)) {
               addMessage("Cannot place Wonder here.");
               return;
           }
 
+          // In multiplayer turn system, queue the decision
+          if (syncState.isOnline && turnState && turnState.phase === 'decision') {
+              setPendingDecision(prev => ({
+                  ...prev,
+                  buildActions: [...prev.buildActions, { tileIndex, building: BuildingType.Wonder }]
+              }));
+              addMessage("Wonder placement queued for submission.");
+              setGameState(prev => ({ ...prev, placingWonder: false }));
+              return;
+          }
+
+          // In single-player, apply immediately
           const newTiles = [...tiles];
           newTiles[tileIndex] = { ...tile, building: BuildingType.Wonder };
           setTiles(newTiles);
@@ -478,18 +545,18 @@ const App: React.FC = () => {
           addMessage("Tile is occupied.");
           return;
       }
-      
+
       const restrictedForBuildings = [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Ocean, TerrainType.River, TerrainType.Marsh];
-      
+
       if (selectedAction === BuildingType.House) {
           // --- HOUSE PLACEMENT LOGIC ---
-          
+
           // 1. Check Terrain
           if (restrictedForBuildings.includes(tile.terrain) && tile.terrain !== TerrainType.Plains && tile.terrain !== TerrainType.Grassland) {
               addMessage("Cannot build houses on this terrain.");
               return;
           }
-          
+
           // 2. Check Population Capacity
           if (civilization.stats.houses >= civilization.stats.capacity) {
               addMessage("Population capacity reached.");
@@ -505,7 +572,7 @@ const App: React.FC = () => {
       } else {
           // --- OTHER STRUCTURE LOGIC ---
           let cost = BUILDING_COSTS[selectedAction];
-          
+
           // China Great Wall Discount
           if (selectedAction === BuildingType.Wonder && civilization.flags.chinaWallDiscount && civilization.builtWonderId === 'wall') {
               // Handled in buildWonder usually, but just in case of direct costs
@@ -525,7 +592,17 @@ const App: React.FC = () => {
           }
       }
 
-      // Apply Changes
+      // In multiplayer turn system, queue the decision instead of applying immediately
+      if (syncState.isOnline && turnState && turnState.phase === 'decision') {
+          setPendingDecision(prev => ({
+              ...prev,
+              buildActions: [...prev.buildActions, { tileIndex, building: selectedAction }]
+          }));
+          addMessage(`Building action queued (${selectedAction}). Submit when ready.`);
+          return;
+      }
+
+      // Apply Changes (single-player mode)
       const newTiles = [...tiles];
       newTiles[tileIndex] = { ...tile, building: selectedAction };
       setTiles(newTiles);
@@ -656,11 +733,30 @@ const App: React.FC = () => {
           addMessage("Need at least 1 Diplomacy to form alliances.");
           return;
       }
-      
+
+      const neighbor = gameState.neighbors.find(n => n.id === neighborId);
+      if (!neighbor) return;
+
+      // Diplomacy bonus calculation
+      const neighborDiplomacy = 3; // Base neighbor diplomacy
+      const diplomacyDiff = Math.max(0, civilization.stats.diplomacy - neighborDiplomacy);
+      const alliedBonus = Math.min(diplomacyDiff, 5); // Cap at 5 stats per point
+
       setGameState(prev => ({
           ...prev,
           neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, relationship: 'Ally' } : n),
-          messages: [`Formed alliance with ${prev.neighbors.find(n => n.id === neighborId)?.name}!`, ...prev.messages]
+          civilization: {
+              ...prev.civilization,
+              stats: {
+                  ...prev.civilization.stats,
+                  martial: prev.civilization.stats.martial + alliedBonus,
+                  defense: prev.civilization.stats.defense + alliedBonus,
+                  faith: prev.civilization.stats.faith + alliedBonus,
+                  industry: prev.civilization.stats.industry + alliedBonus,
+                  science: prev.civilization.stats.science + alliedBonus
+              }
+          },
+          messages: [`Formed alliance with ${neighbor.name}! (+${alliedBonus} to all stats from diplomacy)`, ...prev.messages]
       }));
   };
 
@@ -679,17 +775,34 @@ const App: React.FC = () => {
     const attackRoll = Math.floor(Math.random() * 20) + 1;
     const attackScore = civ.stats.martial + attackRoll;
 
+    // Count defender's walls
+    const wallCount = civ.buildings.walls;
+    let wallBonus = wallCount * 3;
+    let wallNote = '';
+
+    // Science level bypasses walls
+    if (civ.stats.science >= 6) {
+        // Level 1 walls bypassed
+        wallBonus = Math.max(0, wallBonus - (Math.min(wallCount, 1) * 3));
+        wallNote = ' (1st level walls bypassed)';
+    }
+    if (civ.stats.science >= 11) {
+        // Level 2 walls also bypassed
+        wallBonus = Math.max(0, wallBonus - (Math.min(wallCount, 2) * 3));
+        wallNote = ' (all walls bypassed by advanced siege tech)';
+    }
+
     // Defense score = (Martial + Defense + Wall bonus) + d20 roll
     const defenseRoll = Math.floor(Math.random() * 20) + 1;
-    const wallBonus = 0; // TODO: get from defender's walls if implemented
     const defenseScore = neighbor.martial + neighbor.defense + wallBonus + defenseRoll;
 
     const margin = attackScore - defenseScore;
 
     let resultMsg = '';
+    const wallEffectMsg = wallCount > 0 ? ` Enemy walls added +${wallCount * 3} defense (${wallCount} walls × 3)${wallNote}.` : '';
     if (margin > 15) {
         // Decisive Victory
-        resultMsg = `DECISIVE VICTORY! (${attackScore} vs ${defenseScore}) You conquered ${neighbor.name}!`;
+        resultMsg = `DECISIVE VICTORY! (${attackScore} vs ${defenseScore}) You conquered ${neighbor.name}!${wallEffectMsg}`;
         setGameState(prev => ({
             ...prev,
             neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, isConquered: true } : n),
@@ -699,7 +812,7 @@ const App: React.FC = () => {
     } else if (margin > 0) {
         // Narrow Victory
         const lostHouses = Math.max(1, Math.floor(civ.stats.houses * 0.1));
-        resultMsg = `Narrow Victory! (${attackScore} vs ${defenseScore}) You defeated ${neighbor.name} but lost ${lostHouses} houses.`;
+        resultMsg = `Narrow Victory! (${attackScore} vs ${defenseScore}) You defeated ${neighbor.name} but lost ${lostHouses} houses.${wallEffectMsg}`;
         setGameState(prev => ({
             ...prev,
             neighbors: prev.neighbors.map(n => n.id === neighborId ? { ...n, isConquered: true } : n),
@@ -708,12 +821,12 @@ const App: React.FC = () => {
         }));
     } else if (margin > -10) {
         // Stalemate
-        resultMsg = `Stalemate! (${attackScore} vs ${defenseScore}) Neither side gained ground.`;
+        resultMsg = `Stalemate! (${attackScore} vs ${defenseScore}) Neither side gained ground.${wallEffectMsg}`;
         addMessage(resultMsg);
     } else {
         // Defeat - attacker loses houses
         const lostHouses = Math.max(1, Math.floor(civ.stats.houses * 0.2));
-        resultMsg = `DEFEAT! (${attackScore} vs ${defenseScore}) ${neighbor.name} repelled your attack! Lost ${lostHouses} houses.`;
+        resultMsg = `DEFEAT! (${attackScore} vs ${defenseScore}) ${neighbor.name} repelled your attack! Lost ${lostHouses} houses.${wallEffectMsg}`;
         setGameState(prev => ({
             ...prev,
             civilization: { ...prev.civilization, stats: { ...prev.civilization.stats, houses: Math.max(1, prev.civilization.stats.houses - lostHouses) } },
@@ -915,6 +1028,25 @@ const App: React.FC = () => {
                   <div className="p-4 bg-yellow-900/20 m-2 rounded border border-yellow-700/30">
                       <div className="text-xs text-yellow-500 uppercase font-bold">State Religion</div>
                       <div className="text-sm font-bold text-yellow-100">{civ.religion.name}</div>
+                  </div>
+              )}
+              <div className="p-4 bg-indigo-900/20 m-2 rounded border border-indigo-700/30">
+                  <div className="text-xs text-indigo-400 uppercase font-bold mb-2">Cultural Stage</div>
+                  <div className="text-sm font-bold text-indigo-100">{civ.culturalStage}</div>
+              </div>
+              {civ.technologies && civ.technologies.length > 0 && (
+                  <div className="p-4 bg-purple-900/20 m-2 rounded border border-purple-700/30">
+                      <div className="text-xs text-purple-400 uppercase font-bold mb-2">Technologies ({civ.technologies.length})</div>
+                      <div className="space-y-1">
+                          {civ.technologies.map(techId => {
+                              const tech = TECHNOLOGIES.find(t => t.id === techId);
+                              return tech ? (
+                                  <div key={techId} className="text-xs text-purple-200 bg-purple-900/30 px-2 py-1 rounded">
+                                      {tech.name}
+                                  </div>
+                              ) : null;
+                          })}
+                      </div>
                   </div>
               )}
           </aside>

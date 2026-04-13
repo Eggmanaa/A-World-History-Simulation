@@ -413,6 +413,73 @@ gameRouter.post('/teacher/:periodId/custom-event', async (c) => {
   }
 });
 
+// POST /game/teacher/:periodId/broadcast - Broadcast message to all students
+gameRouter.post('/teacher/:periodId/broadcast', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+    const { message, type } = await c.req.json();
+    if (!message || !['info', 'warning', 'pause'].includes(type)) {
+      return c.json({ message: 'Message and valid type required' }, 400);
+    }
+    const period = await c.env.DB.prepare('SELECT id FROM periods WHERE id = ? AND teacher_id = ?').bind(periodId, user.id).first();
+    if (!period) return c.json({ message: 'Period not found' }, 404);
+    const gameState = await c.env.DB.prepare('SELECT * FROM game_states WHERE period_id = ?').bind(periodId).first();
+    if (!gameState) return c.json({ message: 'Game not started' }, 400);
+    const eventLog = JSON.parse(gameState.event_log || '[]');
+    const broadcast = { type: 'broadcast', broadcastType: type, message, teacherName: user.name || 'Teacher', timestamp: new Date().toISOString() };
+    eventLog.push(broadcast);
+    if (type === 'pause') {
+      const gameData = JSON.parse(gameState.game_data || '{}');
+      gameData.gamePaused = true;
+      await c.env.DB.prepare('UPDATE game_states SET event_log = ?, game_data = ?, updated_at = datetime(\'now\') WHERE period_id = ?').bind(JSON.stringify(eventLog), JSON.stringify(gameData), periodId).run();
+    } else {
+      await c.env.DB.prepare('UPDATE game_states SET event_log = ?, updated_at = datetime(\'now\') WHERE period_id = ?').bind(JSON.stringify(eventLog), periodId).run();
+    }
+    return c.json({ message: 'Broadcast sent', broadcast }, 201);
+  } catch (error) {
+    console.error('Broadcast error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// POST /game/teacher/:periodId/end - End game and calculate final scores
+gameRouter.post('/teacher/:periodId/end', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+    const period = await c.env.DB.prepare('SELECT id FROM periods WHERE id = ? AND teacher_id = ?').bind(periodId, user.id).first();
+    if (!period) return c.json({ message: 'Period not found' }, 404);
+    const gameState = await c.env.DB.prepare('SELECT * FROM game_states WHERE period_id = ?').bind(periodId).first();
+    if (!gameState) return c.json({ message: 'Game not started' }, 400);
+    const gameData = JSON.parse(gameState.game_data || '{}');
+    gameData.gameEnded = true;
+    gameData.endedAt = new Date().toISOString();
+    const eventLog = JSON.parse(gameState.event_log || '[]');
+    eventLog.push({ type: 'game_ended', timestamp: new Date().toISOString(), endedBy: user.name || 'Teacher' });
+    await c.env.DB.prepare('UPDATE game_states SET game_data = ?, event_log = ?, updated_at = datetime(\'now\') WHERE period_id = ?').bind(JSON.stringify(gameData), JSON.stringify(eventLog), periodId).run();
+    return c.json({ message: 'Game ended' }, 200);
+  } catch (error) {
+    console.error('End game error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// GET /game/student/:periodId/broadcasts - Get recent broadcasts
+gameRouter.get('/student/:periodId/broadcasts', async (c) => {
+  try {
+    const periodId = c.req.param('periodId');
+    const gameState = await c.env.DB.prepare('SELECT event_log, game_data FROM game_states WHERE period_id = ?').bind(periodId).first();
+    if (!gameState) return c.json({ broadcasts: [], gamePaused: false });
+    const eventLog = JSON.parse(gameState.event_log || '[]');
+    const broadcasts = eventLog.filter((e: any) => e.type === 'broadcast').slice(-10);
+    const gameData = JSON.parse(gameState.game_data || '{}');
+    return c.json({ broadcasts, gamePaused: !!gameData.gamePaused, gameEnded: !!gameData.gameEnded });
+  } catch (error) {
+    return c.json({ broadcasts: [], gamePaused: false });
+  }
+});
+
 // ============================================================================
 // STUDENT ENDPOINTS
 // ============================================================================
@@ -635,6 +702,234 @@ gameRouter.post('/student/:periodId/save', async (c) => {
     }, 200);
   } catch (error) {
     console.error('Save game state error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// TURN SYSTEM ENDPOINTS
+// ============================================================================
+
+// POST /teacher/:periodId/start-turn - Start a new decision phase
+gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+    const { timerMinutes } = await c.req.json();
+
+    // Verify period belongs to teacher
+    const period = await c.env.DB.prepare(
+      'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
+    ).bind(periodId, user.id).first();
+
+    if (!period) {
+      return c.json({ message: 'Period not found' }, 404);
+    }
+
+    // Get all students in period
+    const students = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM students WHERE period_id = ?'
+    ).bind(periodId).first();
+
+    const totalPlayers = (students as any).count || 1;
+    const deadline = Date.now() + (timerMinutes || 5) * 60 * 1000;
+
+    // Create turn state
+    const turnState = {
+      number: 1,
+      phase: 'decision',
+      timeRemaining: (timerMinutes || 5) * 60,
+      submittedCount: 0,
+      totalPlayers,
+      isPaused: false,
+      deadline
+    };
+
+    // Store turn state in game_states
+    await c.env.DB.prepare(`
+      UPDATE game_states
+      SET turn_state = ?, updated_at = datetime('now')
+      WHERE period_id = ?
+    `).bind(JSON.stringify(turnState), periodId).run();
+
+    return c.json({
+      message: 'Turn started',
+      turnState
+    }, 201);
+  } catch (error) {
+    console.error('Start turn error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// POST /teacher/:periodId/end-phase - Force end current phase
+gameRouter.post('/teacher/:periodId/end-phase', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+
+    // Verify period belongs to teacher
+    const period = await c.env.DB.prepare(
+      'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
+    ).bind(periodId, user.id).first();
+
+    if (!period) {
+      return c.json({ message: 'Period not found' }, 404);
+    }
+
+    // Get current turn state
+    const gameState = await c.env.DB.prepare(
+      'SELECT turn_state FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first();
+
+    const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+
+    if (turnState.phase === 'decision') {
+      turnState.phase = 'resolution';
+      turnState.timeRemaining = -1;
+    }
+
+    // Update turn state
+    await c.env.DB.prepare(`
+      UPDATE game_states
+      SET turn_state = ?, updated_at = datetime('now')
+      WHERE period_id = ?
+    `).bind(JSON.stringify(turnState), periodId).run();
+
+    return c.json({
+      message: 'Phase ended',
+      turnState
+    }, 200);
+  } catch (error) {
+    console.error('End phase error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// POST /teacher/:periodId/pause - Toggle pause
+gameRouter.post('/teacher/:periodId/pause', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+
+    // Verify period belongs to teacher
+    const period = await c.env.DB.prepare(
+      'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
+    ).bind(periodId, user.id).first();
+
+    if (!period) {
+      return c.json({ message: 'Period not found' }, 404);
+    }
+
+    // Get current turn state
+    const gameState = await c.env.DB.prepare(
+      'SELECT turn_state FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first();
+
+    const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+    turnState.isPaused = !turnState.isPaused;
+
+    // Update turn state
+    await c.env.DB.prepare(`
+      UPDATE game_states
+      SET turn_state = ?, updated_at = datetime('now')
+      WHERE period_id = ?
+    `).bind(JSON.stringify(turnState), periodId).run();
+
+    return c.json({
+      message: `Turn ${turnState.isPaused ? 'paused' : 'resumed'}`,
+      turnState
+    }, 200);
+  } catch (error) {
+    console.error('Pause error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// POST /student/:periodId/submit-turn - Submit turn decisions
+gameRouter.post('/student/:periodId/submit-turn', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+    const { decision } = await c.req.json();
+
+    // Verify student and period
+    const student = await c.env.DB.prepare(
+      'SELECT id FROM students WHERE id = ? AND period_id = ?'
+    ).bind(user.id, periodId).first();
+
+    if (!student) {
+      return c.json({ message: 'Student not found in this period' }, 404);
+    }
+
+    // Store turn decision
+    await c.env.DB.prepare(`
+      INSERT INTO turn_decisions (period_id, student_id, decision_data, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).bind(periodId, user.id, JSON.stringify(decision)).run();
+
+    // Update submission count in turn state
+    const gameState = await c.env.DB.prepare(
+      'SELECT turn_state FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first();
+
+    const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+
+    // Count submissions
+    const submissions = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM turn_decisions WHERE period_id = ? AND created_at > datetime("now", "-1 minute")'
+    ).bind(periodId).first();
+
+    turnState.submittedCount = (submissions as any)?.count || 1;
+
+    // Update turn state
+    await c.env.DB.prepare(`
+      UPDATE game_states
+      SET turn_state = ?, updated_at = datetime('now')
+      WHERE period_id = ?
+    `).bind(JSON.stringify(turnState), periodId).run();
+
+    return c.json({
+      message: 'Turn submitted',
+      result: { submitted: true, submittedCount: turnState.submittedCount }
+    }, 201);
+  } catch (error) {
+    console.error('Submit turn error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// GET /student/:periodId/turn-state - Get current turn phase, timer, submission count
+gameRouter.get('/student/:periodId/turn-state', async (c) => {
+  try {
+    const periodId = c.req.param('periodId');
+
+    // Get current turn state
+    const gameState = await c.env.DB.prepare(
+      'SELECT turn_state FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first();
+
+    const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+
+    // If there's a deadline, calculate remaining time
+    if (turnState.deadline) {
+      const remaining = Math.max(0, Math.floor((turnState.deadline - Date.now()) / 1000));
+      turnState.timeRemaining = remaining;
+
+      // If time expired and phase is still decision, auto-transition to resolution
+      if (remaining === 0 && turnState.phase === 'decision') {
+        turnState.phase = 'resolution';
+        await c.env.DB.prepare(`
+          UPDATE game_states
+          SET turn_state = ?, updated_at = datetime('now')
+          WHERE period_id = ?
+        `).bind(JSON.stringify(turnState), periodId).run();
+      }
+    }
+
+    return c.json(turnState, 200);
+  } catch (error) {
+    console.error('Get turn state error:', error);
     return c.json({ message: 'Internal server error' }, 500);
   }
 });

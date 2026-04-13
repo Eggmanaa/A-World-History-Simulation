@@ -228,6 +228,63 @@ const TeacherDashboard: React.FC = () => {
     }
   };
 
+  const startTurn = async (timerMinutes: number) => {
+    if (!activePeriod) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/start-turn`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timerMinutes }),
+      });
+      if (!response.ok) throw new Error('Failed to start turn');
+      await response.json();
+      // Refresh period data
+      await new Promise(r => setTimeout(r, 500));
+      fetchPeriods();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const endPhase = async () => {
+    if (!activePeriod) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/end-phase`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) throw new Error('Failed to end phase');
+      await response.json();
+      fetchPeriods();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const togglePause = async () => {
+    if (!activePeriod) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/game/teacher/${activePeriod.id}/pause`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) throw new Error('Failed to toggle pause');
+      await response.json();
+      fetchPeriods();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchStudentCivs = async () => {
     if (!activePeriod) return;
     setLoading(true);
@@ -659,6 +716,59 @@ const TeacherDashboard: React.FC = () => {
                 <p className="text-slate-400 text-lg">Timeline simulation complete</p>
               </div>
             )}
+
+            {/* Turn Control Panel */}
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-8">
+              <h3 className="text-xl font-bold text-cyan-400 mb-6">Turn Control</h3>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    onClick={() => startTurn(5)}
+                    disabled={loading}
+                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
+                  >
+                    Start (5 min)
+                  </button>
+                  <button
+                    onClick={() => startTurn(10)}
+                    disabled={loading}
+                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
+                  >
+                    Start (10 min)
+                  </button>
+                  <button
+                    onClick={() => startTurn(15)}
+                    disabled={loading}
+                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
+                  >
+                    Start (15 min)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={endPhase}
+                    disabled={loading}
+                    className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    End Phase
+                  </button>
+                  <button
+                    onClick={togglePause}
+                    disabled={loading}
+                    className="bg-orange-600 hover:bg-orange-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Pause/Resume
+                  </button>
+                </div>
+
+                <div className="bg-slate-700 rounded p-4 text-sm text-slate-300">
+                  <p className="font-bold text-cyan-300 mb-2">Turn Info</p>
+                  <p>Use turn system to enable simultaneous resolution of actions during decision phases.</p>
+                </div>
+              </div>
+            </div>
 
             {/* Event History */}
             <div className="bg-slate-800 border border-slate-700 rounded-lg p-8">

@@ -1,5 +1,5 @@
 
-import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock } from './types';
+import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock, VictoryCondition } from './types';
 
 export const HEX_SIZE = 1.0;
 export const MAP_RADIUS = 9;
@@ -417,4 +417,66 @@ export const GENERATE_NEIGHBORS = (year: number): NeighborCiv[] => {
         { id: 'n2', name: 'Rival City-State', martial: baseStrength, defense: 5, faith: 3, isConquered: false, relationship: 'Neutral' },
         { id: 'n3', name: 'Foreign Empire', martial: Math.floor(baseStrength * 1.5), defense: 10, faith: 5, isConquered: false, relationship: 'Neutral' },
     ];
+};
+
+export interface Technology {
+    id: string;
+    name: string;
+    year: number;
+    effect: string;
+    description: string;
+    requires?: string;
+}
+
+export const TECHNOLOGIES: Technology[] = [
+    { id: 'writing', name: 'Writing', year: -3000, effect: 'science_bonus_3', description: '+3 Science' },
+    { id: 'bronze_working', name: 'Bronze Working', year: -1300, effect: 'martial_2x', description: 'Doubles martial strength' },
+    { id: 'iron_working', name: 'Iron Working', year: -1000, effect: 'martial_3x', description: 'Triples martial strength', requires: 'bronze_working' },
+    { id: 'mathematics', name: 'Mathematics', year: -600, effect: 'science_bonus_5', description: '+5 Science', requires: 'writing' },
+    { id: 'philosophy', name: 'Philosophy', year: -500, effect: 'faith_to_science', description: 'Convert 25% faith to science', requires: 'writing' },
+    { id: 'engineering', name: 'Engineering', year: -300, effect: 'industry_bonus_5', description: '+5 Industry', requires: 'mathematics' },
+];
+
+export const CULTURAL_STAGE_MULTIPLIERS = {
+    barbarism: { martial: 1.5, fertility: 1.3, science: 0.5, faith: 0.5, industry: 0.8 },
+    classical: { martial: 1.0, fertility: 1.0, science: 1.5, faith: 1.3, industry: 1.2 },
+    imperial: { martial: 1.3, fertility: 0.8, science: 1.2, faith: 1.0, industry: 1.5 },
+    decline: { martial: 0.7, fertility: 0.5, science: 0.8, faith: 1.2, industry: 0.6 },
+};
+
+export const VICTORY_CONDITIONS: Record<string, VictoryCondition> = {
+    military: {
+        name: 'Conquest',
+        description: 'Control the most territory through warfare',
+        icon: 'Sword',
+        calculate: (state) => {
+            const territory = state.tiles?.filter((t: any) => t.building).length || 0;
+            return territory + (state.warsWon || 0) * 5;
+        }
+    },
+    scientific: {
+        name: 'Innovation',
+        description: 'Advance science to the highest level',
+        icon: 'FlaskConical',
+        calculate: (state) => {
+            const science = state.civilization?.stats?.science || 0;
+            return science + (state.technologies?.length || 0) * 3;
+        }
+    },
+    cultural: {
+        name: 'Legacy',
+        description: 'Build the most wonders and cultural achievements',
+        icon: 'Landmark',
+        calculate: (state) => {
+            return (state.wondersBuilt?.length || 0) * 10 + (state.civilization?.stats?.industry || 0);
+        }
+    },
+    religious: {
+        name: 'Faith',
+        description: 'Spread your religion to the most civilizations',
+        icon: 'Scroll',
+        calculate: (state) => {
+            return (state.civilization?.stats?.faith || 0) + (state.religionSpread || 0) * 5;
+        }
+    }
 };

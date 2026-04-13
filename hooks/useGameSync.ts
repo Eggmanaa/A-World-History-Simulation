@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { TurnState, TurnDecision } from '../types';
 
 interface SyncState {
   isOnline: boolean;           // Connected to a game room
   periodId: string | null;
   serverYear: number | null;
   serverTimelineIndex: number | null;
+  turnState: TurnState | null; // Current turn phase and timer
   lastSync: number;            // Timestamp of last successful sync
   pendingActions: any[];
   error: string | null;
@@ -18,6 +20,7 @@ interface SyncActionPayload {
 interface GameSyncReturn {
   syncState: SyncState;
   syncAction: (action: SyncActionPayload) => Promise<any>;
+  submitTurn: (decision: TurnDecision) => Promise<any>;
   pollForUpdates: () => Promise<void>;
 }
 
@@ -33,6 +36,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
     periodId: null,
     serverYear: null,
     serverTimelineIndex: null,
+    turnState: null,
     lastSync: 0,
     pendingActions: [],
     error: null,
@@ -138,6 +142,26 @@ export function useGameSync(civId: string | null): GameSyncReturn {
           error: null,
         }));
       }
+
+      // Also poll for turn state
+      const turnResponse = await fetch(
+        `/api/game/student/${syncState.periodId}/turn-state`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      if (turnResponse.ok) {
+        const turnData = await turnResponse.json();
+        if (!isUnmountingRef.current) {
+          setSyncState((prev) => ({
+            ...prev,
+            turnState: turnData,
+          }));
+        }
+      }
     } catch (err) {
       // Network error - stay online but don't update
       console.warn('Sync error:', err);
@@ -230,6 +254,59 @@ export function useGameSync(civId: string | null): GameSyncReturn {
     [syncState.isOnline, syncState.periodId, civId]
   );
 
+  // Submit turn decisions
+  const submitTurn = useCallback(
+    async (decision: TurnDecision): Promise<any> => {
+      if (!syncState.isOnline || !syncState.periodId || !civId) {
+        console.warn('Cannot submit turn - offline or no civId');
+        return null;
+      }
+
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setSyncState((prev) => ({ ...prev, isOnline: false }));
+          return null;
+        }
+
+        const response = await fetch(
+          `/api/game/student/${syncState.periodId}/submit-turn`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              civilizationId: civId,
+              decision,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('periodId');
+            setSyncState((prev) => ({
+              ...prev,
+              isOnline: false,
+              error: 'Session expired',
+            }));
+          }
+          return null;
+        }
+
+        const data = await response.json();
+        return data.result || data;
+      } catch (err) {
+        console.error('Failed to submit turn:', err);
+        return null;
+      }
+    },
+    [syncState.isOnline, syncState.periodId, civId]
+  );
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -244,6 +321,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
   return {
     syncState,
     syncAction,
+    submitTurn,
     pollForUpdates,
   };
 }

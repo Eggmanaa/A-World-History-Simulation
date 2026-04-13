@@ -108,6 +108,27 @@ export interface NeighborCiv {
     religion?: string;
 }
 
+// Turn System Types
+export type TurnPhase = 'setup' | 'decision' | 'resolution' | 'results';
+
+export interface TurnState {
+  number: number;
+  phase: TurnPhase;
+  timeRemaining: number; // seconds, -1 means no timer
+  submittedCount: number;
+  totalPlayers: number;
+  isPaused: boolean;
+  deadline?: number; // Unix timestamp when phase ends
+}
+
+export interface TurnDecision {
+  culturalFocus: StatKey | null;
+  buildActions: { tileIndex: number; building: BuildingType }[];
+  warDeclarations: string[]; // preset IDs of civs to attack
+  allianceOffers: string[]; // preset IDs of civs to ally with
+  submitted: boolean;
+}
+
 // New Event System Types
 export type StatKey = 'martial' | 'defense' | 'faith' | 'industry' | 'fertility' | 'science' | 'culture' | 'diplomacy' | 'capacity';
 
@@ -190,6 +211,7 @@ export interface GameState {
     };
     culturalStage: 'Barbarism' | 'Classical' | 'Imperial' | 'Decline';
     traits: string[];
+    technologies: string[];
     buildings: {
       temples: number;
       amphitheatres: number;
@@ -223,6 +245,25 @@ export interface GameState {
   hasStarted: boolean;
   pendingTurnChoice: boolean;
   currentEventPopup: EventPopupData | null;
+  warsWon: number;
+  religionSpread: number;
+  wondersBuilt: WonderDefinition[];
+  gameEnded: boolean;
+}
+
+export interface VictoryCondition {
+    name: string;
+    description: string;
+    icon: string;
+    calculate: (state: any) => number;
+}
+
+export interface Broadcast {
+    id: string;
+    message: string;
+    type: 'info' | 'warning' | 'pause';
+    timestamp: number;
+    teacherName?: string;
 }
 
 export const TERRAIN_COLORS: Record<TerrainType, string> = {
