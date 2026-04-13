@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Home,
   Users,
@@ -293,6 +294,10 @@ const calculateStats = (
 };
 
 const App: React.FC = () => {
+  // --- ROUTER STATE ---
+  const location = useLocation();
+  const autoStarted = useRef(false);
+
   // --- STATE ---
   const [tiles, setTiles] = useState<TileData[]>([]);
   const [activeTab, setActiveTab] = useState<
@@ -428,6 +433,18 @@ const App: React.FC = () => {
       },
     });
   };
+
+  // Auto-select civilization when navigating from student dashboard
+  useEffect(() => {
+    const state = location.state as { civId?: string } | null;
+    if (state?.civId && !gameState.hasStarted && !autoStarted.current) {
+      const preset = CIV_PRESETS.find((c) => c.id === state.civId);
+      if (preset) {
+        autoStarted.current = true;
+        startGame(preset);
+      }
+    }
+  }, [location.state, gameState.hasStarted]);
 
   const processTimelineEvent = (
     event: any,
