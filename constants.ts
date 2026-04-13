@@ -397,17 +397,17 @@ export const RELIGION_TENETS: ReligionTenet[] = [
 ];
 
 export const SCIENCE_UNLOCKS: ScienceUnlock[] = [
-    { level: 1, effect: 'Can attack through marsh', unlocks: 'attack_marsh' },
-    { level: 2, effect: 'Can attack through forests', unlocks: 'attack_forest' },
-    { level: 4, effect: '+2 Martial', statBonus: { martial: 2 } },
-    { level: 5, effect: '+2 Industry, Can attack over rivers', statBonus: { industry: 2 }, unlocks: 'attack_river' },
-    { level: 7, effect: '+2 Housing Capacity', statBonus: { capacity: 2 } },
-    { level: 9, effect: '+5 Martial, +5 Industry', statBonus: { martial: 5, industry: 5 } },
-    { level: 10, effect: '+5 Faith, Can attack over ocean', statBonus: { faith: 5 }, unlocks: 'attack_ocean' },
-    { level: 12, effect: '+10 Martial', statBonus: { martial: 10 } },
-    { level: 15, effect: '+10 Industry', statBonus: { industry: 10 } },
-    { level: 16, effect: '+5 Housing Capacity', statBonus: { capacity: 5 } },
-    { level: 30, effect: 'Can build Archimedes Tower', unlocks: 'archimedes_tower' },
+    { level: 5, effect: 'Level 1: Can attack through marsh', unlocks: 'attack_marsh' },
+    { level: 10, effect: 'Level 2: Can attack through forest', unlocks: 'attack_forest' },
+    { level: 15, effect: 'Level 3: +1 martial bonus', statBonus: { martial: 1 } },
+    { level: 20, effect: 'Level 4: +2 industry bonus', statBonus: { industry: 2 } },
+    { level: 25, effect: 'Level 5: Can attack over rivers', unlocks: 'attack_river' },
+    { level: 30, effect: 'Level 6: Bypass basic walls in combat', unlocks: 'bypass_walls' },
+    { level: 40, effect: 'Level 8: +3 martial, +2 defense bonus', statBonus: { martial: 3, defense: 2 } },
+    { level: 50, effect: 'Level 10: Can attack over ocean', unlocks: 'attack_ocean' },
+    { level: 60, effect: 'Level 12: +5 martial bonus', statBonus: { martial: 5 } },
+    { level: 75, effect: 'Level 15: Can attack over mountains', unlocks: 'attack_mountains' },
+    { level: 80, effect: 'Level 16: +5 housing capacity', statBonus: { capacity: 5 } },
 ];
 
 export const GENERATE_NEIGHBORS = (year: number): NeighborCiv[] => {
