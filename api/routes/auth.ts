@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { hashPassword, verifyPassword, generateToken } from '../utils/crypto';
-import { JWT_SECRET } from '../middleware/auth';
+import { getJWTSecret } from '../middleware/auth';
 
 type Bindings = {
   DB: D1Database;
@@ -44,7 +44,7 @@ authRouter.post('/teacher/register', async (c) => {
       id: result.meta.last_row_id,
       email,
       role: 'teacher'
-    }, JWT_SECRET);
+    }, getJWTSecret(c.env));
     
     return c.json({
       message: 'Registration successful',
@@ -88,7 +88,7 @@ authRouter.post('/teacher/login', async (c) => {
       id: teacher.id,
       email: teacher.email,
       role: 'teacher'
-    }, JWT_SECRET);
+    }, getJWTSecret(c.env));
     
     return c.json({
       message: 'Login successful',
@@ -133,7 +133,7 @@ authRouter.post('/student/login', async (c) => {
       username: student.username,
       role: 'student',
       periodId: student.period_id
-    }, JWT_SECRET);
+    }, getJWTSecret(c.env));
     
     return c.json({
       message: 'Login successful',
@@ -207,7 +207,7 @@ authRouter.post('/student/join', async (c) => {
       username,
       role: 'student',
       periodId: invite.period_id
-    }, JWT_SECRET);
+    }, getJWTSecret(c.env));
     
     return c.json({
       message: 'Successfully joined!',

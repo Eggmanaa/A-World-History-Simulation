@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { authRouter } from './routes/auth';
 import { teacherRouter } from './routes/teacher';
 import { studentRouter } from './routes/student';
+import { gameRouter } from './routes/game';
 
 // Define bindings for Cloudflare Workers
 type Bindings = {
@@ -26,5 +27,6 @@ api.get('/health', (c) => {
 api.route('/auth', authRouter);
 api.route('/teacher', teacherRouter);
 api.route('/student', studentRouter);
+api.route('/game', gameRouter);
 
 export { api };

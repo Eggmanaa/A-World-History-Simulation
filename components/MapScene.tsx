@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, SoftShadows } from '@react-three/drei';
 import { TileData, BuildingType } from '../types';
-import { HexTile3D, House3D, Temple3D, Wall3D, Amphitheatre3D, Wonder3D } from './Models';
+import { HexTile3D, House3D, Temple3D, Wall3D, Amphitheatre3D, Wonder3D, ArchimedesTower3D } from './Models';
 
 interface MapSceneProps {
   tiles: TileData[];
@@ -12,10 +12,82 @@ interface MapSceneProps {
 
 const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isTouch, setIsTouch] = useState(false);
+
+  // Detect touch device and set initial state
+  useEffect(() => {
+    setIsTouch(
+      () => true === ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+    );
+  }, []);
+
+  // Handle touch events for iPad/mobile
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !isTouch) return;
+
+    let lastDistance = 0;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Multi-touch pinch to zoom
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const distance = Math.hypot(
+          touch1.clientX - touch2.clientX,
+          touch1.clientY - touch2.clientY
+        );
+
+        if (lastDistance > 0) {
+          const scale = distance / lastDistance;
+          // Pinch gesture detected - let OrbitControls handle it via wheel event
+          const wheelEvent = new WheelEvent('wheel', {
+            deltaY: (scale < 1 ? 50 : -50),
+            bubbles: true,
+            cancelable: true,
+          });
+          canvas.dispatchEvent(wheelEvent);
+        }
+        lastDistance = distance;
+      } else if (e.touches.length === 1) {
+        // Single finger drag for rotation
+        lastDistance = 0;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      lastDistance = 0;
+    };
+
+    canvas.addEventListener('touchmove', handleTouchMove, false);
+    canvas.addEventListener('touchend', handleTouchEnd, false);
+    canvas.addEventListener('touchcancel', handleTouchEnd, false);
+
+    return () => {
+      canvas.removeEventListener('touchmove', handleTouchMove, false);
+      canvas.removeEventListener('touchend', handleTouchEnd, false);
+      canvas.removeEventListener('touchcancel', handleTouchEnd, false);
+    };
+  }, [isTouch]);
+
+  // Calculate device pixel ratio cap (2 max for Retina iPads)
+  const dpr = Math.min(window.devicePixelRatio, 2);
 
   return (
-    <div className="w-full h-full bg-slate-900 rounded-lg overflow-hidden shadow-inner border border-slate-700 relative">
-      <Canvas shadows camera={{ position: [20, 20, 20], fov: 30, near: 1, far: 1000 }}>
+    <div
+      ref={containerRef}
+      className="w-full h-full bg-slate-900 rounded-lg overflow-hidden shadow-inner border border-slate-700 relative"
+      style={{ touchAction: 'none' }}
+    >
+      <Canvas
+        ref={canvasRef}
+        shadows
+        camera={{ position: [20, 20, 20], fov: 30, near: 1, far: 1000 }}
+        dpr={dpr}
+      >
         <color attach="background" args={['#1e293b']} /> {/* Slate-900ish background */}
         <fog attach="fog" args={['#1e293b', 30, 80]} />
 
@@ -54,6 +126,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
               {tile.building === BuildingType.Wall && <Wall3D position={[tile.x, 0, tile.z]} />}
               {tile.building === BuildingType.Amphitheatre && <Amphitheatre3D position={[tile.x, 0, tile.z]} />}
               {tile.building === BuildingType.Wonder && <Wonder3D position={[tile.x, 0, tile.z]} />}
+              {tile.building === BuildingType.ArchimedesTower && <ArchimedesTower3D position={[tile.x, 0, tile.z]} />}
             </group>
           ))}
         </group>
@@ -63,6 +136,8 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
         <OrbitControls
           enablePan={true}
           enableZoom={true}
+          enableDamping={true}
+          dampingFactor={0.05}
           minDistance={10}
           maxDistance={60}
           maxPolarAngle={Math.PI / 2.5}
@@ -72,9 +147,19 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
 
       <div className="absolute bottom-4 left-4 bg-black/70 text-slate-300 p-3 rounded-xl text-xs pointer-events-none select-none backdrop-blur-md border border-slate-600/50 shadow-xl">
         <p className="font-bold text-amber-500 mb-1">CONTROLS</p>
-        <p>Left Click: Build / Select</p>
-        <p>Right Click + Drag: Rotate View</p>
-        <p>Scroll: Zoom In/Out</p>
+        {isTouch ? (
+          <>
+            <p>One Finger: Rotate View</p>
+            <p>Two Finger Pinch: Zoom</p>
+            <p>Tap: Build / Select</p>
+          </>
+        ) : (
+          <>
+            <p>Left Click: Build / Select</p>
+            <p>Right Click + Drag: Rotate View</p>
+            <p>Scroll: Zoom In/Out</p>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
-import { 
-    Home, Users, Warehouse, Sprout, Hammer, Sword, Shield, 
-    FlaskConical, Palette, Scroll, History, Play, BrickWall, Landmark, Star, Crown, X, Check, Handshake, TowerControl
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+    Home, Users, Warehouse, Sprout, Hammer, Sword, Shield,
+    FlaskConical, Palette, Scroll, History, Play, BrickWall, Landmark, Star, Crown, X, Check, Handshake, TowerControl, Globe, MapPin
 } from 'lucide-react';
 import MapScene from './components/MapScene';
 import { generateMap, CIV_PRESETS, TIMELINE_EVENTS, WONDERS_LIST, RELIGION_TENETS, GENERATE_NEIGHBORS } from './constants';
 import { TileData, TerrainType, BuildingType, BUILDING_COSTS, TERRAIN_BONUSES, GameState, CivPreset, WATER_CAPACITIES, WonderDefinition, TimelineEventAction, StatKey, NeighborCiv } from './types';
+import { getAdjacentCivs, areAdjacent } from './adjacency';
 
 // --- HELPER LOGIC ---
 
@@ -60,22 +61,11 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
         if (b === BuildingType.Temple) buildingFaith += 2;
         if (b === BuildingType.Amphitheatre) {
             buildingCulture += 3;
-            buildingFaith = Math.max(0, buildingFaith - 1);
         }
         if (b === BuildingType.ArchimedesTower) {
             buildingDefense += 20;
         }
     });
-
-    // Wonder Bonuses
-    if (civData.builtWonderId) {
-        const wonder = WONDERS_LIST.find(w => w.id === civData.builtWonderId);
-        if (wonder && wonder.bonus) {
-            if (wonder.bonus.defense) buildingDefense += wonder.bonus.defense;
-            if (wonder.bonus.faith) buildingFaith += wonder.bonus.faith;
-            if (wonder.bonus.culture) buildingCulture += wonder.bonus.culture;
-        }
-    }
 
     // 3. Base + Multipliers
     let martial = civData.baseStats.martial;
@@ -86,11 +76,27 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
     let fertility = civData.baseStats.fertility;
     let industry = civData.baseStats.industry + terrainIndustry;
     let diplomacy = civData.stats.diplomacy || 0;
+    let populationCapacity = civData.stats.capacity;
+
+    // Wonder Bonuses
+    if (civData.builtWonderId) {
+        const wonder = WONDERS_LIST.find(w => w.id === civData.builtWonderId);
+        if (wonder && wonder.bonus) {
+            if (wonder.bonus.defense) buildingDefense += wonder.bonus.defense;
+            if (wonder.bonus.faith) buildingFaith += wonder.bonus.faith;
+            if (wonder.bonus.culture) buildingCulture += wonder.bonus.culture;
+            if (wonder.bonus.martial) martial += wonder.bonus.martial;
+            if (wonder.bonus.science) science += wonder.bonus.science;
+            if (wonder.bonus.diplomacy) diplomacy += wonder.bonus.diplomacy;
+            if (wonder.bonus.populationCapacity) populationCapacity += wonder.bonus.populationCapacity;
+            if (wonder.bonus.production) industry += wonder.bonus.production;
+        }
+    }
 
     // Apply Religion Tenets
     if (civData.religion && civData.religion.tenets && civData.religion.tenets.length > 0) {
         const tenets = civData.religion.tenets;
-        
+
         if (tenets.includes('monotheism')) {
             faith += 5;
         }
@@ -104,6 +110,24 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
             const convertedCount = neighbors.filter(n => n.religion === civData.religion.name).length;
             martial += (convertedCount * 2);
         }
+        if (tenets.includes('scriptures')) {
+            // Double faith output
+            faith *= 2;
+        }
+        if (tenets.includes('philosophy')) {
+            // Convert 50% of faith to science
+            science += Math.floor(faith * 0.5);
+        }
+        if (tenets.includes('medicine')) {
+            // Add +5 population capacity
+            populationCapacity += 5;
+        }
+        if (tenets.includes('asceticism')) {
+            // -5 pop cap, +10 faith
+            populationCapacity -= 5;
+            faith += 10;
+        }
+        // evangelism: affects religion spreading speed (UI-level, not stat calc)
         if (tenets.includes('christianity')) {
             faith += 1;
             culture += 1;
@@ -127,21 +151,22 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
     if (activeBonuses.industry) industry = Math.floor(industry * 1.5);
 
     return {
-        martial: Math.floor(martial), 
-        defense: Math.floor(defense), 
-        faith: Math.floor(faith), 
-        culture: Math.floor(culture), 
-        science: Math.floor(science), 
-        fertility: Math.floor(fertility), 
+        martial: Math.floor(martial),
+        defense: Math.floor(defense),
+        faith: Math.floor(faith),
+        culture: Math.floor(culture),
+        science: Math.floor(science),
+        fertility: Math.floor(fertility),
         industry: Math.floor(industry),
-        diplomacy: diplomacy
+        diplomacy: diplomacy,
+        capacity: Math.floor(populationCapacity)
     };
 };
 
 const App: React.FC = () => {
   // --- STATE ---
   const [tiles, setTiles] = useState<TileData[]>([]);
-  const [activeTab, setActiveTab] = useState<'build' | 'wonders' | 'religion' | 'war'>('build');
+  const [activeTab, setActiveTab] = useState<'build' | 'world' | 'wonders' | 'religion' | 'war'>('build');
   const [gameState, setGameState] = useState<GameState>({
       simulationId: 'demo',
       year: -50000,
@@ -334,7 +359,7 @@ const App: React.FC = () => {
       newHouses = Math.max(0, newHouses - eventResult.housesLost);
       
       // Pop Calculation
-      const popMultiplier = (eventResult.newFlags.housesSupportTwoPop || event.year >= -480) ? 2 : 1;
+      const popMultiplier = eventResult.newFlags.housesSupportTwoPop ? 2 : 1;
       let newPop = newHouses * popMultiplier;
       
       // Handle explicit pop set (e.g. Thera)
@@ -559,7 +584,7 @@ const App: React.FC = () => {
 
       setGameState(prev => {
           const newTenets = [...prev.civilization.religion.tenets, tenetId];
-          const isIsrael = prev.civilization.flags.israelBonus;
+          const isIsrael = prev.civilization.flags.israelBonus || prev.civilization.presetId === 'israel';
           const doneFounding = !isIsrael || newTenets.length >= 3; // Israel gets 3
           
           const msgs = [`Picked Tenet: ${tenetId}`];
@@ -837,13 +862,14 @@ const App: React.FC = () => {
           {/* RIGHT TABBED PANEL */}
           <aside className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col z-10 shadow-xl">
                <div className="flex border-b border-slate-800">
-                   {['build', 'wonders', 'religion', 'war'].map(tab => (
-                       <button 
+                   {['build', 'world', 'wonders', 'religion', 'war'].map(tab => (
+                       <button
                            key={tab}
                            onClick={() => setActiveTab(tab as any)}
                            className={`flex-1 py-3 flex justify-center items-center text-slate-400 hover:bg-slate-800 transition-colors ${activeTab === tab ? 'border-b-2 border-orange-500 text-orange-500 bg-slate-800' : ''}`}
                        >
                            {tab === 'build' && <Hammer size={18} />}
+                           {tab === 'world' && <Globe size={18} />}
                            {tab === 'wonders' && <Crown size={18} />}
                            {tab === 'religion' && <Star size={18} />}
                            {tab === 'war' && <Sword size={18} />}
@@ -876,6 +902,70 @@ const App: React.FC = () => {
                                <div className="p-2 bg-purple-600 rounded text-white"><TowerControl size={18}/></div>
                                <div><div className="font-bold text-sm">Archimedes Tower</div><div className="text-xs text-slate-400">Cost: 20 Ind, 30 Sci</div></div>
                            </button>
+                       </div>
+                   )}
+
+                   {/* WORLD / ADJACENCY TAB */}
+                   {activeTab === 'world' && (
+                       <div className="space-y-3">
+                           <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Adjacent Civilizations</h2>
+                           <p className="text-xs text-slate-500 mb-3">These civilizations border your territory. You can trade, declare war, or spread religion to them.</p>
+                           {getAdjacentCivs(civ.presetId).map(adjCivId => {
+                               const adjPreset = CIV_PRESETS.find(c => c.id === adjCivId);
+                               if (!adjPreset) return null;
+                               const neighbor = gameState.neighbors.find(n => n.id === adjCivId || n.name === adjPreset.name);
+                               const relationship = neighbor?.relationship || 'Neutral';
+                               const isConquered = neighbor?.isConquered || false;
+                               return (
+                                   <div key={adjCivId} className={`p-3 rounded-lg border transition-all ${
+                                       isConquered ? 'bg-slate-900 border-slate-800 opacity-50' :
+                                       relationship === 'Ally' ? 'bg-emerald-900/20 border-emerald-700/50' :
+                                       relationship === 'Enemy' ? 'bg-red-900/20 border-red-700/50' :
+                                       'bg-slate-800 border-slate-700'
+                                   }`}>
+                                       <div className="flex items-center gap-3 mb-2">
+                                           <div className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: adjPreset.colors.base, borderColor: adjPreset.colors.accent }} />
+                                           <span className="font-bold text-sm flex-1">{adjPreset.name}</span>
+                                           {relationship === 'Ally' && <span className="text-xs bg-emerald-900 text-emerald-200 px-2 py-0.5 rounded-full">Ally</span>}
+                                           {relationship === 'Enemy' && <span className="text-xs bg-red-900 text-red-200 px-2 py-0.5 rounded-full">At War</span>}
+                                           {isConquered && <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">Fallen</span>}
+                                       </div>
+                                       <div className="text-xs text-slate-500 mb-2">
+                                           Regions: {adjPreset.regions.join(', ')}
+                                       </div>
+                                       {neighbor && (
+                                           <div className="grid grid-cols-2 gap-1 text-xs mb-2">
+                                               <span className="text-red-400">Martial: {neighbor.martial}</span>
+                                               <span className="text-blue-400">Defense: {neighbor.defense}</span>
+                                           </div>
+                                       )}
+                                       {!isConquered && (
+                                           <div className="flex gap-2 mt-2">
+                                               {gameState.gameFlags.warUnlocked && relationship !== 'Ally' && neighbor && (
+                                                   <button onClick={() => attackNeighbor(neighbor.id)} className="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1">
+                                                       <Sword size={12} /> Attack
+                                                   </button>
+                                               )}
+                                               {relationship !== 'Ally' && neighbor && (
+                                                   <button onClick={() => formAlliance(neighbor.id)} disabled={civ.stats.diplomacy < 1} className="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1 disabled:opacity-50">
+                                                       <Handshake size={12} /> Ally
+                                                   </button>
+                                               )}
+                                               {civ.religion.name && neighbor && (
+                                                   <button onClick={() => spreadReligion(neighbor.id)} disabled={neighbor.religion === civ.religion.name} className="flex-1 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1 disabled:opacity-50">
+                                                       <Star size={12} /> Convert
+                                                   </button>
+                                               )}
+                                           </div>
+                                       )}
+                                   </div>
+                               );
+                           })}
+                           {getAdjacentCivs(civ.presetId).length === 0 && (
+                               <div className="p-4 bg-slate-800/50 text-center text-sm text-slate-500 italic border border-slate-700 rounded">
+                                   No adjacent civilizations defined.
+                               </div>
+                           )}
                        </div>
                    )}
 

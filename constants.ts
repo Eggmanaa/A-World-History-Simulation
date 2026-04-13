@@ -333,28 +333,28 @@ export const TIMELINE_EVENTS: TimelineEvent[] = [
             { type: 'MODIFY_STAT', targetRegions: ['Rome', 'Italia'], stat: 'culture', value: 5, message: "Pax Romana: +5 Culture." }
         ]
     },
-    { 
+    {
         year: 67, name: "Vesuvius Eruption", desc: "Disaster in Italia.",
         actions: [
-            { type: 'DISASTER', targetRegions: ['Italia', 'Rome'], saveTrait: 'Wisdom', saveDC: 40, saveStat: 'faith', failEffect: { houseLossPercent: 50 }, message: "Mount Vesuvius Erupts! (Save: Wisdom or Faith > 40)" }
+            { type: 'DISASTER', targetRegions: ['Italia', 'Rome'], saveTrait: 'Wisdom', saveDC: 12, saveStat: 'faith', failEffect: { houseLossPercent: 50 }, message: "Mount Vesuvius Erupts! (Save: Wisdom or Faith > 12)" }
         ]
     },
-    { 
+    {
         year: 138, name: "Antonine Plague", desc: "Sickness strikes Rome.",
         actions: [
             { type: 'DISASTER', targetRegions: ['Rome', 'Italia'], saveTrait: 'Health', saveDC: 6, failEffect: { houseLossPercent: 20 }, message: "Antonine Plague. (Save: Health)" }
         ]
     },
     {
-        year: 375, name: "Barbarian Invasions", desc: "Huns and Goths migrate.",
-        actions: [
-            { type: 'ADD_NEIGHBOR', neighbor: { name: "Hunnic Horde", martial: 25, defense: 5, faith: 0 }, message: "The Huns are attacking!" }
-        ]
-    },
-    { 
         year: 300, name: "Roman Split", desc: "Empire divides.",
         actions: [
              { type: 'SET_FLAG', flagName: 'romanSplit', targetRegions: ['Rome', 'Italia'], message: "Empire Split." }
+        ]
+    },
+    {
+        year: 375, name: "Barbarian Invasions", desc: "Huns and Goths migrate.",
+        actions: [
+            { type: 'ADD_NEIGHBOR', neighbor: { name: "Hunnic Horde", martial: 25, defense: 5, faith: 0 }, message: "The Huns are attacking!" }
         ]
     },
     { year: 362, name: "Julian the Apostate", desc: "End of simulation." }
@@ -387,7 +387,7 @@ export const RELIGION_TENETS: ReligionTenet[] = [
     { id: 'asceticism', name: 'Asceticism', description: '-5 Pop Cap, +10 Faith.' },
     { id: 'monotheism', name: 'Monotheism', description: '+5 Faith, removes other faiths.' },
     { id: 'medicine', name: 'Medicine', description: '+5 Population Capacity.' },
-    { id: 'evangelism', name: 'Evangelism', description: 'Spreads 2x faster.' },
+    { id: 'evangelism', name: 'Evangelism', description: 'Religion spreads faster (UI-level effect).' },
     { id: 'christianity', name: 'Christianity', description: '+1 Faith, +1 Culture.' }
 ];
 
