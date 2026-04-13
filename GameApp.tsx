@@ -210,7 +210,7 @@ const calculateStats = (tiles: TileData[], civData: any, activeBonuses: any, nei
 const App: React.FC = () => {
   // --- STATE ---
   const [tiles, setTiles] = useState<TileData[]>([]);
-  const [activeTab, setActiveTab] = useState<'build' | 'world' | 'wonders' | 'religion' | 'war'>('build');
+  const [activeTab, setActiveTab] = useState<'build' | 'world' | 'wonders' | 'religion' | 'war' | 'scoreboard'>('build');
   const [gameState, setGameState] = useState<GameState>({
       simulationId: 'demo',
       year: -50000,
@@ -223,7 +223,11 @@ const App: React.FC = () => {
       neighbors: [],
       pendingTurnChoice: false,
       currentEventPopup: null,
-      gameFlags: { warUnlocked: false, religionUnlocked: false }
+      gameFlags: { warUnlocked: false, religionUnlocked: false },
+      warsWon: 0,
+      religionSpread: 0,
+      wondersBuilt: [],
+      gameEnded: false
   });
 
   // Temporary storage for the active turn bonus
@@ -232,8 +236,12 @@ const App: React.FC = () => {
   // Mobile responsive state
   const [showPanel, setShowPanel] = useState<'stats' | 'actions' | null>(null);
 
-  // Turn system state
-  const turnState = syncState.turnState; // Get turn state from sync
+  // --- SYNC HOOKS ---
+  const { syncState, submitTurn } = useGameSync(gameState.hasStarted ? gameState.civilization?.presetId : null);
+  useAutoSave(gameState, gameState.hasStarted ? gameState.civilization?.presetId : null);
+
+  // Turn system state (must be after syncState is declared)
+  const turnState = syncState?.turnState;
   const [pendingDecision, setPendingDecision] = useState<TurnDecision>({
     culturalFocus: null,
     buildActions: [],
@@ -241,10 +249,6 @@ const App: React.FC = () => {
     allianceOffers: [],
     submitted: false
   });
-
-  // --- SYNC HOOKS ---
-  const { syncState, submitTurn } = useGameSync(gameState.hasStarted ? gameState.civilization?.presetId : null);
-  useAutoSave(gameState, gameState.hasStarted ? gameState.civilization?.presetId : null);
 
   // When teacher advances timeline, trigger local advance
   useEffect(() => {
