@@ -1,7 +1,8 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, SoftShadows } from '@react-three/drei';
+import * as THREE from 'three';
 import { TileData, BuildingType } from '../types';
 import { HexTile3D, House3D, Farm3D, Workshop3D, Library3D, Barracks3D, Temple3D, Wall3D, Amphitheatre3D, Wonder3D, ArchimedesTower3D } from './Models';
 
@@ -9,6 +10,14 @@ interface MapSceneProps {
   tiles: TileData[];
   onTileClick: (tileId: string) => void;
 }
+
+// Stable hash so each tile gets the same organic jitter every render. If we
+// re-randomized every frame the map would vibrate visibly.
+const hashJitter = (id: string, salt: number) => {
+  let h = salt;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return ((h >>> 0) % 1000) / 1000; // 0..1
+};
 
 const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -76,6 +85,18 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
   // Calculate device pixel ratio cap (2 max for Retina iPads)
   const dpr = Math.min(window.devicePixelRatio, 2);
 
+  // Pre-compute organic jitter per tile so the grid doesn't read as a
+  // crystalline lattice. Hashing on tile.id keeps it stable across renders
+  // (no visual vibration).
+  const tileJitter = useMemo(
+    () =>
+      tiles.map((t) => ({
+        rotY: (hashJitter(t.id, 7) - 0.5) * 0.18, // ±~5°
+        scale: 0.96 + hashJitter(t.id, 13) * 0.08, // 0.96..1.04
+      })),
+    [tiles],
+  );
+
   return (
     <div
       ref={containerRef}
@@ -87,16 +108,29 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
         shadows
         camera={{ position: [0, 45, 35], fov: 45, near: 1, far: 1000 }}
         dpr={dpr}
+        onCreated={({ gl }) => {
+          // Post-construction renderer tweaks — putting these in the gl
+          // constructor prop caused a silent R3F init failure in iter-A.
+          // Applying them here after the renderer exists works reliably.
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.1;
+        }}
       >
-        <color attach="background" args={['#0f172a']} /> {/* Darker, more dramatic background */}
-        <fog attach="fog" args={['#0f172a', 50, 90]} />
+        {/* Atmospheric navy backdrop beats flat slate for depth */}
+        <color attach="background" args={['#152238']} />
+        <fog attach="fog" args={['#152238', 55, 110]} />
+
+        {/* Hemisphere fill: warm top (sun-sky) and cool bottom (sky-bounce).
+            Cheap global-illumination approximation that makes biomes read. */}
+        <hemisphereLight args={['#ffd9a8', '#1e3a5f', 0.55]} />
 
         {/* Studio Lighting for Board Game Look */}
-        <ambientLight intensity={0.6} />
+        <ambientLight intensity={0.35} />
 
         <directionalLight
           position={[20, 40, 20]}
-          intensity={1.8}
+          intensity={2.0}
+          color="#fff5d6"
           castShadow
           shadow-mapSize={[4096, 4096]}
           shadow-bias={-0.0005}
@@ -106,13 +140,20 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
           shadow-camera-bottom={-40}
         />
 
-        <pointLight position={[-15, 15, -15]} intensity={0.5} color="#bfdbfe" />
-        <pointLight position={[15, 10, -15]} intensity={0.3} color="#fef3c7" />
+        {/* Cool rim light from opposite side for figure/ground separation */}
+        <directionalLight position={[-20, 25, -20]} intensity={0.35} color="#a3c9ff" />
+
+        <pointLight position={[-15, 15, -15]} intensity={0.4} color="#bfdbfe" />
+        <pointLight position={[15, 10, -15]} intensity={0.25} color="#fef3c7" />
 
         <group position={[0, -2, 0]} rotation={[0, Math.PI / 6, 0]}>
-          {tiles.map((tile) => (
+          {tiles.map((tile, idx) => {
+            const j = tileJitter[idx] || { rotY: 0, scale: 1 };
+            return (
             <group
               key={tile.id}
+              rotation={[0, j.rotY, 0]}
+              scale={[j.scale, 1, j.scale]}
               onPointerOver={(e) => { e.stopPropagation(); setHoveredId(tile.id); }}
               onPointerOut={(e) => { e.stopPropagation(); setHoveredId(null); }}
             >
@@ -134,7 +175,8 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
               {tile.building === BuildingType.Wonder && <Wonder3D position={[tile.x, 0, tile.z]} />}
               {tile.building === BuildingType.ArchimedesTower && <ArchimedesTower3D position={[tile.x, 0, tile.z]} />}
             </group>
-          ))}
+            );
+          })}
         </group>
 
         <SoftShadows size={5} samples={16} focus={0.5} />

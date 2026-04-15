@@ -38,6 +38,36 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
     height = 0.45;
   }
 
+  // Biome-aware material: water tiles get reflective/emissive treatment so
+  // ocean/river/marsh read as wet, while land tiles keep the matte board-game
+  // look. Centralizing the params here lets us tune biomes without touching
+  // the mesh tree.
+  let matRoughness = 0.8;
+  let matMetalness = 0.05;
+  let matEmissive = '#000000';
+  let matEmissiveIntensity = 0;
+  if (terrain === TerrainType.Ocean) {
+    matRoughness = 0.15;
+    matMetalness = 0.35;
+    matEmissive = '#0c4a6e';
+    matEmissiveIntensity = 0.18;
+  } else if (terrain === TerrainType.River) {
+    matRoughness = 0.25;
+    matMetalness = 0.25;
+    matEmissive = '#1e3a8a';
+    matEmissiveIntensity = 0.1;
+  } else if (terrain === TerrainType.Marsh) {
+    matRoughness = 0.45;
+    matMetalness = 0.15;
+    matEmissive = '#064e3b';
+    matEmissiveIntensity = 0.08;
+  } else if (terrain === TerrainType.Forest) {
+    matRoughness = 0.85; // extra matte for canopy richness
+  } else if (terrain === TerrainType.Desert) {
+    matRoughness = 0.9;
+    matMetalness = 0; // dry, no sheen
+  }
+
   return (
     <group position={[x, yPos, z]}>
       <mesh
@@ -49,8 +79,10 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
       >
         <meshStandardMaterial
           color={isHovered ? '#e2e8f0' : terrainColor}
-          roughness={0.8}
-          metalness={0.05}
+          roughness={matRoughness}
+          metalness={matMetalness}
+          emissive={matEmissive}
+          emissiveIntensity={matEmissiveIntensity}
         />
       </mesh>
 
