@@ -67,7 +67,18 @@ import {
   PlayerActionType,
   TurnResolution,
   CombatLogEntry,
+  AttackOutcomePopup,
+  ThresholdPopup,
 } from "./types";
+import {
+  AttackOutcomeModal,
+  ThresholdModal,
+  TechTreeModal,
+  ReligionTreeModal,
+  CultureTreeModal,
+  CULTURE_CHOICES,
+  RELIGION_TENET_THRESHOLDS,
+} from "./components/DecisionModals";
 import { getAdjacentCivs, areAdjacent, CIV_ADJACENCY } from "./adjacency";
 import { WORLD_EVENTS } from "./worldEvents";
 import {
@@ -765,6 +776,17 @@ const App: React.FC = () => {
   const [v2StatsBefore, setV2StatsBefore] = useState<Record<string, number>>({});
   const [v2UnlockedActions, setV2UnlockedActions] = useState<typeof ACTION_DEFINITIONS>([]);
   const [showRespawnPanel, setShowRespawnPanel] = useState(false);
+
+  // V2 DECISION MODALS — attack outcome, threshold popups, tree browsers.
+  // These live at the top level so they can fire from anywhere in the
+  // turn flow without having to thread callbacks through every phase.
+  const [attackOutcome, setAttackOutcome] = useState<AttackOutcomePopup | null>(null);
+  const [thresholdQueue, setThresholdQueue] = useState<ThresholdPopup[]>([]);
+  const [thresholdsAwarded, setThresholdsAwarded] = useState<string[]>([]);
+  const [showTechTree, setShowTechTree] = useState(false);
+  const [showReligionTree, setShowReligionTree] = useState(false);
+  const [showCultureTree, setShowCultureTree] = useState(false);
+  const [chosenCultureIds, setChosenCultureIds] = useState<string[]>([]);
   // Tracks whether the player has ever had a non-zero population. Without
   // this guard, the respawn effect would fire at game start (everyone begins
   // with houses:0 / population:0) — and again every time the player resets
@@ -1029,6 +1051,7 @@ const App: React.FC = () => {
           cultureYield: startingCultureYield,
           faithYield: startingFaithYield,
           tempDefenseBonus: 0,
+          fortifyDice: 0,
         },
       },
     });
@@ -1738,11 +1761,46 @@ const App: React.FC = () => {
         : cr.won
           ? 'victory'
           : (cr.margin === 0 ? 'stalemate' : 'defeat');
+      // Surface a prominent battle-report modal so the outcome isn't
+      // buried in the lower-right tab. The modal uses the rollDetail we
+      // now pipe through from executeAction.
+      const rollDetail = cr.rolls;
+      if (rollDetail) {
+        const popupEffects: string[] = [];
+        if (outcome === 'decisive_victory') {
+          popupEffects.push('+3 Culture Total', '+3 Production Pool loot', '+1 conquered territory');
+        } else if (outcome === 'victory') {
+          popupEffects.push('+2 Culture Total', '+2 Production Pool loot');
+        } else if (outcome === 'stalemate') {
+          popupEffects.push('Both forces hold. No losses.');
+        } else {
+          popupEffects.push('-2 Population', '-1 Martial');
+        }
+        setAttackOutcome({
+          turn: gameState.turnNumber || 1,
+          targetName: cr.target,
+          attackerName: gameState.civilization.name,
+          attackTotal: rollDetail.attackTotal,
+          defendTotal: rollDetail.defendTotal,
+          margin: cr.margin ?? 0,
+          outcome,
+          rolls: {
+            attackerMartial: rollDetail.attackerMartial,
+            attackerBaseRoll: rollDetail.attackerBaseRoll,
+            defenderMartial: rollDetail.defenderMartial,
+            defenderBaseRoll: rollDetail.defenderBaseRoll,
+            wallDice: rollDetail.wallDice,
+            fortifyDice: rollDetail.fortifyDice,
+            bypassedWalls: rollDetail.bypassedWalls,
+          },
+          effects: popupEffects,
+        });
+      }
       combatLogEntry = {
         turn: gameState.turnNumber || 1,
         target: cr.target,
-        attackTotal: 0, // we don't expose raw rolls outside executeAction; see margin
-        defendTotal: 0,
+        attackTotal: cr.rolls?.attackTotal ?? 0,
+        defendTotal: cr.rolls?.defendTotal ?? 0,
         margin: cr.margin ?? 0,
         outcome,
         conquered: decisive,
@@ -1880,6 +1938,78 @@ const App: React.FC = () => {
         gameState.neighbors,
         updatedTreaties,
       );
+
+      // THRESHOLD POPUPS — compare new recomputed totals against a table of
+      // milestones and queue a popup for each one crossed. thresholdsAwarded
+      // prevents the same milestone from firing twice.
+      const newThresholds: ThresholdPopup[] = [];
+      const ackBucket = thresholdsAwarded;
+      const newScience = recomputed.science ?? gameState.civilization.stats.science ?? 0;
+      const newCulture = recomputed.culture ?? gameState.civilization.stats.culture ?? 0;
+      const newFaith = recomputed.faith ?? gameState.civilization.stats.faith ?? 0;
+
+      SCIENCE_UNLOCKS.forEach((u) => {
+        const id = `sci-${u.level}`;
+        if (newScience >= u.level && !ackBucket.includes(id)) {
+          const bonuses: string[] = [];
+          if (u.statBonus) {
+            Object.entries(u.statBonus).forEach(([k, v]) => bonuses.push(`+${v} ${k}`));
+          }
+          if (u.unlocks) bonuses.push(`Ability: ${u.unlocks.replace(/_/g, ' ')}`);
+          newThresholds.push({
+            id,
+            kind: 'science',
+            title: u.effect.split(':')[0],
+            subtitle: `Science ${u.level} reached`,
+            description: u.effect,
+            bonuses,
+            cta: 'Press on with research',
+          });
+        }
+      });
+
+      CULTURAL_STAGE_THRESHOLDS.forEach((s) => {
+        const id = `cul-${s.stage}`;
+        if (newCulture >= s.minCulture && !ackBucket.includes(id)) {
+          newThresholds.push({
+            id,
+            kind: 'culture',
+            title: `Stage: ${s.stage}`,
+            subtitle: `Culture ${s.minCulture} reached`,
+            description: s.flavor,
+            bonuses: [
+              'Pick a Cultural Bonus from the Culture Tree (amber button on the sidebar).',
+              `Stage multipliers now apply: Martial ×${CULTURAL_STAGE_MULTIPLIERS[s.stage.toLowerCase() as keyof typeof CULTURAL_STAGE_MULTIPLIERS].martial}, Science ×${CULTURAL_STAGE_MULTIPLIERS[s.stage.toLowerCase() as keyof typeof CULTURAL_STAGE_MULTIPLIERS].science}.`,
+            ],
+            cta: 'Claim cultural bonus',
+          });
+        }
+      });
+
+      RELIGION_TENET_THRESHOLDS.forEach((t, i) => {
+        const id = `faith-${t}`;
+        if (newFaith >= t && !ackBucket.includes(id)) {
+          newThresholds.push({
+            id,
+            kind: 'faith',
+            title: i === 0 ? 'Religion can be founded' : `Tenet slot ${i + 1} unlocked`,
+            subtitle: `Faith ${t} reached`,
+            description:
+              i === 0
+                ? 'Your people yearn for meaning. Use the Worship action (needs one Temple) to found a religion.'
+                : 'Your faith has matured. Open the Religion Tree to adopt another tenet.',
+            bonuses: [
+              i === 0 ? 'Worship → Found Religion option unlocked' : `Pick tenet #${i + 1} in the Religion Tree`,
+            ],
+            cta: i === 0 ? 'Found a religion' : 'Open Religion Tree',
+          });
+        }
+      });
+
+      if (newThresholds.length > 0) {
+        setThresholdQueue((q) => [...q, ...newThresholds]);
+        setThresholdsAwarded((a) => [...a, ...newThresholds.map((t) => t.id)]);
+      }
 
       setGameState((prev) => ({
         ...prev,
@@ -2823,6 +2953,7 @@ const App: React.FC = () => {
           cultureYield: respawnCiv.baseStats.cultureYield,
           faithYield: respawnCiv.baseStats.faithYield,
           tempDefenseBonus: 0,
+          fortifyDice: 0,
         },
       },
       messages: [`Respawned as ${respawnCiv.name}! ${bonus.description}. Rise again!`, ...prev.messages],
@@ -2956,6 +3087,89 @@ const App: React.FC = () => {
           availableCivs={getAvailableRespawnCivs(gameState.turnNumber || 1, takenRespawnIds)}
           bonuses={getRespawnBonuses()}
           onSelect={handleRespawn}
+        />
+      )}
+
+      {/* ATTACK OUTCOME MODAL — shown right after any Attack action so the
+          student sees the full dice breakdown and effects in one place. */}
+      {attackOutcome && (
+        <AttackOutcomeModal
+          popup={attackOutcome}
+          onClose={() => setAttackOutcome(null)}
+        />
+      )}
+
+      {/* THRESHOLD MODAL — science/culture/faith/etc milestones. Shown one
+          at a time from the front of the queue until empty. */}
+      {thresholdQueue.length > 0 && (
+        <ThresholdModal
+          popup={thresholdQueue[0]}
+          onClose={() => setThresholdQueue((q) => q.slice(1))}
+        />
+      )}
+
+      {/* TECH / RELIGION / CULTURE TREES — opened from the sidebar buttons. */}
+      {showTechTree && (
+        <TechTreeModal
+          gameState={gameState}
+          onClose={() => setShowTechTree(false)}
+        />
+      )}
+      {showReligionTree && (
+        <ReligionTreeModal
+          gameState={gameState}
+          onPickTenet={(tenetId) => {
+            // Only allow picking if we have an unlocked slot.
+            const faith = gameState.civilization?.stats?.faith || 0;
+            const chosen = gameState.civilization?.religion?.tenets || [];
+            const slotsUnlocked = RELIGION_TENET_THRESHOLDS.filter((t) => faith >= t).length;
+            if (slotsUnlocked <= chosen.length) return;
+            if (chosen.includes(tenetId)) return;
+            setGameState((prev) => ({
+              ...prev,
+              civilization: {
+                ...prev.civilization,
+                religion: {
+                  name: prev.civilization.religion?.name ?? 'Faith of the People',
+                  tenets: [...(prev.civilization.religion?.tenets || []), tenetId],
+                },
+              },
+              messages: [`Adopted tenet: ${tenetId.replace(/_/g, ' ')}.`, ...prev.messages],
+            }));
+          }}
+          onClose={() => setShowReligionTree(false)}
+        />
+      )}
+      {showCultureTree && (
+        <CultureTreeModal
+          gameState={gameState}
+          chosenCultureIds={chosenCultureIds}
+          onPickCulture={(choiceId) => {
+            const choice = CULTURE_CHOICES.find((c) => c.id === choiceId);
+            if (!choice) return;
+            // Enforce one-per-stage.
+            const stagePicks = chosenCultureIds
+              .map((id) => CULTURE_CHOICES.find((c) => c.id === id))
+              .filter((c) => c && c.stage === choice.stage);
+            if (stagePicks.length > 0) return;
+            setChosenCultureIds((p) => [...p, choiceId]);
+            // Apply bonuses — fold into civ.stats.
+            setGameState((prev) => {
+              const stats = { ...prev.civilization.stats };
+              if (choice.statBonus) {
+                Object.entries(choice.statBonus).forEach(([k, v]) => {
+                  const key = k as keyof typeof stats;
+                  (stats as any)[key] = ((stats as any)[key] || 0) + (v || 0);
+                });
+              }
+              return {
+                ...prev,
+                civilization: { ...prev.civilization, stats },
+                messages: [`Cultural bonus claimed: ${choice.label} — ${choice.grants}.`, ...prev.messages],
+              };
+            });
+          }}
+          onClose={() => setShowCultureTree(false)}
         />
       )}
 
@@ -3642,7 +3856,14 @@ const App: React.FC = () => {
 
         {/* MAP */}
         <section className="flex-1 relative bg-slate-950">
-          <MapScene tiles={tiles} onTileClick={handleTileClick} />
+          <MapScene
+            tiles={tiles}
+            onTileClick={handleTileClick}
+            climate={(() => {
+              const p = CIV_PRESETS.find(c => c.id === gameState.civilization?.presetId);
+              return p?.climate || 'temperate';
+            })()}
+          />
           {gameState.fogOfWar && (
             <div
               className="absolute inset-0 pointer-events-none"
@@ -3801,9 +4022,17 @@ const App: React.FC = () => {
             {/* SCIENCE TAB */}
             {activeTab === "science" && (
               <div className="space-y-3">
-                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                  Science &amp; Technology
-                </h2>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Science &amp; Technology
+                  </h2>
+                  <button
+                    onClick={() => setShowTechTree(true)}
+                    className="text-xs px-2 py-1 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/50 rounded text-cyan-200 font-semibold"
+                  >
+                    Open Tech Tree
+                  </button>
+                </div>
 
                 {/* Current Stats */}
                 <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
@@ -3917,9 +4146,17 @@ const App: React.FC = () => {
             {/* CULTURE TAB — explains what Culture unlocks and how to earn it. */}
             {activeTab === "culture" && (
               <div className="space-y-3">
-                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                  Culture &amp; Legacy
-                </h2>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Culture &amp; Legacy
+                  </h2>
+                  <button
+                    onClick={() => setShowCultureTree(true)}
+                    className="text-xs px-2 py-1 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded text-amber-200 font-semibold"
+                  >
+                    Open Culture Tree
+                  </button>
+                </div>
 
                 {/* Current Stats Summary */}
                 <div className="bg-slate-800 rounded-lg p-3 border border-pink-900/40">
@@ -4244,9 +4481,17 @@ const App: React.FC = () => {
             {/* RELIGION TAB */}
             {activeTab === "religion" && (
               <div className="space-y-4">
-                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                  Theology
-                </h2>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Theology
+                  </h2>
+                  <button
+                    onClick={() => setShowReligionTree(true)}
+                    className="text-xs px-2 py-1 bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/50 rounded text-violet-200 font-semibold"
+                  >
+                    Open Religion Tree
+                  </button>
+                </div>
                 {!civ.flags.religionFound ? (
                   <div className="p-4 bg-slate-800 rounded border border-slate-700 text-center">
                     <p className="text-sm text-slate-300 mb-3">

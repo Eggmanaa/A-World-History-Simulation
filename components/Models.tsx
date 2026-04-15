@@ -1,10 +1,94 @@
 
 import React from 'react';
-import { TerrainType, TERRAIN_COLORS } from '../types';
+import { TerrainType, TERRAIN_COLORS, ClimateZone } from '../types';
 import * as THREE from 'three';
 
 // Reusable Hexagon Geometry
 const hexGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 6);
+
+// ============================================================
+// CLIMATE-AWARE TREE VARIANTS
+// ============================================================
+// The forest biome used to render the same cone-tree everywhere — which made
+// Egypt's forest look exactly like Germania's. This palette lets each
+// climate paint its trees with the right silhouette and color. Trees are
+// still inexpensive (cone + cylinder primitives) so a whole forest tile
+// stays cheap to render.
+type TreeStyle = {
+  foliageColor: string;
+  trunkColor: string;
+  foliageShape: 'cone' | 'sphere' | 'fan' | 'flat';
+  trunkHeight: number;       // 0.1–0.35
+  foliageScale: number;      // overall size factor
+  foliageY: number;          // vertical offset of the foliage
+  variety: number;            // extra jitter multiplier
+};
+
+const TREE_STYLES: Record<ClimateZone, TreeStyle> = {
+  temperate:     { foliageColor: '#166534', trunkColor: '#3f2e20', foliageShape: 'cone',   trunkHeight: 0.22, foliageScale: 1.0,  foliageY: 0.45, variety: 0.3 },
+  mediterranean: { foliageColor: '#4d7c0f', trunkColor: '#5b4020', foliageShape: 'sphere', trunkHeight: 0.16, foliageScale: 0.9,  foliageY: 0.4,  variety: 0.25 },
+  arid:          { foliageColor: '#65a30d', trunkColor: '#78350f', foliageShape: 'fan',    trunkHeight: 0.32, foliageScale: 0.7,  foliageY: 0.55, variety: 0.15 },
+  tropical:      { foliageColor: '#15803d', trunkColor: '#713f12', foliageShape: 'fan',    trunkHeight: 0.28, foliageScale: 1.1,  foliageY: 0.5,  variety: 0.35 },
+  boreal:        { foliageColor: '#064e3b', trunkColor: '#44352a', foliageShape: 'cone',   trunkHeight: 0.18, foliageScale: 1.15, foliageY: 0.55, variety: 0.4 },
+  savanna:       { foliageColor: '#a16207', trunkColor: '#78350f', foliageShape: 'flat',   trunkHeight: 0.28, foliageScale: 1.1,  foliageY: 0.45, variety: 0.2 },
+  alpine:        { foliageColor: '#14532d', trunkColor: '#3f2e20', foliageShape: 'cone',   trunkHeight: 0.2,  foliageScale: 1.0,  foliageY: 0.5,  variety: 0.35 },
+  highland:      { foliageColor: '#4d7c0f', trunkColor: '#5b4020', foliageShape: 'sphere', trunkHeight: 0.22, foliageScale: 0.85, foliageY: 0.45, variety: 0.25 },
+};
+
+// A single tree rendered at the local origin. Color, shape and proportions
+// come from the civ's climate style; jitter comes from the tile index so
+// every forest tile looks slightly different without re-randomizing each
+// frame.
+const Tree: React.FC<{ climate: ClimateZone; seed: number }> = ({ climate, seed }) => {
+  const style = TREE_STYLES[climate] || TREE_STYLES.temperate;
+  const jitter = ((Math.sin(seed * 12.9898) * 43758.5453) % 1 + 1) % 1; // 0..1 stable
+  const extra = style.variety * jitter;
+
+  return (
+    <group>
+      {/* trunk */}
+      <mesh position={[0, style.trunkHeight / 2, 0]} castShadow>
+        <cylinderGeometry args={[0.08, 0.1, style.trunkHeight, 6]} />
+        <meshStandardMaterial color={style.trunkColor} roughness={0.95} />
+      </mesh>
+      {/* foliage */}
+      {style.foliageShape === 'cone' && (
+        <mesh position={[0, style.foliageY + extra * 0.1, 0]} castShadow>
+          <coneGeometry args={[0.28 * style.foliageScale, 0.85 * style.foliageScale, 8]} />
+          <meshStandardMaterial color={style.foliageColor} roughness={0.85} />
+        </mesh>
+      )}
+      {style.foliageShape === 'sphere' && (
+        <mesh position={[0, style.foliageY + extra * 0.08, 0]} castShadow>
+          <sphereGeometry args={[0.3 * style.foliageScale, 10, 8]} />
+          <meshStandardMaterial color={style.foliageColor} roughness={0.8} />
+        </mesh>
+      )}
+      {style.foliageShape === 'fan' && (
+        <group position={[0, style.foliageY + extra * 0.1, 0]}>
+          {/* palm-style: a couple of flat fronds arranged radially */}
+          {[0, 1, 2, 3, 4].map((i) => (
+            <mesh
+              key={i}
+              rotation={[Math.PI / 3, (i * Math.PI * 2) / 5, 0]}
+              castShadow
+            >
+              <coneGeometry args={[0.12 * style.foliageScale, 0.55 * style.foliageScale, 4]} />
+              <meshStandardMaterial color={style.foliageColor} roughness={0.75} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {style.foliageShape === 'flat' && (
+        <mesh position={[0, style.foliageY + extra * 0.05, 0]} castShadow>
+          {/* baobab-style flat disc */}
+          <cylinderGeometry args={[0.35 * style.foliageScale, 0.32 * style.foliageScale, 0.15, 10]} />
+          <meshStandardMaterial color={style.foliageColor} roughness={0.9} />
+        </mesh>
+      )}
+    </group>
+  );
+};
 
 interface HexTileProps {
   x: number;
@@ -12,9 +96,10 @@ interface HexTileProps {
   terrain: TerrainType;
   onClick: () => void;
   isHovered?: boolean;
+  climate?: ClimateZone;
 }
 
-export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered }) => {
+export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate' }) => {
   const color = TERRAIN_COLORS[terrain];
 
   // Height variation based on terrain
@@ -94,25 +179,41 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
          </mesh>
       )}
 
-      {/* Forest Details */}
+      {/* Forest Details — now climate-aware. Arid civs get date palms,
+          Germania gets boreal pines, Khmer gets jungle palms, etc. */}
       {terrain === TerrainType.Forest && (
         <group position={[0, 0.5, 0]}>
             {[
-                { x: -0.3, z: -0.2, s: 0.8 },
-                { x: 0.3, z: 0.1, s: 1 },
-                { x: -0.1, z: 0.4, s: 0.7 }
+                { x: -0.3, z: -0.2, s: 0.8, seed: 1 },
+                { x: 0.3, z: 0.1, s: 1, seed: 2 },
+                { x: -0.1, z: 0.4, s: 0.7, seed: 3 }
             ].map((tree, i) => (
                 <group key={i} position={[tree.x, 0, tree.z]} scale={[tree.s, tree.s, tree.s]}>
-                    <mesh position={[0, 0.4, 0]} castShadow>
-                        <coneGeometry args={[0.25, 0.8, 8]} />
-                        <meshStandardMaterial color="#14532d" roughness={0.8} />
-                    </mesh>
-                     <mesh position={[0, 0.1, 0]} castShadow>
-                        <cylinderGeometry args={[0.08, 0.08, 0.2, 6]} />
-                        <meshStandardMaterial color="#3f2e20" />
-                    </mesh>
+                    <Tree climate={climate} seed={tree.seed + x * 7 + z * 3} />
                 </group>
             ))}
+        </group>
+      )}
+
+      {/* Arid & Savanna climates get sparse ground dressing even on non-forest
+          tiles — a little cluster of scrub/grass suggests the environment. */}
+      {(climate === 'arid' || climate === 'savanna') && terrain === TerrainType.Plains && (
+        <group position={[0, 0.3, 0]}>
+          <mesh position={[0.15, 0, 0.2]}>
+            <coneGeometry args={[0.08, 0.15, 5]} />
+            <meshStandardMaterial color={climate === 'arid' ? '#ca8a04' : '#a16207'} roughness={0.95} />
+          </mesh>
+          <mesh position={[-0.2, 0, -0.1]}>
+            <coneGeometry args={[0.07, 0.12, 5]} />
+            <meshStandardMaterial color={climate === 'arid' ? '#a3a05c' : '#84611f'} roughness={0.95} />
+          </mesh>
+        </group>
+      )}
+
+      {/* Tropical tiles get a hint of undergrowth on grassland/plains. */}
+      {climate === 'tropical' && (terrain === TerrainType.Grassland || terrain === TerrainType.Plains) && (
+        <group position={[0.2, 0.3, 0.2]} scale={[0.6, 0.6, 0.6]}>
+          <Tree climate="tropical" seed={x * 13 + z * 5} />
         </group>
       )}
 

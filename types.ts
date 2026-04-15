@@ -27,6 +27,20 @@ export enum BuildingType {
 
 export type WaterResource = 'River' | 'Lake' | 'LakeBrackish' | 'Marsh' | 'Ocean' | 'Well';
 
+// Climate zones drive the look of trees, foliage and ground dressing. Each
+// civilization maps to one of these so its map feels authentic to its real
+// historical geography. Climate is cosmetic — it never changes combat math
+// or yields — but it massively changes how a civ *feels* on screen.
+export type ClimateZone =
+  | 'temperate'   // Europe, forested Mediterranean: oak, pine
+  | 'mediterranean' // olive, cypress, low scrub
+  | 'arid'        // Egypt, Persia, Arabia: date palms, acacia, sparse
+  | 'tropical'    // Khmer, Olmec, Nubia: jungle palms, broadleaf
+  | 'boreal'      // Scythia, north: conifers, birch
+  | 'savanna'     // Sub-Saharan Africa: baobab, acacia, grass
+  | 'alpine'      // Anatolia/mountainous: pine, fir
+  | 'highland';   // Ethiopia/Andean: acacia, conifer, meadow
+
 export interface TileData {
   id: string;
   q: number;
@@ -37,6 +51,10 @@ export interface TileData {
   terrain: TerrainType;
   building: BuildingType;
   isHovered?: boolean;
+  // Optional per-tile climate override. Normally tiles inherit the civ's
+  // climate, but future map-blending could make tiles on the far edge take
+  // on a neighbor's climate aesthetic.
+  climate?: ClimateZone;
 }
 
 export interface Trait {
@@ -71,6 +89,9 @@ export interface CivPreset {
   };
   centerBiomes: TerrainType[];
   edgeBiomes: TerrainType[];
+  // Cosmetic climate hint — drives tree species and ground dressing in 3D
+  // rendering. If omitted, the renderer falls back to 'temperate'.
+  climate?: ClimateZone;
 }
 
 export interface RespawnCiv {
@@ -249,13 +270,14 @@ export interface EventPopupData {
 // Turn phase flow: INCOME → UNLOCKS → WORLD_EVENT → CIV_EVENT → BUILD_PHASE → ACTION → RESOLUTION
 export type TurnPhaseV2 = 'income' | 'unlocks' | 'world_event' | 'civ_event' | 'build_phase' | 'action' | 'resolution' | 'idle';
 
-// The 9 action types (Build is now a separate phase, not an action)
+// The 10 action types (Build is a separate phase, not an action)
 export type PlayerActionType =
   | 'grow'       // +2 Population (place houses)
   | 'build'      // Legacy: kept for backward compat in TurnResolution
   | 'research'   // Gain Science Yield + Library bonuses
   | 'trade'      // Partner with adjacent civ for mutual benefit
   | 'attack'     // Combat (unlocks Turn 3)
+  | 'fortify'    // Defensive stance: adds stacking d6 on defense rolls
   | 'develop'    // Gain Culture Yield + Amphitheater bonuses
   | 'worship'    // Gain Faith Yield + Temple bonuses, or found religion
   | 'wonder'     // Invest production toward a Wonder
@@ -363,7 +385,14 @@ export interface GameState {
       scienceYield: number;
       cultureYield: number;
       faithYield: number;
-      tempDefenseBonus: number; // from Fortify action, clears each turn
+      tempDefenseBonus: number; // legacy: flat defense buff, clears each turn
+      // FORTIFY DICE: persistent counter of extra d6 dice the civ rolls on
+      // every DEFENSIVE event (raids and incoming attacks). Each use of the
+      // Fortify action adds +1, capped at FORTIFY_MAX. Decays by 1 at the
+      // start of each income phase so standing armies eventually relax. This
+      // stat intentionally does NOT help the civ attack — its purpose is
+      // pure defense, preventing a runaway offensive snowball.
+      fortifyDice: number;
     };
     baseStats: { // Snapshot of base stats for recalculation
         martial: number;
@@ -441,7 +470,19 @@ export interface GameState {
     buildingsGained: Partial<GameState['civilization']['buildings']>;
     tilesGained: number;
   } | null;
+  // Prominent attack outcome modal (replaces having to hunt the lower-right
+  // tab). Cleared when the student acknowledges the result.
+  attackOutcome?: AttackOutcomePopup | null;
+  // Queue of threshold popups — shown one-by-one. IDs already awarded are
+  // tracked separately so we never re-show the same milestone.
+  pendingThresholds?: ThresholdPopup[];
+  thresholdsAwarded?: string[];
 }
+
+// Maximum fortify dice a civ can stack. Above this, further Fortify
+// actions just refresh existing dice (no decay that round) rather than
+// pile on more — keeps the mechanic defensive, not game-breaking.
+export const FORTIFY_MAX = 3;
 
 export interface CombatLogEntry {
   turn: number;
@@ -454,6 +495,47 @@ export interface CombatLogEntry {
   popLost?: number;
   martialLost?: number;
   loot?: { culture?: number; production?: number };
+  // Full dice breakdown so the Attack Outcome Popup can show the student
+  // exactly where every number came from — this is a teaching moment.
+  rolls?: {
+    attackerMartial: number;
+    attackerBaseRoll: number;     // attacker's d6
+    defenderMartial: number;
+    defenderBaseRoll: number;     // defender's d6
+    wallDice: number[];           // each wall tile contributes 1d6
+    fortifyDice: number[];        // each fortify stack contributes 1d6
+    bypassedWalls: boolean;       // Siege Engineering cancels wall dice
+  };
+}
+
+// One-shot modal that surfaces the outcome of an attack action in a clear,
+// prominent way — not just the lower-right tab. Kept on GameState so a page
+// reload mid-modal still shows the result.
+export interface AttackOutcomePopup {
+  turn: number;
+  targetName: string;
+  attackerName: string;
+  attackTotal: number;
+  defendTotal: number;
+  margin: number;
+  outcome: 'decisive_victory' | 'victory' | 'stalemate' | 'defeat';
+  rolls: CombatLogEntry['rolls'];
+  effects: string[];
+}
+
+// Queued milestone popups. When a student crosses a threshold (Science 10,
+// Culture 20, Faith 10 for religion, etc.) we enqueue one of these and the
+// renderer pops them in sequence so the student acknowledges each before
+// continuing. This hugely expands decision space — students actually SEE the
+// milestones they earned instead of having them quietly accrue.
+export interface ThresholdPopup {
+  id: string;                     // unique key for dedupe (e.g., 'sci-30')
+  kind: 'science' | 'culture' | 'faith' | 'population' | 'martial' | 'wonder';
+  title: string;
+  subtitle: string;               // short hook, e.g. "You unlocked Bronze Working"
+  description: string;            // longer historical flavor
+  bonuses: string[];              // readable bullet list of what they get
+  cta?: string;                   // call-to-action button label
 }
 
 export interface VictoryCondition {

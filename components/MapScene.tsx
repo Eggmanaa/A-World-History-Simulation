@@ -3,12 +3,15 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, SoftShadows } from '@react-three/drei';
 import * as THREE from 'three';
-import { TileData, BuildingType } from '../types';
+import { TileData, BuildingType, ClimateZone } from '../types';
 import { HexTile3D, House3D, Farm3D, Workshop3D, Library3D, Barracks3D, Temple3D, Wall3D, Amphitheatre3D, Wonder3D, ArchimedesTower3D } from './Models';
 
 interface MapSceneProps {
   tiles: TileData[];
   onTileClick: (tileId: string) => void;
+  // Cosmetic-only: drives tree species, undergrowth, and dressing so each
+  // civ's map reads as authentically *theirs*. Defaults to 'temperate'.
+  climate?: ClimateZone;
 }
 
 // Stable hash so each tile gets the same organic jitter every render. If we
@@ -19,7 +22,7 @@ const hashJitter = (id: string, salt: number) => {
   return ((h >>> 0) % 1000) / 1000; // 0..1
 };
 
-const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
+const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temperate' }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -168,6 +171,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
                 terrain={tile.terrain}
                 isHovered={hoveredId === tile.id}
                 onClick={() => onTileClick(tile.id)}
+                climate={tile.climate || climate}
               />
               {tile.building === BuildingType.House && <House3D position={[tile.x, 0, tile.z]} />}
               {tile.building === BuildingType.Farm && <Farm3D position={[tile.x, 0, tile.z]} />}

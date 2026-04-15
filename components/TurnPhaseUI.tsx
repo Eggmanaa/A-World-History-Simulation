@@ -9,8 +9,8 @@
 import React, { useState, useMemo } from 'react';
 import {
   Coins, Globe, MapPin, Zap, ChevronRight, Check, X, Sword, Shield,
-  FlaskConical, Palette, Scroll, Sprout, Hammer, Handshake, Landmark,
-  Clock, Star, Crown, TrendingUp, AlertTriangle,
+  ShieldPlus, FlaskConical, Palette, Scroll, Sprout, Hammer, Handshake,
+  Landmark, Clock, Star, Crown, TrendingUp, AlertTriangle,
 } from 'lucide-react';
 import type {
   GameState, WorldEvent, CivSpecificEvent, PlayerActionType,
@@ -25,7 +25,7 @@ import { WONDERS_LIST, RELIGION_TENETS } from '../constants';
 
 // Icon mapping
 const ICON_MAP: Record<string, React.FC<any>> = {
-  Sword, Shield, FlaskConical, Palette, Scroll, Sprout, Hammer,
+  Sword, Shield, ShieldPlus, FlaskConical, Palette, Scroll, Sprout, Hammer,
   Handshake, Landmark, Globe, Star, Crown, Zap,
 };
 

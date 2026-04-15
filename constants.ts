@@ -11,8 +11,12 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 3, faithYield: 3, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#eab308', accent: '#2563eb' },
-        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains, TerrainType.Grassland],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Mountain]
+        // Authentically Egyptian: a life-giving Nile strip of river + plains
+        // surrounded on every side by desert — that's what the map looked
+        // like from space, and it's what it should feel like here.
+        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.River, TerrainType.Plains, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Desert, TerrainType.Mountain],
+        climate: 'arid'
     },
     {
         id: 'greece', name: 'Ancient Greece', regions: ['Greece', 'Aegean', 'Europe'],
@@ -20,8 +24,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 2, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 5, cultureYield: 5, faithYield: 2, capacity: 8 },
         waterResource: 'Lake', isIsland: true,
         colors: { base: '#3b82f6', accent: '#f8fafc' },
-        centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Mountain],
-        edgeBiomes: [TerrainType.Ocean, TerrainType.Mountain, TerrainType.Forest]
+        // Aegean island-hop: rocky mountains meeting open sea, with scrubby
+        // grassland in between. Olive trees, not oaks.
+        centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Mountain, TerrainType.Mountain],
+        edgeBiomes: [TerrainType.Ocean, TerrainType.Ocean, TerrainType.Mountain, TerrainType.Forest],
+        climate: 'mediterranean'
     },
     {
         id: 'rome', name: 'Roman Empire', regions: ['Italia', 'Rome', 'Europe'],
@@ -29,8 +36,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 4, defense: 3, faith: 2, industry: 5, fertility: 2, productionIncome: 5, scienceYield: 3, cultureYield: 3, faithYield: 2, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#dc2626', accent: '#fcd34d' },
-        centerBiomes: [TerrainType.Grassland, TerrainType.Plains, TerrainType.River],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Plains]
+        // Italia: fertile river valleys, rolling grassland, spine of the
+        // Apennines, Mediterranean groves at the edges.
+        centerBiomes: [TerrainType.Grassland, TerrainType.Plains, TerrainType.River, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Plains, TerrainType.Ocean],
+        climate: 'mediterranean'
     },
     {
         id: 'china', name: 'Ancient China', regions: ['China', 'Asia'],
@@ -38,8 +48,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 4, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 4, cultureYield: 3, faithYield: 2, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#ca8a04', accent: '#ef4444' },
-        centerBiomes: [TerrainType.River, TerrainType.Plains, TerrainType.Forest],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Forest]
+        // Huang He / Yangtze basins: two great rivers, bamboo forests,
+        // Himalayan wall on one side, Gobi-style desert on the other.
+        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains, TerrainType.Forest],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Forest, TerrainType.Mountain],
+        climate: 'temperate'
     },
     {
         id: 'germania', name: 'Germania', regions: ['Germania', 'Teutons', 'Europe'],
@@ -47,8 +60,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 5, defense: 2, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 1, cultureYield: 1, faithYield: 2, capacity: 10 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#14532d', accent: '#a3e635' },
-        centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Grassland],
-        edgeBiomes: [TerrainType.Forest, TerrainType.Mountain, TerrainType.River]
+        // Dark European forest + Rhine/Elbe/Danube + marshland. Romans wrote
+        // that you could walk for days without seeing sky.
+        centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Forest, TerrainType.Grassland, TerrainType.River],
+        edgeBiomes: [TerrainType.Forest, TerrainType.Mountain, TerrainType.Marsh, TerrainType.River],
+        climate: 'boreal'
     },
     {
         id: 'phoenicia', name: 'Phoenicia', regions: ['Phoenicia', 'Fertile Crescent'],
@@ -56,8 +72,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 2, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 4, faithYield: 2, capacity: 8 },
         waterResource: 'Ocean', isIsland: false,
         colors: { base: '#7e22ce', accent: '#f0abfc' },
-        centerBiomes: [TerrainType.Plains, TerrainType.Desert],
-        edgeBiomes: [TerrainType.Ocean, TerrainType.Ocean, TerrainType.Mountain]
+        // Thin Levantine coastal strip: narrow plain wedged between Lebanon
+        // range and the Mediterranean.
+        centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Ocean],
+        edgeBiomes: [TerrainType.Ocean, TerrainType.Ocean, TerrainType.Mountain, TerrainType.Desert],
+        climate: 'mediterranean'
     },
     {
         id: 'india', name: 'Ancient India', regions: ['India', 'Asia'],
@@ -65,8 +84,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 3, faith: 5, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 4, cultureYield: 3, faithYield: 5, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#f97316', accent: '#10b981' },
-        centerBiomes: [TerrainType.River, TerrainType.Grassland, TerrainType.Forest],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Ocean]
+        // Indus & Ganges: lush river valleys, monsoon forests, Himalayas to
+        // the north, Indian Ocean at the edge.
+        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Grassland, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Ocean, TerrainType.Forest],
+        climate: 'tropical'
     },
     {
         id: 'mesopotamia', name: 'Mesopotamia', regions: ['Mesopotamia', 'Fertile Crescent'],
@@ -74,8 +96,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 2, faith: 4, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 5, cultureYield: 3, faithYield: 4, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#1e3a8a', accent: '#fbbf24' },
-        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Marsh, TerrainType.Mountain]
+        // Tigris-Euphrates alluvial plain: two rivers, marshy delta to the
+        // south, desert ringing everything else.
+        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains, TerrainType.Marsh],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Marsh, TerrainType.Mountain],
+        climate: 'arid'
     },
     {
         id: 'persia', name: 'Persian Empire', regions: ['Persia', 'Asia', 'Fertile Crescent'],
@@ -83,8 +108,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 4, defense: 3, faith: 4, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 3, cultureYield: 3, faithYield: 4, capacity: 15 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#9d174d', accent: '#fbbf24' },
-        centerBiomes: [TerrainType.Plains, TerrainType.Mountain, TerrainType.Desert],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Mountain]
+        // Iranian plateau: high arid plains, the Zagros and Elburz ranges,
+        // scattered oases.
+        centerBiomes: [TerrainType.Plains, TerrainType.Mountain, TerrainType.Desert, TerrainType.Plains],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Mountain, TerrainType.Desert],
+        climate: 'arid'
     },
     {
         id: 'sparta', name: 'Sparta', regions: ['Greece', 'Laconia', 'Europe'],
@@ -92,8 +120,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 7, defense: 4, faith: 1, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 1, cultureYield: 2, faithYield: 1, capacity: 15 },
         waterResource: 'Lake', isIsland: true,
         colors: { base: '#7f1d1d', accent: '#94a3b8' },
-        centerBiomes: [TerrainType.Mountain, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.Ocean, TerrainType.HighMountain]
+        // Laconia: the Eurotas plain boxed in by Taygetus and Parnon — harsh,
+        // mountainous, inward-facing.
+        centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Mountain],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Ocean, TerrainType.HighMountain, TerrainType.Mountain],
+        climate: 'mediterranean'
     },
     {
         id: 'anatolia', name: 'Anatolia', regions: ['Anatolia', 'Fertile Crescent'],
@@ -101,8 +132,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 3, faithYield: 3, capacity: 10 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#92400e', accent: '#fcd34d' },
-        centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Grassland],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Ocean]
+        centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Grassland, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Ocean, TerrainType.Plains],
+        climate: 'alpine'
     },
     {
         id: 'crete', name: 'Minoan Crete', regions: ['Crete', 'Aegean', 'Europe'],
@@ -110,8 +142,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 3, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 4, cultureYield: 5, faithYield: 3, capacity: 8 },
         waterResource: 'Ocean', isIsland: true,
         colors: { base: '#0d9488', accent: '#ccfbf1' },
-        centerBiomes: [TerrainType.Grassland, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Ocean, TerrainType.Ocean, TerrainType.Mountain]
+        centerBiomes: [TerrainType.Grassland, TerrainType.Plains, TerrainType.Mountain],
+        edgeBiomes: [TerrainType.Ocean, TerrainType.Ocean, TerrainType.Ocean, TerrainType.Mountain],
+        climate: 'mediterranean'
     },
     {
         id: 'gaul', name: 'Gaul', regions: ['Gaul', 'Celts', 'Europe'],
@@ -119,8 +152,10 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 4, defense: 2, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 3, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#166534', accent: '#a3e635' },
-        centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Forest, TerrainType.Mountain, TerrainType.Ocean]
+        // Deep forest + great rivers (Rhône, Seine, Loire).
+        centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Plains, TerrainType.River],
+        edgeBiomes: [TerrainType.Forest, TerrainType.Mountain, TerrainType.Ocean, TerrainType.Grassland],
+        climate: 'temperate'
     },
     {
         id: 'carthage', name: 'Carthage', regions: ['Carthage', 'North Africa', 'Phoenicia'],
@@ -128,8 +163,10 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 2, faith: 2, industry: 5, fertility: 2, productionIncome: 5, scienceYield: 2, cultureYield: 3, faithYield: 2, capacity: 8 },
         waterResource: 'Ocean', isIsland: false,
         colors: { base: '#7c3aed', accent: '#c4b5fd' },
-        centerBiomes: [TerrainType.Plains, TerrainType.Desert, TerrainType.Ocean],
-        edgeBiomes: [TerrainType.Ocean, TerrainType.Desert, TerrainType.Mountain]
+        // Coastal North Africa: sea & scrub, Sahara behind.
+        centerBiomes: [TerrainType.Plains, TerrainType.Ocean, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Ocean, TerrainType.Desert, TerrainType.Desert, TerrainType.Mountain],
+        climate: 'arid'
     },
     {
         id: 'macedon', name: 'Macedonia', regions: ['Macedon', 'Greece', 'Europe'],
@@ -137,8 +174,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 5, defense: 3, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 2, capacity: 10 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#1e40af', accent: '#fbbf24' },
-        centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Grassland],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Forest]
+        centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Grassland, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Forest, TerrainType.Ocean],
+        climate: 'alpine'
     },
     {
         id: 'assyria', name: 'Assyrian Empire', regions: ['Assyria', 'Mesopotamia', 'Fertile Crescent'],
@@ -146,8 +184,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 6, defense: 3, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 1, faithYield: 2, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#450a0a', accent: '#f59e0b' },
-        centerBiomes: [TerrainType.Plains, TerrainType.River, TerrainType.Desert],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.Desert, TerrainType.Marsh]
+        centerBiomes: [TerrainType.Plains, TerrainType.River, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Desert, TerrainType.Marsh, TerrainType.Desert],
+        climate: 'arid'
     },
     {
         id: 'cush', name: 'Kingdom of Kush', regions: ['Cush', 'Nubia', 'Africa'],
@@ -155,8 +194,10 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 3, faith: 4, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 3, cultureYield: 3, faithYield: 4, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#854d0e', accent: '#fef08a' },
-        centerBiomes: [TerrainType.River, TerrainType.Desert, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Desert, TerrainType.HighMountain, TerrainType.Desert]
+        // Upper Nile + Nubian desert.
+        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains, TerrainType.Desert],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.HighMountain, TerrainType.Grassland],
+        climate: 'savanna'
     },
     {
         id: 'israel', name: 'Ancient Israel', regions: ['Israel', 'Fertile Crescent'],
@@ -164,8 +205,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 4, faith: 7, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 3, cultureYield: 2, faithYield: 7, capacity: 10 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#2563eb', accent: '#ffffff' },
-        centerBiomes: [TerrainType.Plains, TerrainType.Mountain, TerrainType.Desert],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Ocean]
+        centerBiomes: [TerrainType.Plains, TerrainType.Mountain, TerrainType.Desert, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Ocean, TerrainType.Desert],
+        climate: 'mediterranean'
     },
     {
         id: 'troy', name: 'Troy', regions: ['Troy', 'Northwest Anatolia', 'Asia Minor'],
@@ -173,8 +215,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 6, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 3, faithYield: 2, capacity: 8 },
         waterResource: 'Ocean', isIsland: false,
         colors: { base: '#92400e', accent: '#fef3c7' },
-        centerBiomes: [TerrainType.Ocean, TerrainType.Plains, TerrainType.Mountain],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.Ocean, TerrainType.Forest]
+        centerBiomes: [TerrainType.Ocean, TerrainType.Plains, TerrainType.Mountain, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Ocean, TerrainType.Forest, TerrainType.Ocean],
+        climate: 'mediterranean'
     },
     {
         id: 'scythia', name: 'Scythia', regions: ['Scythia', 'Central Asia', 'Steppes'],
@@ -182,8 +225,10 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 5, defense: 1, faith: 1, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 1, cultureYield: 2, faithYield: 2, capacity: 6 },
         waterResource: 'Well', isIsland: false,
         colors: { base: '#7f1d1d', accent: '#fcd34d' },
-        centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Desert],
-        edgeBiomes: [TerrainType.Grassland, TerrainType.Desert, TerrainType.Mountain]
+        // Pontic-Caspian steppe: endless grassland, few rivers.
+        centerBiomes: [TerrainType.Grassland, TerrainType.Grassland, TerrainType.Plains],
+        edgeBiomes: [TerrainType.Grassland, TerrainType.Desert, TerrainType.Mountain, TerrainType.Forest],
+        climate: 'boreal'
     },
     {
         id: 'olmec', name: 'Olmec Civilization', regions: ['Mesoamerica', 'Yucatan', 'Americas'],
@@ -191,8 +236,10 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 5, faithYield: 3, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#15803d', accent: '#fcd34d' },
-        centerBiomes: [TerrainType.River, TerrainType.Forest, TerrainType.Marsh],
-        edgeBiomes: [TerrainType.Forest, TerrainType.Marsh, TerrainType.Grassland]
+        // Gulf Coast jungles: rainforest + wetlands.
+        centerBiomes: [TerrainType.River, TerrainType.Forest, TerrainType.Forest, TerrainType.Marsh],
+        edgeBiomes: [TerrainType.Forest, TerrainType.Marsh, TerrainType.Grassland, TerrainType.Ocean],
+        climate: 'tropical'
     },
     {
         id: 'korea', name: 'Ancient Korea', regions: ['Korean Peninsula', 'Asia'],
@@ -200,8 +247,9 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 2, defense: 4, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 5, cultureYield: 3, faithYield: 3, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#0ea5e9', accent: '#f8fafc' },
-        centerBiomes: [TerrainType.River, TerrainType.Mountain, TerrainType.Forest],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Ocean]
+        centerBiomes: [TerrainType.River, TerrainType.Mountain, TerrainType.Forest, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Ocean, TerrainType.Ocean],
+        climate: 'temperate'
     },
     {
         id: 'khmer', name: 'Khmer Empire', regions: ['Southeast Asia', 'Cambodia', 'Asia'],
@@ -209,8 +257,10 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 2, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 2, cultureYield: 4, faithYield: 5, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#6b21a8', accent: '#fcd34d' },
-        centerBiomes: [TerrainType.River, TerrainType.Forest, TerrainType.Marsh],
-        edgeBiomes: [TerrainType.Forest, TerrainType.Marsh, TerrainType.Grassland]
+        // Mekong basin: jungle, rice paddies, Tonle Sap marshland.
+        centerBiomes: [TerrainType.River, TerrainType.Forest, TerrainType.Marsh, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Forest, TerrainType.Marsh, TerrainType.Grassland, TerrainType.Forest],
+        climate: 'tropical'
     },
     {
         id: 'ethiopia', name: 'Aksum (Ethiopia)', regions: ['Ethiopia', 'East Africa', 'Africa'],
@@ -218,8 +268,11 @@ export const CIV_PRESETS: CivPreset[] = [
         baseStats: { martial: 3, defense: 4, faith: 5, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 3, faithYield: 5, capacity: 10 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#15803d', accent: '#fef08a' },
-        centerBiomes: [TerrainType.River, TerrainType.Mountain, TerrainType.Grassland],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Grassland]
+        // Ethiopian highlands: dramatic altitude, rift-valley lakes, green
+        // plateaus above the African heat.
+        centerBiomes: [TerrainType.Mountain, TerrainType.Grassland, TerrainType.River, TerrainType.Plains],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Grassland, TerrainType.Forest],
+        climate: 'highland'
     }
 ];
 

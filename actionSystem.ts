@@ -6,6 +6,7 @@
  */
 
 import type { GameState, PlayerActionType, BuildingType, TileData } from './types';
+import { FORTIFY_MAX } from './types';
 
 export interface ActionDefinition {
   id: PlayerActionType;
@@ -74,10 +75,19 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     unlockYear: 'c. 8000 BC',
     unlockHistoricalContext: 'Early humans developed counting systems using tally marks on bone and clay tokens in Mesopotamia. These first steps toward mathematics and record-keeping laid the foundation for all scientific knowledge that would follow.',
   },
-  // Fortify was removed: Martial now serves both offense AND defense, so a
-  // dedicated defensive action was redundant. Build Walls during the Build
-  // Phase for permanent Defense, or raise Martial via Barracks / science /
-  // religion tenets.
+  {
+    id: 'fortify',
+    name: 'Fortify',
+    shortDesc: '+1 Defense d6 (stacks, decays)',
+    fullDesc: 'Take a defensive stance. Adds +1 permanent die to your Defense Dice pool (max 3). You roll these extra d6 on every defense — raids, sieges, incoming attacks. Each pool die decays by 1 at the start of every turn, so you must keep fortifying to stay dug in. Fortify never helps you attack.',
+    icon: 'ShieldPlus',
+    category: 'military',
+    color: 'text-sky-300',
+    unlockedAtTurn: 3,
+    unlockMessage: 'Your people learn to dig in, raise earthworks, and stand watch.',
+    unlockYear: 'c. 7000 BC',
+    unlockHistoricalContext: 'Early walled settlements like Jericho (c. 8000 BC) show humans had already learned to dig ditches and raise walls as dedicated defensive effort. Fortifying was a distinct activity from everyday building — it signaled a civilization willing to trade economic time for peace of mind.',
+  },
   {
     id: 'trade',
     name: 'Trade',
@@ -215,6 +225,12 @@ export function checkActionAvailability(
       }
       return { available: true };
 
+    case 'fortify':
+      if ((stats.fortifyDice || 0) >= FORTIFY_MAX) {
+        return { available: true, reason: `Already at max Defense Dice (${FORTIFY_MAX}). Fortifying again refreshes them.` };
+      }
+      return { available: true };
+
     default:
       return { available: false, reason: 'Unknown action' };
   }
@@ -305,6 +321,22 @@ export function previewAction(
     case 'diplomacy':
       return { effects: ['Form alliance: +2 Martial for both parties', 'Breaking alliance costs 2 Culture Total'] };
 
+    case 'fortify': {
+      const current = stats.fortifyDice || 0;
+      const next = Math.min(FORTIFY_MAX, current + 1);
+      const wallDice = state.civilization.buildings.walls || 0;
+      return {
+        effects: [
+          `Defense Dice: ${current} → ${next} (cap ${FORTIFY_MAX}).`,
+          `Each die adds +1d6 to every defense roll (raids + incoming attacks).`,
+          `Pool decays by 1 per turn — keep fortifying to stay dug in.`,
+          wallDice > 0
+            ? `Your ${wallDice} Wall${wallDice === 1 ? '' : 's'} already grant ${wallDice} defensive d6${wallDice === 1 ? '' : ' each'}. Fortify stacks on top.`
+            : `Build Walls too — each Wall tile grants an additional +1d6 on defense.`,
+        ],
+      };
+    }
+
     default:
       return { effects: [] };
   }
@@ -326,6 +358,19 @@ export interface ActionExecutionResult {
     won: boolean;
     margin: number;
     effects: string[];
+    // Full dice breakdown so the UI can show a proper "battle report" popup
+    // with every roll visible. Students see WHY they won or lost.
+    rolls?: {
+      attackerMartial: number;
+      attackerBaseRoll: number;
+      defenderMartial: number;
+      defenderBaseRoll: number;
+      wallDice: number[];
+      fortifyDice: number[];
+      bypassedWalls: boolean;
+      attackTotal: number;
+      defendTotal: number;
+    };
   };
   wonderInvestment?: { wonderId: string; amount: number };
   foundReligion?: boolean;
@@ -417,12 +462,52 @@ export function executeAction(
         return { messages: ['You have no martial strength. Build Barracks first.'], statChanges: {} };
       }
 
-      // Combat: Attacker Martial + d6 vs Defender (Martial + Defense + d6)
+      // Combat math:
+      //   Attacker = Martial + d6
+      //   Defender = Martial + Defense + d6 + 1d6 per Wall (up to 3) + 1d6 per Fortify stack
+      // Siege Engineering (Science L30) lets attackers bypass wall dice but
+      // does NOT bypass Fortify — digging in beats sapping.
       const attackRoll = Math.floor(Math.random() * 6) + 1;
       const defendRoll = Math.floor(Math.random() * 6) + 1;
+
+      // Wall dice: target may carry a walls count. For the PLAYER's own
+      // attack path, the defender is an NPC neighbor — we approximate their
+      // walls with a small buffer based on their defense stat so even NPCs
+      // benefit from a d6 defense roll. 0-3 dice.
+      const defenderWallCount = Math.max(
+        0,
+        Math.min(3, Math.floor((target.defense || 0) / 3)),
+      );
+      const hasBypass = state.civilization.stats.science >= 30; // Siege Engineering
+      const wallDiceRolls = hasBypass
+        ? []
+        : Array.from({ length: defenderWallCount }, () => Math.floor(Math.random() * 6) + 1);
+
+      // Fortify dice — NPC neighbors don't accrue fortifyDice today, so this
+      // is 0 for the player-attacks-NPC path. When Civ-vs-Civ pvp lands, the
+      // defender's fortifyDice will flow through here too.
+      const defenderFortifyStacks = 0;
+      const fortifyDiceRolls = Array.from({ length: defenderFortifyStacks }, () =>
+        Math.floor(Math.random() * 6) + 1,
+      );
+
+      const wallDiceSum = wallDiceRolls.reduce((a, b) => a + b, 0);
+      const fortifyDiceSum = fortifyDiceRolls.reduce((a, b) => a + b, 0);
       const attackTotal = stats.martial + attackRoll;
-      const defendTotal = target.martial + target.defense + defendRoll;
+      const defendTotal = target.martial + target.defense + defendRoll + wallDiceSum + fortifyDiceSum;
       const margin = attackTotal - defendTotal;
+
+      const rollDetail = {
+        attackerMartial: stats.martial,
+        attackerBaseRoll: attackRoll,
+        defenderMartial: target.martial + target.defense,
+        defenderBaseRoll: defendRoll,
+        wallDice: wallDiceRolls,
+        fortifyDice: fortifyDiceRolls,
+        bypassedWalls: hasBypass && defenderWallCount > 0,
+        attackTotal,
+        defendTotal,
+      };
 
       let result: ActionExecutionResult;
 
@@ -437,7 +522,7 @@ export function executeAction(
             culture: stats.culture + 3,
             productionPool: stats.productionPool + 3,
           },
-          combatResult: { target: target.name, won: true, margin, effects: ['Decisive Victory'] },
+          combatResult: { target: target.name, won: true, margin, effects: ['Decisive Victory'], rolls: rollDetail },
         };
       } else if (margin > 0) {
         // Victory
@@ -450,7 +535,7 @@ export function executeAction(
             culture: stats.culture + 2,
             productionPool: stats.productionPool + 2,
           },
-          combatResult: { target: target.name, won: true, margin, effects: ['Victory'] },
+          combatResult: { target: target.name, won: true, margin, effects: ['Victory'], rolls: rollDetail },
         };
       } else if (margin === 0) {
         // Stalemate
@@ -460,7 +545,7 @@ export function executeAction(
             'Both sides hold their ground.',
           ],
           statChanges: {},
-          combatResult: { target: target.name, won: false, margin: 0, effects: ['Stalemate'] },
+          combatResult: { target: target.name, won: false, margin: 0, effects: ['Stalemate'], rolls: rollDetail },
         };
       } else {
         // Defeat — simple loss. Defense is exercised by the random raid
@@ -477,11 +562,23 @@ export function executeAction(
             houses: Math.max(0, stats.houses - popLoss),
             martial: Math.max(0, stats.martial - 1),
           },
-          combatResult: { target: target.name, won: false, margin, effects: ['Defeat'] },
+          combatResult: { target: target.name, won: false, margin, effects: ['Defeat'], rolls: rollDetail },
         };
       }
 
       return result;
+    }
+
+    case 'fortify': {
+      const current = stats.fortifyDice || 0;
+      const next = Math.min(FORTIFY_MAX, current + 1);
+      const messages = current >= FORTIFY_MAX
+        ? [`Defense Dice already at max (${FORTIFY_MAX}). Refreshed — they hold through next turn.`]
+        : [`Fortified! Defense Dice: ${current} → ${next}. You now roll +${next}d6 on every defense until decay.`];
+      return {
+        messages,
+        statChanges: { fortifyDice: next },
+      };
     }
 
     case 'develop': {
@@ -614,6 +711,15 @@ export function calculateIncome(state: GameState): {
     changes.tempDefenseBonus = 0;
   }
 
+  // 3b. Decay fortify dice by 1 per turn — the "standing army relaxes"
+  // effect. Players must keep Fortifying each turn if they want to stay
+  // dug in. This is the balance lever that prevents Fortify from turning
+  // into a free permanent stack.
+  const currentFortify = stats.fortifyDice || 0;
+  if (currentFortify > 0) {
+    changes.fortifyDice = Math.max(0, currentFortify - 1);
+  }
+
   // 4. Reset houses built this turn
   changes.housesBuiltThisTurn = 0;
 
@@ -627,9 +733,21 @@ export function calculateIncome(state: GameState): {
     const turnScale = Math.max(1, Math.min(10, state.turnNumber || 1));
     const raidRoll = Math.floor(Math.random() * 6) + 1;
     const raidPower = Math.floor(turnScale * 0.8) + raidRoll; // ~2-14 by late game
-    // Defense was collapsed into Martial, so Martial now mitigates raids too.
-    const effectiveDef = (stats.martial || 0);
+    // Wall dice + Fortify dice make the raid check meaningful: each Wall
+    // tile (up to 3) adds a d6, and each Fortify stack adds a d6. These are
+    // the levers students have for "I'm a peaceful civ but I want to
+    // survive" — no need to build Martial, just dig in.
+    const wallCount = Math.min(3, state.civilization.buildings.walls || 0);
+    const wallDiceRolls = Array.from({ length: wallCount }, () => Math.floor(Math.random() * 6) + 1);
+    const fortifyStacks = currentFortify; // use the pre-decay value for THIS raid
+    const fortifyDiceRolls = Array.from({ length: fortifyStacks }, () => Math.floor(Math.random() * 6) + 1);
+    const wallSum = wallDiceRolls.reduce((a, b) => a + b, 0);
+    const fortifySum = fortifyDiceRolls.reduce((a, b) => a + b, 0);
+    const effectiveDef = (stats.martial || 0) + wallSum + fortifySum;
     const damage = Math.max(0, raidPower - effectiveDef);
+    const defenseBreakdown = wallCount + fortifyStacks > 0
+      ? ` (Martial ${stats.martial} + ${wallCount}d6 walls [${wallDiceRolls.join('+') || 0}] + ${fortifyStacks}d6 fortify [${fortifyDiceRolls.join('+') || 0}])`
+      : ` (Martial ${stats.martial})`;
     if (damage > 0) {
       const currentPop = changes.population ?? stats.population;
       const currentHouses = changes.houses ?? stats.houses;
@@ -642,9 +760,9 @@ export function calculateIncome(state: GameState): {
       if (prodLoss > 0) {
         changes.productionPool = Math.max(0, (changes.productionPool ?? stats.productionPool ?? 0) - prodLoss);
       }
-      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs Martial ${effectiveDef}). Lost ${popLoss} Population${prodLoss > 0 ? ` and ${prodLoss} Production` : ''}.`);
+      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs defense ${effectiveDef}${defenseBreakdown}). Lost ${popLoss} Population${prodLoss > 0 ? ` and ${prodLoss} Production` : ''}.`);
     } else {
-      messages.push(`⚔️ A raid was beaten back by your Martial ${effectiveDef}. No losses.`);
+      messages.push(`🛡️ A raid was beaten back — defense ${effectiveDef}${defenseBreakdown} held off raid power ${raidPower}. No losses.`);
     }
   }
 
