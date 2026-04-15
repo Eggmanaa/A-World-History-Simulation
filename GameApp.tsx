@@ -834,6 +834,8 @@ const App: React.FC = () => {
             if (parsed.v2TurnResolution) setV2TurnResolution(parsed.v2TurnResolution);
             if (parsed.v2StatsBefore) setV2StatsBefore(parsed.v2StatsBefore);
             if (parsed.v2UnlockedActions) setV2UnlockedActions(parsed.v2UnlockedActions);
+            if (parsed.chosenCultureIds) setChosenCultureIds(parsed.chosenCultureIds);
+            if (parsed.thresholdsAwarded) setThresholdsAwarded(parsed.thresholdsAwarded);
           }
         }
       } catch (e) {
@@ -857,6 +859,8 @@ const App: React.FC = () => {
           v2TurnResolution,
           v2StatsBefore,
           v2UnlockedActions,
+          chosenCultureIds,
+          thresholdsAwarded,
           savedAt: Date.now(),
         }));
       } catch (e) {
@@ -882,7 +886,7 @@ const App: React.FC = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [gameState, tiles, isSinglePlayer, takenRespawnIds, v2IncomeMessages, v2TurnResolution, v2StatsBefore, v2UnlockedActions]);
+  }, [gameState, tiles, isSinglePlayer, takenRespawnIds, v2IncomeMessages, v2TurnResolution, v2StatsBefore, v2UnlockedActions, chosenCultureIds, thresholdsAwarded]);
 
   const resetGame = () => {
     localStorage.removeItem(SAVE_KEY);
@@ -928,6 +932,13 @@ const App: React.FC = () => {
     setV2UnlockedActions([]);
     setV2IncomeMessages([]);
     setV2StatsBefore({});
+    setAttackOutcome(null);
+    setThresholdQueue([]);
+    setThresholdsAwarded([]);
+    setChosenCultureIds([]);
+    setShowTechTree(false);
+    setShowReligionTree(false);
+    setShowCultureTree(false);
     setConquestMessages([]);
     setConquestTargetName('');
     setShowConquestReward(false);
@@ -4219,6 +4230,57 @@ const App: React.FC = () => {
                   );
                 })()}
 
+                {/* CULTURAL BONUSES CLAIMED — each stage offers a one-time
+                    bonus choice via the Culture Tree modal. This block
+                    shows which slots are filled and which are waiting. */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-amber-900/40">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest">Cultural Bonuses</h3>
+                    <span className="text-xs text-slate-400">{chosenCultureIds.length} / 4 claimed</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(['Classical', 'Imperial', 'Enlightenment', 'Modern'] as const).map((stage) => {
+                      const threshold = CULTURAL_STAGE_THRESHOLDS.find((s) => s.stage === stage);
+                      const reached = (civ.stats.culture || 0) >= (threshold?.minCulture || 0);
+                      const claimed = chosenCultureIds
+                        .map((id) => CULTURE_CHOICES.find((c) => c.id === id))
+                        .find((c) => c && c.stage === stage);
+                      return (
+                        <div
+                          key={stage}
+                          className={`rounded border p-1.5 ${
+                            claimed
+                              ? 'bg-amber-500/15 border-amber-500/50'
+                              : reached
+                                ? 'bg-amber-500/5 border-amber-500/30'
+                                : 'bg-slate-900/40 border-slate-700'
+                          }`}
+                        >
+                          <div className="text-[10px] text-slate-400 uppercase">{stage}</div>
+                          <div className={`text-xs font-bold ${claimed ? 'text-amber-200' : reached ? 'text-amber-300' : 'text-slate-500'}`}>
+                            {claimed ? claimed.label : reached ? 'Ready to claim' : `Locked (${threshold?.minCulture})`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(['Classical', 'Imperial', 'Enlightenment', 'Modern'] as const).some((stage) => {
+                    const threshold = CULTURAL_STAGE_THRESHOLDS.find((s) => s.stage === stage);
+                    const reached = (civ.stats.culture || 0) >= (threshold?.minCulture || 0);
+                    const claimed = chosenCultureIds
+                      .map((id) => CULTURE_CHOICES.find((c) => c.id === id))
+                      .find((c) => c && c.stage === stage);
+                    return reached && !claimed;
+                  }) && (
+                    <button
+                      onClick={() => setShowCultureTree(true)}
+                      className="w-full mt-2 py-1.5 bg-amber-600 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded"
+                    >
+                      Claim pending bonus
+                    </button>
+                  )}
+                </div>
+
                 {/* Active Cultural Prestige (soft-power) */}
                 <div className="bg-slate-800 rounded-lg p-3 border border-pink-900/40">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Cultural Prestige</h3>
@@ -4567,6 +4629,54 @@ const App: React.FC = () => {
                         Founded {Math.abs(gameState.year)} {gameState.year < 0 ? "BCE" : "CE"}
                       </div>
                     </div>
+
+                    {/* TENET SLOT PROGRESSION — shows the three faith
+                        thresholds (10, 25, 50) so students see when the
+                        next tenet unlocks. This matches the Religion Tree
+                        modal's pick-as-you-grow design. */}
+                    {(() => {
+                      const slots = RELIGION_TENET_THRESHOLDS;
+                      const faith = civ.stats.faith || 0;
+                      const picked = civ.religion.tenets.length;
+                      return (
+                        <div className="mb-4 bg-slate-900/60 rounded p-2 border border-violet-900/40">
+                          <div className="flex items-center justify-between text-xs mb-2">
+                            <span className="text-slate-400">Tenets Adopted</span>
+                            <span className="text-violet-300 font-bold">{picked} / {slots.length}</span>
+                          </div>
+                          <div className="flex gap-1">
+                            {slots.map((t, i) => {
+                              const unlocked = faith >= t;
+                              const adopted = i < picked;
+                              return (
+                                <div
+                                  key={t}
+                                  className={`flex-1 text-center rounded px-1 py-1 text-[10px] border ${
+                                    adopted
+                                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-bold'
+                                      : unlocked
+                                        ? 'bg-violet-500/10 border-violet-500/50 text-violet-300'
+                                        : 'bg-slate-800 border-slate-700 text-slate-500'
+                                  }`}
+                                >
+                                  <div>Slot {i + 1}</div>
+                                  <div className="opacity-80">Faith {t}{adopted ? ' ✓' : unlocked ? ' open' : ''}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {faith >= slots[picked] && picked < slots.length && (
+                            <button
+                              onClick={() => setShowReligionTree(true)}
+                              className="w-full mt-2 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold rounded"
+                            >
+                              Pick tenet #{picked + 1}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     <div className="space-y-2">
                       {civ.religion.tenets.map((tid) => (
                         <div
@@ -4652,6 +4762,35 @@ const App: React.FC = () => {
                   </div>
                   <p className="text-[11px] text-slate-400 mt-2 italic">
                     Conquer <b className="text-red-300">5 civilizations</b> via Decisive Victory (margin ≥ 6) to win the Conquest victory.
+                  </p>
+                </div>
+
+                {/* DEFENSE POSTURE — shows the dice pool the civ actually
+                    rolls on raids and incoming attacks. Walls (up to 3d8)
+                    + Fortify stacks (up to 3d8) stack on top of base
+                    Martial + d6. Students need this live. */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-sky-900/40">
+                  <h3 className="text-xs font-bold text-sky-300 uppercase tracking-widest mb-2">Defense Posture</h3>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs mb-2">
+                    <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                      <div className="text-slate-500">Base</div>
+                      <div className="text-red-300 font-bold">Martial + d6</div>
+                    </div>
+                    <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                      <div className="text-slate-500">Walls</div>
+                      <div className="text-stone-300 font-bold">
+                        {Math.min(3, civ.buildings.walls || 0)}d8 <span className="text-slate-500 text-[10px]">/ 3</span>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                      <div className="text-slate-500">Fortify</div>
+                      <div className="text-emerald-300 font-bold">
+                        {civ.stats.fortifyDice || 0}d8 <span className="text-slate-500 text-[10px]">/ 3</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Fortify Dice decay by 1 each turn. Keep fortifying to hold your posture. Siege Engineering (Science 30) lets attackers bypass Wall dice but not Fortify.
                   </p>
                 </div>
 
