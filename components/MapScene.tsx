@@ -85,14 +85,19 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
   // Calculate device pixel ratio cap (2 max for Retina iPads)
   const dpr = Math.min(window.devicePixelRatio, 2);
 
-  // Pre-compute organic jitter per tile so the grid doesn't read as a
-  // crystalline lattice. Hashing on tile.id keeps it stable across renders
-  // (no visual vibration).
+  // Tile tessellation must be seamless — hex grids only tile perfectly
+  // at 0°/60°/120°/… rotations, so any arbitrary angle opens sub-pixel
+  // seams between neighbors. Set rotation jitter to 0 and slightly
+  // oversize each tile (scale=1.03) so neighbors overlap by ~1.5%,
+  // which hides both rotation-induced gaps AND floating-point
+  // imprecision in the hex coordinate math. The overlap is invisible
+  // from the default camera angle — tiles read as one continuous
+  // surface, no navy leaking through.
   const tileJitter = useMemo(
     () =>
-      tiles.map((t) => ({
-        rotY: (hashJitter(t.id, 7) - 0.5) * 0.18, // ±~5°
-        scale: 1, // was 0.96..1.04 — fixed to close tile tessellation gaps (user report 2026-04-15)
+      tiles.map((_t) => ({
+        rotY: 0, // was ±5° — hex tiling only works at 60° steps
+        scale: 1.03, // slight over-coverage to kill any pinhole seams
       })),
     [tiles],
   );
