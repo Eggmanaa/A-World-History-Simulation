@@ -78,8 +78,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
   {
     id: 'fortify',
     name: 'Fortify',
-    shortDesc: '+1 Defense d6 (stacks, decays)',
-    fullDesc: 'Take a defensive stance. Adds +1 permanent die to your Defense Dice pool (max 3). You roll these extra d6 on every defense — raids, sieges, incoming attacks. Each pool die decays by 1 at the start of every turn, so you must keep fortifying to stay dug in. Fortify never helps you attack.',
+    shortDesc: '+1 Defense d8 (stacks, decays)',
+    fullDesc: 'Take a defensive stance. Adds +1 permanent die to your Defense Dice pool (max 3). You roll these extra d8 on every defense — raids, sieges, incoming attacks. Each pool die decays by 1 at the start of every turn, so you must keep fortifying to stay dug in. Fortify never helps you attack.',
     icon: 'ShieldPlus',
     category: 'military',
     color: 'text-sky-300',
@@ -328,11 +328,11 @@ export function previewAction(
       return {
         effects: [
           `Defense Dice: ${current} → ${next} (cap ${FORTIFY_MAX}).`,
-          `Each die adds +1d6 to every defense roll (raids + incoming attacks).`,
+          `Each die adds +1d8 to every defense roll (raids + incoming attacks).`,
           `Pool decays by 1 per turn — keep fortifying to stay dug in.`,
           wallDice > 0
-            ? `Your ${wallDice} Wall${wallDice === 1 ? '' : 's'} already grant ${wallDice} defensive d6${wallDice === 1 ? '' : ' each'}. Fortify stacks on top.`
-            : `Build Walls too — each Wall tile grants an additional +1d6 on defense.`,
+            ? `Your ${wallDice} Wall${wallDice === 1 ? '' : 's'} already grant ${wallDice} defensive d8${wallDice === 1 ? '' : ' each'}. Fortify stacks on top.`
+            : `Build Walls too — each Wall tile grants an additional +1d8 on defense.`,
         ],
       };
     }
@@ -464,7 +464,12 @@ export function executeAction(
 
       // Combat math:
       //   Attacker = Martial + d6
-      //   Defender = Martial + Defense + d6 + 1d6 per Wall (up to 3) + 1d6 per Fortify stack
+      //   Defender = Martial + Defense + d6 + 1d8 per Wall (up to 3) + 1d8 per Fortify stack
+      // Why bigger dice for walls/fortify? Martial scales multiplicatively
+      // via traits (Strength ×2), cultural stages (Barbarism ×1.5, etc.),
+      // wonders, and tenets. Walls/fortify are linear flat adds, so they
+      // need a beefier die to keep defense-focused play viable against a
+      // snowballing Martial civ. d8 vs d6 is a ~29% uplift per die.
       // Siege Engineering (Science L30) lets attackers bypass wall dice but
       // does NOT bypass Fortify — digging in beats sapping.
       const attackRoll = Math.floor(Math.random() * 6) + 1;
@@ -473,7 +478,7 @@ export function executeAction(
       // Wall dice: target may carry a walls count. For the PLAYER's own
       // attack path, the defender is an NPC neighbor — we approximate their
       // walls with a small buffer based on their defense stat so even NPCs
-      // benefit from a d6 defense roll. 0-3 dice.
+      // benefit from a d8 defense roll. 0-3 dice.
       const defenderWallCount = Math.max(
         0,
         Math.min(3, Math.floor((target.defense || 0) / 3)),
@@ -481,14 +486,14 @@ export function executeAction(
       const hasBypass = state.civilization.stats.science >= 30; // Siege Engineering
       const wallDiceRolls = hasBypass
         ? []
-        : Array.from({ length: defenderWallCount }, () => Math.floor(Math.random() * 6) + 1);
+        : Array.from({ length: defenderWallCount }, () => Math.floor(Math.random() * 8) + 1);
 
       // Fortify dice — NPC neighbors don't accrue fortifyDice today, so this
       // is 0 for the player-attacks-NPC path. When Civ-vs-Civ pvp lands, the
       // defender's fortifyDice will flow through here too.
       const defenderFortifyStacks = 0;
       const fortifyDiceRolls = Array.from({ length: defenderFortifyStacks }, () =>
-        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 8) + 1,
       );
 
       const wallDiceSum = wallDiceRolls.reduce((a, b) => a + b, 0);
@@ -574,7 +579,7 @@ export function executeAction(
       const next = Math.min(FORTIFY_MAX, current + 1);
       const messages = current >= FORTIFY_MAX
         ? [`Defense Dice already at max (${FORTIFY_MAX}). Refreshed — they hold through next turn.`]
-        : [`Fortified! Defense Dice: ${current} → ${next}. You now roll +${next}d6 on every defense until decay.`];
+        : [`Fortified! Defense Dice: ${current} → ${next}. You now roll +${next}d8 on every defense until decay.`];
       return {
         messages,
         statChanges: { fortifyDice: next },
@@ -734,19 +739,21 @@ export function calculateIncome(state: GameState): {
     const raidRoll = Math.floor(Math.random() * 6) + 1;
     const raidPower = Math.floor(turnScale * 0.8) + raidRoll; // ~2-14 by late game
     // Wall dice + Fortify dice make the raid check meaningful: each Wall
-    // tile (up to 3) adds a d6, and each Fortify stack adds a d6. These are
+    // tile (up to 3) adds a d8, and each Fortify stack adds a d8. These are
     // the levers students have for "I'm a peaceful civ but I want to
-    // survive" — no need to build Martial, just dig in.
+    // survive" — no need to build Martial, just dig in. d8 (not d6) because
+    // Martial scales multiplicatively, and a linear defense mechanic needs
+    // a bigger die to keep up with late-game Martial stacks.
     const wallCount = Math.min(3, state.civilization.buildings.walls || 0);
-    const wallDiceRolls = Array.from({ length: wallCount }, () => Math.floor(Math.random() * 6) + 1);
+    const wallDiceRolls = Array.from({ length: wallCount }, () => Math.floor(Math.random() * 8) + 1);
     const fortifyStacks = currentFortify; // use the pre-decay value for THIS raid
-    const fortifyDiceRolls = Array.from({ length: fortifyStacks }, () => Math.floor(Math.random() * 6) + 1);
+    const fortifyDiceRolls = Array.from({ length: fortifyStacks }, () => Math.floor(Math.random() * 8) + 1);
     const wallSum = wallDiceRolls.reduce((a, b) => a + b, 0);
     const fortifySum = fortifyDiceRolls.reduce((a, b) => a + b, 0);
     const effectiveDef = (stats.martial || 0) + wallSum + fortifySum;
     const damage = Math.max(0, raidPower - effectiveDef);
     const defenseBreakdown = wallCount + fortifyStacks > 0
-      ? ` (Martial ${stats.martial} + ${wallCount}d6 walls [${wallDiceRolls.join('+') || 0}] + ${fortifyStacks}d6 fortify [${fortifyDiceRolls.join('+') || 0}])`
+      ? ` (Martial ${stats.martial} + ${wallCount}d8 walls [${wallDiceRolls.join('+') || 0}] + ${fortifyStacks}d8 fortify [${fortifyDiceRolls.join('+') || 0}])`
       : ` (Martial ${stats.martial})`;
     if (damage > 0) {
       const currentPop = changes.population ?? stats.population;
