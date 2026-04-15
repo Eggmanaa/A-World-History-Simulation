@@ -106,7 +106,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
         camera={{ position: [0, 45, 35], fov: 45, near: 1, far: 1000 }}
         dpr={dpr}
         gl={{
-          antialias: false, // SMAA in postprocessing handles this
+          antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.05,
           powerPreference: 'high-performance',
@@ -192,21 +192,9 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
             minPolarAngle={Math.PI / 6}
           />
 
-          {/* Post-processing — order matters: AA first so other passes see
-              clean edges, then color/contrast, then bloom on bright spots,
-              then vignette to draw the eye to the center of the map. */}
-          <EffectComposer multisampling={0}>
-            <SMAA />
-            <BrightnessContrast brightness={0.02} contrast={0.12} />
-            <HueSaturation saturation={0.12} hue={0} />
-            <Bloom
-              intensity={0.45}
-              luminanceThreshold={0.85}
-              luminanceSmoothing={0.3}
-              mipmapBlur
-            />
-            <Vignette eskil={false} offset={0.25} darkness={0.55} />
-          </EffectComposer>
+          {/* Post-processing temporarily disabled while we verify base
+              scene renders. iter-2 will reintroduce SMAA + Bloom + Vignette
+              once we confirm the EffectComposer compositing issue. */}
         </Suspense>
       </Canvas>
 
