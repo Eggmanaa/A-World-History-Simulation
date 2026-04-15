@@ -218,18 +218,13 @@ export const StudentDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Base Stats */}
+                  {/* Base Stats — Defense folded into Martial so we show
+                      the combined combat strength, not two separate numbers. */}
                   <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-slate-400">Martial:</span>
                       <span className="ml-2 font-semibold text-red-400">
-                        {selectedCiv.baseStats.martial}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Defense:</span>
-                      <span className="ml-2 font-semibold text-blue-400">
-                        {selectedCiv.baseStats.defense}
+                        {selectedCiv.baseStats.martial + (selectedCiv.baseStats.defense || 0)}
                       </span>
                     </div>
                     <div>
@@ -242,6 +237,12 @@ export const StudentDashboard: React.FC = () => {
                       <span className="text-slate-400">Industry:</span>
                       <span className="ml-2 font-semibold text-yellow-400">
                         {selectedCiv.baseStats.industry}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Fertility:</span>
+                      <span className="ml-2 font-semibold text-green-400">
+                        {selectedCiv.baseStats.fertility}
                       </span>
                     </div>
                   </div>
@@ -347,15 +348,11 @@ export const StudentDashboard: React.FC = () => {
                         ))}
                       </div>
 
-                      {/* Stats Grid */}
+                      {/* Stats Grid — Defense folded into Martial */}
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <span className="text-slate-500">Martial</span>
-                          <p className="font-semibold text-red-400">{civ.baseStats.martial}</p>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Defense</span>
-                          <p className="font-semibold text-blue-400">{civ.baseStats.defense}</p>
+                          <p className="font-semibold text-red-400">{civ.baseStats.martial + (civ.baseStats.defense || 0)}</p>
                         </div>
                         <div>
                           <span className="text-slate-500">Faith</span>
@@ -364,6 +361,10 @@ export const StudentDashboard: React.FC = () => {
                         <div>
                           <span className="text-slate-500">Industry</span>
                           <p className="font-semibold text-yellow-400">{civ.baseStats.industry}</p>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Fertility</span>
+                          <p className="font-semibold text-green-400">{civ.baseStats.fertility}</p>
                         </div>
                       </div>
 

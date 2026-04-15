@@ -1059,8 +1059,7 @@ export const RespawnPanel: React.FC<{
                 <p className="text-[10px] text-slate-400">{civ.region}</p>
                 <p className="text-[10px] text-amber-400 mt-1">{civ.trait}</p>
                 <div className="flex gap-2 mt-1 text-[10px] text-slate-500">
-                  <span>M:{civ.baseStats.martial}</span>
-                  <span>D:{civ.baseStats.defense}</span>
+                  <span>M:{civ.baseStats.martial + (civ.baseStats.defense || 0)}</span>
                   <span>PI:{civ.baseStats.productionIncome}</span>
                   <span>SY:{civ.baseStats.scienceYield}</span>
                   <span>CY:{civ.baseStats.cultureYield}</span>

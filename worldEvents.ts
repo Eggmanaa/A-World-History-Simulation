@@ -30,7 +30,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         effects: [
           { type: 'modify_yield', stat: 'industry', value: 1, condition: 'river_civ', message: '+1 Production Income (river bonus).' },
           { type: 'modify_stat', stat: 'capacity', value: 1, message: '+1 Capacity from fertile land.' },
-          { type: 'modify_stat', stat: 'defense', value: -1, message: '-1 Defense (flat riverbanks are hard to defend).' },
+          { type: 'modify_stat', stat: 'martial', value: -1, message: '-1 Martial (flat riverbanks are hard to defend).' },
         ],
       },
       {
@@ -38,7 +38,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Fortify the Hilltop',
         description: 'Choose defensible high ground for your settlement.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 2, message: '+2 Defense from high ground.' },
+          { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial from high ground.' },
           { type: 'modify_stat', stat: 'martial', value: 1, message: '+1 Martial from strategic position.' },
           { type: 'modify_stat', stat: 'capacity', value: -1, message: '-1 Capacity (rocky hilltops have poor farmland).' },
         ],
@@ -58,7 +58,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'mesopotamia', name: 'Garden Between Two Rivers', description: 'The Tigris and Euphrates provide abundant resources.', effects: [{ type: 'modify_yield', stat: 'industry', value: 1, message: 'Mesopotamia: +1 Production Income from twin rivers.' }] },
       { civId: 'china', name: 'Yellow River Basin', description: 'Rich loess soil along the Yellow River supports early farming.', effects: [{ type: 'modify_yield', stat: 'science', value: 1, message: 'China: +1 Science Yield from early innovations.' }] },
       { civId: 'ethiopia', name: 'Highland Terrace Farming', description: 'Ethiopia develops unique highland terracing for agriculture.', effects: [{ type: 'modify_yield', stat: 'industry', value: 1, message: 'Ethiopia: +1 Production Income from terrace farming.' }] },
-      { civId: 'korea', name: 'Peninsular Resources', description: 'The Korean peninsula offers rich coastal and mountain resources.', effects: [{ type: 'modify_stat', stat: 'defense', value: 2, message: 'Korea: +2 Defense from peninsular geography.' }] },
+      { civId: 'korea', name: 'Peninsular Resources', description: 'The Korean peninsula offers rich coastal and mountain resources.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Korea: +2 Martial from peninsular geography.' }] },
     ],
     unlocks: [],
   },
@@ -100,7 +100,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         effects: [
           { type: 'modify_stat', stat: 'productionPool', value: 3, message: '+3 Production Pool from stored surplus.' },
           { type: 'modify_yield', stat: 'culture', value: 1, message: '+1 Culture Yield from craft traditions.' },
-          { type: 'modify_stat', stat: 'defense', value: -1, message: '-1 Defense (resources spent on crafts, not walls).' },
+          { type: 'modify_stat', stat: 'martial', value: -1, message: '-1 Martial (resources spent on crafts, not walls).' },
         ],
       },
     ],
@@ -118,15 +118,15 @@ export const WORLD_EVENTS: WorldEvent[] = [
     era: 'Ancient',
     description: 'As settlements grow wealthy, so does the need to protect them. Fortification techniques spread across the ancient world.',
     globalEffects: [
-      { type: 'modify_stat', stat: 'defense', value: 1, message: 'All civilizations gain +1 Defense from basic fortifications.' },
+      { type: 'modify_stat', stat: 'martial', value: 1, message: 'All civilizations gain +1 Martial from basic fortifications.' },
     ],
     choices: [
       {
         id: 'A',
-        label: 'Build Defenses',
+        label: 'Fortify Military',
         description: 'Invest in walls and watchtowers.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 3, message: '+3 Defense this turn.' },
+          { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial this turn.' },
           { type: 'modify_stat', stat: 'productionPool', value: -2, message: '-2 Production Pool (wall construction is expensive).' },
         ],
       },
@@ -136,7 +136,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Use the peace to grow your population.',
         effects: [
           { type: 'modify_stat', stat: 'population', value: 2, message: '+2 Population from expansion.' },
-          { type: 'modify_stat', stat: 'defense', value: -1, message: '-1 Defense (spread too thin to defend).' },
+          { type: 'modify_stat', stat: 'martial', value: -1, message: '-1 Martial (spread too thin to defend).' },
         ],
       },
       {
@@ -179,7 +179,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Migrate to Higher Ground',
         description: 'Move settlements to safer locations.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 2, message: '+2 Defense from elevated position.' },
+          { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial from elevated position.' },
           { type: 'lose_population', value: 1, message: '-1 Population from migration hardship.' },
         ],
       },
@@ -239,14 +239,14 @@ export const WORLD_EVENTS: WorldEvent[] = [
         effects: [
           { type: 'modify_stat', stat: 'culture', value: 2, message: '+2 Culture Total from trade connections.' },
           { type: 'modify_stat', stat: 'productionPool', value: 2, message: '+2 Production Pool from trade profits.' },
-          { type: 'modify_stat', stat: 'defense', value: -1, message: '-1 Defense (your neighbors now have bronze too).' },
+          { type: 'modify_stat', stat: 'martial', value: -1, message: '-1 Martial (your neighbors now have bronze too).' },
         ],
       },
     ],
     civSpecificEvents: [
       { civId: 'greece', name: 'Hoplite Tradition', description: 'Greek city-states develop citizen-soldier armies.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Greece: +2 Martial from hoplite tradition.' }] },
       { civId: 'anatolia', name: 'Iron-Rich Mountains', description: 'Anatolia\'s mountains hold precious metal deposits.', effects: [{ type: 'modify_yield', stat: 'industry', value: 1, message: 'Anatolia: +1 Production Income from mountain mines.' }] },
-      { civId: 'troy', name: 'Walls of Ilium', description: 'Troy builds legendary fortifications controlling the Hellespont.', effects: [{ type: 'modify_stat', stat: 'defense', value: 4, message: 'Troy: +4 Defense from legendary walls.' }] },
+      { civId: 'troy', name: 'Walls of Ilium', description: 'Troy builds legendary fortifications controlling the Hellespont.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Troy: +4 Martial from legendary walls.' }] },
       { civId: 'scythia', name: 'Horse Lords of the Steppe', description: 'Scythian riders master mounted archery on the open plains.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Scythia: +3 Martial from mounted archery.' }] },
       { civId: 'olmec', name: 'Colossal Heads', description: 'The Olmec create massive stone heads honoring their rulers.', effects: [{ type: 'modify_stat', stat: 'culture', value: 3, message: 'Olmec: +3 Culture Total from monumental art.' }] },
     ],
@@ -312,7 +312,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Invest resources toward building a World Wonder.',
         effects: [
           { type: 'modify_stat', stat: 'productionPool', value: 5, message: '+5 Production Pool for wonder investment.' },
-          { type: 'modify_stat', stat: 'defense', value: -2, message: '-2 Defense (workers pulled from border patrol).' },
+          { type: 'modify_stat', stat: 'martial', value: -2, message: '-2 Martial (workers pulled from border patrol).' },
         ],
       },
       {
@@ -356,7 +356,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Fortify Against Raiders',
         description: 'Build walls and train militia to defend your people.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 4, message: '+4 Defense from fortifications.' },
+          { type: 'modify_stat', stat: 'martial', value: 4, message: '+4 Martial from fortifications.' },
         ],
       },
       {
@@ -454,7 +454,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Build up military strength and alliances.',
         effects: [
           { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial.' },
-          { type: 'modify_stat', stat: 'defense', value: 1, message: '+1 Defense.' },
+          { type: 'modify_stat', stat: 'martial', value: 1, message: '+1 Martial.' },
           { type: 'modify_stat', stat: 'culture', value: -2, message: '-2 Culture Total (empire building crushes local traditions).' },
         ],
       },
@@ -509,7 +509,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Defensive Pact',
         description: 'Strengthen defenses and seek allies.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 3, message: '+3 Defense from fortifications.' },
+          { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial from fortifications.' },
           { type: 'modify_stat', stat: 'culture', value: -1, message: '-1 Culture Total (fear replaces creativity).' },
         ],
       },
@@ -603,7 +603,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Stand with the defenders of freedom.',
         effects: [
           { type: 'modify_stat', stat: 'culture', value: 3, message: '+3 Culture Total from defending freedom.' },
-          { type: 'modify_stat', stat: 'defense', value: 2, message: '+2 Defense from Greek tactics.' },
+          { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial from Greek tactics.' },
           { type: 'lose_population', value: 1, message: '-1 Population (war casualties).' },
         ],
       },
@@ -618,8 +618,8 @@ export const WORLD_EVENTS: WorldEvent[] = [
       },
     ],
     civSpecificEvents: [
-      { civId: 'sparta', name: 'Thermopylae', description: '300 Spartans hold the pass against the Persian horde.', effects: [{ type: 'modify_stat', stat: 'defense', value: 8, message: 'Sparta: +8 Defense this turn (Thermopylae).' }, { type: 'modify_stat', stat: 'culture', value: 5, message: 'Sparta: +5 Culture Total from legendary last stand.' }] },
-      { civId: 'greece', name: 'Fleet of Salamis', description: 'Athens builds the fleet that will save Greece.', effects: [{ type: 'modify_stat', stat: 'defense', value: 4, message: 'Greece: +4 Defense from naval superiority.' }] },
+      { civId: 'sparta', name: 'Thermopylae', description: '300 Spartans hold the pass against the Persian horde.', effects: [{ type: 'modify_stat', stat: 'martial', value: 8, message: 'Sparta: +8 Martial this turn (Thermopylae).' }, { type: 'modify_stat', stat: 'culture', value: 5, message: 'Sparta: +5 Culture Total from legendary last stand.' }] },
+      { civId: 'greece', name: 'Fleet of Salamis', description: 'Athens builds the fleet that will save Greece.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Greece: +4 Martial from naval superiority.' }] },
       { civId: 'persia', name: 'March of the Immortals', description: 'Persia\'s elite soldiers lead the invasion.', effects: [{ type: 'modify_stat', stat: 'martial', value: 5, message: 'Persia: +5 Martial for the invasion.' }] },
     ],
     unlocks: ['wonders_classical'],
@@ -702,14 +702,14 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Prepare While Others Fight',
         description: 'Use the distraction to strengthen your position.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 2, message: '+2 Defense.' },
+          { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial.' },
           { type: 'modify_stat', stat: 'productionPool', value: 3, message: '+3 Production Pool.' },
         ],
       },
     ],
     civSpecificEvents: [
       { civId: 'macedon', name: 'Alexander\'s Conquest', description: 'Alexander leads Macedonia to unprecedented glory.', effects: [{ type: 'modify_stat', stat: 'martial', value: 10, message: 'Macedonia: +10 Martial (Alexander\'s Conquest).' }, { type: 'modify_stat', stat: 'culture', value: 5, message: 'Macedonia: +5 Culture Total.' }] },
-      { civId: 'persia', name: 'Fall of Persepolis', description: 'The Persian capital falls to Alexander.', effects: [{ type: 'modify_stat', stat: 'martial', value: -3, message: 'Persia: -3 Martial from defeat.' }, { type: 'modify_stat', stat: 'defense', value: -2, message: 'Persia: -2 Defense.' }] },
+      { civId: 'persia', name: 'Fall of Persepolis', description: 'The Persian capital falls to Alexander.', effects: [{ type: 'modify_stat', stat: 'martial', value: -3, message: 'Persia: -3 Martial from defeat.' }, { type: 'modify_stat', stat: 'martial', value: -2, message: 'Persia: -2 Martial.' }] },
     ],
     unlocks: [],
   },
@@ -780,7 +780,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Back the disciplined Roman legions.',
         effects: [
           { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial from Roman military doctrine.' },
-          { type: 'modify_stat', stat: 'defense', value: 1, message: '+1 Defense.' },
+          { type: 'modify_stat', stat: 'martial', value: 1, message: '+1 Martial.' },
           { type: 'modify_stat', stat: 'culture', value: -1, message: '-1 Culture Total (Roman allies lose cultural autonomy).' },
         ],
       },
@@ -791,7 +791,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         effects: [
           { type: 'modify_stat', stat: 'productionPool', value: 3, message: '+3 Production Pool from Carthaginian trade.' },
           { type: 'modify_stat', stat: 'culture', value: 1, message: '+1 Culture Total.' },
-          { type: 'modify_stat', stat: 'defense', value: -1, message: '-1 Defense (Carthage demands troops for its war).' },
+          { type: 'modify_stat', stat: 'martial', value: -1, message: '-1 Martial (Carthage demands troops for its war).' },
         ],
       },
       {
@@ -826,7 +826,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Ally with Rome',
         description: 'Gain protection, but at the cost of independence.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 3, message: '+3 Defense from Roman protection.' },
+          { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial from Roman protection.' },
           { type: 'modify_stat', stat: 'culture', value: -1, message: '-1 Culture Total from Romanization.' },
         ],
       },
@@ -836,7 +836,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Fight for your independence.',
         effects: [
           { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial from war mobilization.' },
-          { type: 'modify_stat', stat: 'defense', value: 2, message: '+2 Defense from fortifications.' },
+          { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial from fortifications.' },
         ],
       },
       {
@@ -851,7 +851,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       },
     ],
     civSpecificEvents: [
-      { civId: 'carthage', name: 'Carthage\'s Last Stand', description: 'Carthage makes a desperate final defense.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Carthage: +3 Martial (last stand).' }, { type: 'modify_stat', stat: 'defense', value: 3, message: 'Carthage: +3 Defense.' }] },
+      { civId: 'carthage', name: 'Carthage\'s Last Stand', description: 'Carthage makes a desperate final defense.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Carthage: +3 Martial (last stand).' }, { type: 'modify_stat', stat: 'martial', value: 3, message: 'Carthage: +3 Martial.' }] },
     ],
     unlocks: [],
   },
@@ -878,7 +878,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Consolidate Power',
         description: 'Strengthen what you already have.',
         effects: [
-          { type: 'modify_stat', stat: 'defense', value: 2, message: '+2 Defense.' },
+          { type: 'modify_stat', stat: 'martial', value: 2, message: '+2 Martial.' },
           { type: 'modify_yield', stat: 'industry', value: 1, message: '+1 Production Income.' },
           { type: 'modify_stat', stat: 'culture', value: -1, message: '-1 Culture Total (authoritarian rule stifles creativity).' },
         ],
@@ -889,7 +889,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Invest in art, literature, and philosophy.',
         effects: [
           { type: 'modify_stat', stat: 'culture', value: 4, message: '+4 Culture Total from cultural investment.' },
-          { type: 'modify_stat', stat: 'defense', value: -2, message: '-2 Defense (decadence weakens military discipline).' },
+          { type: 'modify_stat', stat: 'martial', value: -2, message: '-2 Martial (decadence weakens military discipline).' },
         ],
       },
     ],
@@ -898,7 +898,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'korea', name: 'Three Kingdoms of Korea', description: 'Goguryeo, Baekje, and Silla compete for dominance.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Korea: +2 Martial from military competition.' }, { type: 'modify_stat', stat: 'science', value: 2, message: 'Korea: +2 Science Total from scholarly tradition.' }] },
       { civId: 'khmer', name: 'Funan Kingdom', description: 'The Khmer-influenced Funan kingdom controls vital trade routes.', effects: [{ type: 'modify_stat', stat: 'productionPool', value: 3, message: 'Khmer: +3 Production Pool from maritime trade.' }, { type: 'modify_stat', stat: 'culture', value: 2, message: 'Khmer: +2 Culture Total from Indianized culture.' }] },
       { civId: 'ethiopia', name: 'Rise of Aksum', description: 'The Kingdom of Aksum becomes a major trading power.', effects: [{ type: 'modify_stat', stat: 'productionPool', value: 3, message: 'Ethiopia: +3 Production Pool from Red Sea trade.' }, { type: 'modify_stat', stat: 'faith', value: 2, message: 'Ethiopia: +2 Faith Total from early Christianity.' }] },
-      { civId: 'gaul', name: 'Vercingetorix\'s Stand', description: 'Gaul unites under a single chieftain against Roman invasion.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Gaul: +2 Martial from tribal unity.' }, { type: 'modify_stat', stat: 'defense', value: 3, message: 'Gaul: +3 Defense from fortified positions.' }] },
+      { civId: 'gaul', name: 'Vercingetorix\'s Stand', description: 'Gaul unites under a single chieftain against Roman invasion.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Gaul: +2 Martial from tribal unity.' }, { type: 'modify_stat', stat: 'martial', value: 3, message: 'Gaul: +3 Martial from fortified positions.' }] },
     ],
     unlocks: [],
   },
@@ -945,7 +945,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       },
     ],
     civSpecificEvents: [
-      { civId: 'israel', name: 'Maccabean Revolt', description: 'Israel fights for religious freedom.', effects: [{ type: 'modify_stat', stat: 'faith', value: 3, message: 'Israel: +3 Faith Total.' }, { type: 'modify_stat', stat: 'defense', value: 2, message: 'Israel: +2 Defense.' }] },
+      { civId: 'israel', name: 'Maccabean Revolt', description: 'Israel fights for religious freedom.', effects: [{ type: 'modify_stat', stat: 'faith', value: 3, message: 'Israel: +3 Faith Total.' }, { type: 'modify_stat', stat: 'martial', value: 2, message: 'Israel: +2 Martial.' }] },
     ],
     unlocks: ['wonders_late'],
   },
@@ -1036,7 +1036,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       },
     ],
     civSpecificEvents: [
-      { civId: 'rome', name: 'Pax Romana', description: 'The Roman Empire reaches its peak of power and stability.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial.' }, { type: 'modify_stat', stat: 'defense', value: 3, message: 'Rome: +3 Defense.' }] },
+      { civId: 'rome', name: 'Pax Romana', description: 'The Roman Empire reaches its peak of power and stability.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial.' }, { type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial.' }] },
       { civId: 'israel', name: 'Birth of Christianity', description: 'A new faith emerges from the land of Israel.', effects: [{ type: 'modify_stat', stat: 'faith', value: 5, message: 'Israel: +5 Faith Total (birthplace of Christianity).' }] },
     ],
     unlocks: ['christianity'],
@@ -1082,7 +1082,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     ],
     civSpecificEvents: [
       { civId: 'rome', name: 'Antonine Plague', description: 'Rome suffers catastrophic plague losses.', effects: [{ type: 'lose_population', value: 2, message: 'Rome: -2 additional Population from Antonine Plague.' }] },
-      { civId: 'mesopotamia', name: 'Earthquake', description: 'A massive earthquake devastates Mesopotamia.', effects: [{ type: 'modify_stat', stat: 'martial', value: -2, message: 'Mesopotamia: -2 Martial.' }, { type: 'modify_stat', stat: 'defense', value: -2, message: 'Mesopotamia: -2 Defense.' }] },
+      { civId: 'mesopotamia', name: 'Earthquake', description: 'A massive earthquake devastates Mesopotamia.', effects: [{ type: 'modify_stat', stat: 'martial', value: -2, message: 'Mesopotamia: -2 Martial.' }, { type: 'modify_stat', stat: 'martial', value: -2, message: 'Mesopotamia: -2 Martial.' }] },
     ],
     unlocks: [],
   },
@@ -1103,7 +1103,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
         description: 'Stand your ground and defend your civilization.',
         effects: [
           { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial for the final battle.' },
-          { type: 'modify_stat', stat: 'defense', value: 3, message: '+3 Defense for the final battle.' },
+          { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial for the final battle.' },
         ],
       },
       {

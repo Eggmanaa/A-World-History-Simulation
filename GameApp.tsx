@@ -123,7 +123,7 @@ const STAT_EXPLANATIONS: Record<string, {
 }> = {
   martial: {
     title: 'Martial',
-    body: 'Your unified combat stat — used for BOTH attack rolls and defense against raids. Every former Defense source (walls, terrain, Archimedes Tower, cultural prestige, Holy War, Masonry tech, peace treaties) is now folded into Martial so a single number tells you how strong your civ is in combat.',
+    body: 'Your unified combat stat — used for BOTH attack rolls and defense against raids. Walls, terrain, Archimedes Tower, cultural prestige, Holy War, Masonry tech, and peace treaties all feed directly into Martial, so a single number tells you how strong your civ is in combat.',
     raise: [
       'Population: every 4 pop adds +1 Martial (citizen militia).',
       'Build Barracks (+3 each) or Walls (+1 each, +2 with Troy) — all stack into Martial.',
@@ -136,7 +136,7 @@ const STAT_EXPLANATIONS: Record<string, {
       'Trait bonus: Strength doubles your Martial total.',
       'Cultural Stages (Imperial/Modern) scale Martial.',
     ],
-    affects: ['Attack rolls (vs target Martial + Defense)', 'Raid mitigation each turn', 'Conquest victory progress'],
+    affects: ['Attack rolls (vs target Martial)', 'Raid mitigation each turn', 'Conquest victory progress'],
   },
   faith: {
     title: 'Faith',
@@ -151,7 +151,7 @@ const STAT_EXPLANATIONS: Record<string, {
   },
   culture: {
     title: 'Culture',
-    body: 'Arts, customs, and identity. Drives progression through Cultural Stages and contributes directly to the Legacy victory score. Also grants passive Cultural Prestige bonuses to Defense and Diplomacy.',
+    body: 'Arts, customs, and identity. Drives progression through Cultural Stages and contributes directly to the Legacy victory score. Also grants passive Cultural Prestige bonuses to Martial and Diplomacy.',
     raise: [
       'Develop action: +Culture Yield and +2 per Amphitheatre.',
       'Amphitheatres give +3 base Culture.',
@@ -161,7 +161,7 @@ const STAT_EXPLANATIONS: Record<string, {
       'Cultural treaties: +2 Culture per active treaty.',
       'Trait bonus: Creativity doubles Culture.',
     ],
-    affects: ['Cultural Stage progression', 'Legacy victory score', 'Cultural Prestige passive bonuses (Defense, Diplomacy)'],
+    affects: ['Cultural Stage progression', 'Legacy victory score', 'Cultural Prestige passive bonuses (Martial, Diplomacy)'],
   },
   science: {
     title: 'Science',
@@ -2608,7 +2608,7 @@ const App: React.FC = () => {
     let resultMsg = "";
     const wallEffectMsg =
       estimatedWalls > 0
-        ? ` Enemy walls added +${wallBonus} defense (${estimatedWalls} walls)${wallNote}.`
+        ? ` Enemy walls added +${wallBonus} martial (${estimatedWalls} walls)${wallNote}.`
         : "";
 
     // Remove peace treaty if violated
@@ -3150,7 +3150,7 @@ const App: React.FC = () => {
                 <div>
                   <div className="font-bold text-lg">Peace Treaty</div>
                   <div className="text-sm text-slate-300">
-                    Cannot attack for 3 turns. +1 Defense.
+                    Cannot attack for 3 turns. +1 Martial.
                   </div>
                 </div>
               </button>
@@ -4136,10 +4136,10 @@ const App: React.FC = () => {
                       {neighbor && (
                         <div className="grid grid-cols-2 gap-1 text-xs mb-2">
                           <span className="text-red-400">
-                            Martial: {neighbor.martial}
+                            Martial: {neighbor.martial + (neighbor.defense || 0)}
                           </span>
-                          <span className="text-blue-400">
-                            Defense: {neighbor.defense}
+                          <span className="text-purple-400">
+                            Faith: {neighbor.faith}
                           </span>
                         </div>
                       )}
@@ -4669,15 +4669,6 @@ const App: React.FC = () => {
                       Martial
                     </span>
                     <b>{civ.stats.martial}</b>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-800 pb-1">
-                    <span
-                      className="text-blue-400"
-                      title="Your ability to protect your people. Includes terrain bonuses."
-                    >
-                      Defense
-                    </span>
-                    <b>{civ.stats.defense}</b>
                   </div>
                   <div className="flex justify-between border-b border-slate-800 pb-1">
                     <span
