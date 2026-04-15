@@ -137,7 +137,9 @@ const STAT_EXPLANATIONS: Record<string, {
     body: 'Your unified combat stat — used for BOTH attack rolls and defense against raids. Walls, terrain, Archimedes Tower, cultural prestige, Holy War, Masonry tech, and peace treaties all feed directly into Martial, so a single number tells you how strong your civ is in combat.',
     raise: [
       'Population: every 4 pop adds +1 Martial (citizen militia).',
-      'Build Barracks (+3 each) or Walls (+1 each, +2 with Troy) — all stack into Martial.',
+      'Build Barracks (+3 each) or Walls (+3 each, +6 with Troy) — all stack into Martial.',
+      'Each Wall tile also adds +1d8 to every defense roll (raids + incoming attacks), up to 3 dice.',
+      'Fortify action: +1 Defense Die (d8), stacks to 3, decays by 1 each turn.',
       'Archimedes Tower gives +20 Martial (requires 30 Science).',
       'Terrain: mountains, hills, islands, and rivers contribute Martial.',
       'Science: Bronze Working +3, Masonry +2, Steel +5, Siege Engineering +2, Iron Working path +5.',
@@ -3970,7 +3972,7 @@ const App: React.FC = () => {
                     { type: BuildingType.Library,     name: 'Library',     cost: 10, icon: FlaskConical, color: 'cyan',    effect: '+2 Sci Yield' },
                     { type: BuildingType.Barracks,    name: 'Barracks',    cost: 10, icon: Sword,        color: 'red',     effect: '+3 Martial' },
                     { type: BuildingType.Temple,      name: 'Temple',      cost: 10, icon: Landmark,     color: 'blue',    effect: '+2 Faith, +1 Faith Yield' },
-                    { type: BuildingType.Wall,        name: 'Wall',        cost: 10, icon: BrickWall,    color: 'slate',   effect: '+1 Martial (fortifications)' },
+                    { type: BuildingType.Wall,        name: 'Wall',        cost: 10, icon: BrickWall,    color: 'slate',   effect: '+3 Martial, +1 Cap, +1d8 on defense (max 3)' },
                     { type: BuildingType.Amphitheatre, name: 'Amphitheatre', cost: 10, icon: Users,      color: 'pink',    effect: '+2 Culture Yield, +3 Culture' },
                     { type: BuildingType.ArchimedesTower, name: 'Archimedes Tower', cost: 20, icon: TowerControl, color: 'purple', effect: '+20 Martial (needs 30 Sci)' },
                   ];
