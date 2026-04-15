@@ -1,9 +1,9 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, SoftShadows, Environment, Sky } from '@react-three/drei';
+import { OrbitControls, SoftShadows } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette, SMAA, BrightnessContrast, HueSaturation } from '@react-three/postprocessing';
-import { ACESFilmicToneMapping, SRGBColorSpace } from 'three';
+import * as THREE from 'three';
 import { TileData, BuildingType } from '../types';
 import { HexTile3D, House3D, Farm3D, Workshop3D, Library3D, Barracks3D, Temple3D, Wall3D, Amphitheatre3D, Wonder3D, ArchimedesTower3D } from './Models';
 
@@ -41,7 +41,6 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
     let lastDistance = 0;
 
     const handleTouchMove = (e: TouchEvent) => {
-      // Multi-touch pinch to zoom
       if (e.touches.length === 2) {
         e.preventDefault();
         const touch1 = e.touches[0];
@@ -81,7 +80,6 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
     };
   }, [isTouch]);
 
-  // Calculate device pixel ratio cap (2 max for Retina iPads)
   const dpr = Math.min(window.devicePixelRatio, 2);
 
   // Pre-compute organic jitter (rotation + tiny scale variance) per tile so
@@ -108,106 +106,108 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
         camera={{ position: [0, 45, 35], fov: 45, near: 1, far: 1000 }}
         dpr={dpr}
         gl={{
-          antialias: false, // SMAA handles this in the post-process pass
-          toneMapping: ACESFilmicToneMapping,
+          antialias: false, // SMAA in postprocessing handles this
+          toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.05,
-          outputColorSpace: SRGBColorSpace,
           powerPreference: 'high-performance',
         }}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+        }}
       >
-        {/* Atmospheric backdrop — gradient sky beats flat black for depth */}
-        <color attach="background" args={['#1e3a5f']} />
-        <fog attach="fog" args={['#1e3a5f', 60, 120]} />
+        <Suspense fallback={null}>
+          {/* Atmospheric backdrop — gradient sky beats flat black for depth */}
+          <color attach="background" args={['#1e3a5f']} />
+          <fog attach="fog" args={['#1e3a5f', 60, 120]} />
 
-        {/* HDRI-like environment lighting via Drei preset — gives surfaces
-            real reflections and global illumination instead of flat shading. */}
-        <Environment preset="sunset" background={false} environmentIntensity={0.5} />
+          {/* Hemisphere fill: warm sun-lit top, cool sky-bounced bottom.
+              Cheap GI approximation that makes biomes pop. */}
+          <hemisphereLight args={['#ffd9a8', '#1e3a5f', 0.7]} />
 
-        {/* Hemisphere fill: warm sun-lit top, cool sky-bounced bottom.
-            Cheap GI approximation that makes biomes pop. */}
-        <hemisphereLight args={['#ffd9a8', '#1e3a5f', 0.7]} />
+          <ambientLight intensity={0.35} />
 
-        {/* Key directional light = sun. Stronger and warmer than baseline. */}
-        <directionalLight
-          position={[25, 50, 20]}
-          intensity={2.2}
-          color="#fff5d6"
-          castShadow
-          shadow-mapSize={[4096, 4096]}
-          shadow-bias={-0.0005}
-          shadow-camera-left={-40}
-          shadow-camera-right={40}
-          shadow-camera-top={40}
-          shadow-camera-bottom={-40}
-        />
-
-        {/* Cool rim light from opposite side for separation */}
-        <directionalLight position={[-20, 25, -20]} intensity={0.4} color="#a3c9ff" />
-
-        <pointLight position={[-15, 15, -15]} intensity={0.4} color="#bfdbfe" />
-        <pointLight position={[15, 10, -15]} intensity={0.25} color="#fef3c7" />
-
-        <group position={[0, -2, 0]} rotation={[0, Math.PI / 6, 0]}>
-          {tiles.map((tile, idx) => {
-            const j = tileJitter[idx];
-            return (
-              <group
-                key={tile.id}
-                rotation={[0, j.rotY, 0]}
-                scale={[j.scale, 1, j.scale]}
-                onPointerOver={(e) => { e.stopPropagation(); setHoveredId(tile.id); }}
-                onPointerOut={(e) => { e.stopPropagation(); setHoveredId(null); }}
-              >
-                <HexTile3D
-                  x={tile.x}
-                  z={tile.z}
-                  terrain={tile.terrain}
-                  isHovered={hoveredId === tile.id}
-                  onClick={() => onTileClick(tile.id)}
-                />
-                {tile.building === BuildingType.House && <House3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Farm && <Farm3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Workshop && <Workshop3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Library && <Library3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Barracks && <Barracks3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Temple && <Temple3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Wall && <Wall3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Amphitheatre && <Amphitheatre3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.Wonder && <Wonder3D position={[tile.x, 0, tile.z]} />}
-                {tile.building === BuildingType.ArchimedesTower && <ArchimedesTower3D position={[tile.x, 0, tile.z]} />}
-              </group>
-            );
-          })}
-        </group>
-
-        <SoftShadows size={4} samples={12} focus={0.6} />
-
-        <OrbitControls
-          enablePan={true}
-          enableZoom={true}
-          enableDamping={true}
-          dampingFactor={0.05}
-          minDistance={10}
-          maxDistance={60}
-          maxPolarAngle={Math.PI / 2.5}
-          minPolarAngle={Math.PI / 6}
-        />
-
-        {/* Post-processing — order matters: AA first so other passes see
-            clean edges, then color/contrast, then bloom on bright spots,
-            then vignette to draw the eye to the center of the map. */}
-        <EffectComposer multisampling={0}>
-          <SMAA />
-          <BrightnessContrast brightness={0.02} contrast={0.12} />
-          <HueSaturation saturation={0.12} hue={0} />
-          <Bloom
-            intensity={0.45}
-            luminanceThreshold={0.85}
-            luminanceSmoothing={0.3}
-            mipmapBlur
+          {/* Key directional light = sun. Stronger and warmer than baseline. */}
+          <directionalLight
+            position={[25, 50, 20]}
+            intensity={2.0}
+            color="#fff5d6"
+            castShadow
+            shadow-mapSize={[4096, 4096]}
+            shadow-bias={-0.0005}
+            shadow-camera-left={-40}
+            shadow-camera-right={40}
+            shadow-camera-top={40}
+            shadow-camera-bottom={-40}
           />
-          <Vignette eskil={false} offset={0.25} darkness={0.55} />
-        </EffectComposer>
+
+          {/* Cool rim light from opposite side for separation */}
+          <directionalLight position={[-20, 25, -20]} intensity={0.4} color="#a3c9ff" />
+
+          <pointLight position={[-15, 15, -15]} intensity={0.4} color="#bfdbfe" />
+          <pointLight position={[15, 10, -15]} intensity={0.25} color="#fef3c7" />
+
+          <group position={[0, -2, 0]} rotation={[0, Math.PI / 6, 0]}>
+            {tiles.map((tile, idx) => {
+              const j = tileJitter[idx];
+              return (
+                <group
+                  key={tile.id}
+                  rotation={[0, j.rotY, 0]}
+                  scale={[j.scale, 1, j.scale]}
+                  onPointerOver={(e) => { e.stopPropagation(); setHoveredId(tile.id); }}
+                  onPointerOut={(e) => { e.stopPropagation(); setHoveredId(null); }}
+                >
+                  <HexTile3D
+                    x={tile.x}
+                    z={tile.z}
+                    terrain={tile.terrain}
+                    isHovered={hoveredId === tile.id}
+                    onClick={() => onTileClick(tile.id)}
+                  />
+                  {tile.building === BuildingType.House && <House3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Farm && <Farm3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Workshop && <Workshop3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Library && <Library3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Barracks && <Barracks3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Temple && <Temple3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Wall && <Wall3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Amphitheatre && <Amphitheatre3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.Wonder && <Wonder3D position={[tile.x, 0, tile.z]} />}
+                  {tile.building === BuildingType.ArchimedesTower && <ArchimedesTower3D position={[tile.x, 0, tile.z]} />}
+                </group>
+              );
+            })}
+          </group>
+
+          <SoftShadows size={4} samples={12} focus={0.6} />
+
+          <OrbitControls
+            enablePan={true}
+            enableZoom={true}
+            enableDamping={true}
+            dampingFactor={0.05}
+            minDistance={10}
+            maxDistance={60}
+            maxPolarAngle={Math.PI / 2.5}
+            minPolarAngle={Math.PI / 6}
+          />
+
+          {/* Post-processing — order matters: AA first so other passes see
+              clean edges, then color/contrast, then bloom on bright spots,
+              then vignette to draw the eye to the center of the map. */}
+          <EffectComposer multisampling={0}>
+            <SMAA />
+            <BrightnessContrast brightness={0.02} contrast={0.12} />
+            <HueSaturation saturation={0.12} hue={0} />
+            <Bloom
+              intensity={0.45}
+              luminanceThreshold={0.85}
+              luminanceSmoothing={0.3}
+              mipmapBlur
+            />
+            <Vignette eskil={false} offset={0.25} darkness={0.55} />
+          </EffectComposer>
+        </Suspense>
       </Canvas>
 
       <div className="absolute bottom-4 left-4 bg-black/70 text-slate-300 p-3 rounded-xl text-xs pointer-events-none select-none backdrop-blur-md border border-slate-600/50 shadow-xl">
