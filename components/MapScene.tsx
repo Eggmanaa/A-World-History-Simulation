@@ -92,7 +92,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick }) => {
     () =>
       tiles.map((t) => ({
         rotY: (hashJitter(t.id, 7) - 0.5) * 0.18, // ±~5°
-        scale: 0.96 + hashJitter(t.id, 13) * 0.08, // 0.96..1.04
+        scale: 1, // was 0.96..1.04 — fixed to close tile tessellation gaps (user report 2026-04-15)
       })),
     [tiles],
   );
