@@ -409,6 +409,363 @@ export const Amphitheatre3D: React.FC<{ position: [number, number, number] }> = 
     );
 };
 
+export const Farm3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
+    // Ancient farm with thatched-roof barn, plowed field rows, and grain storage
+    const thatchColor = "#B8A060"; // Dry straw/thatch
+    const woodColor = "#6B4226"; // Rough timber
+    const soilColor = "#5C4033"; // Dark plowed earth
+    const cropColor = "#7B9E3A"; // Green crop shoots
+    const stoneColor = "#9B8B7A"; // Foundation stone
+
+    return (
+        <group position={position}>
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                {/* Plowed field rows */}
+                {[-0.25, -0.15, -0.05, 0.05, 0.15, 0.25].map((z, i) => (
+                    <mesh key={`row-${i}`} position={[-0.25, 0.02, z]} receiveShadow>
+                        <boxGeometry args={[0.35, 0.03, 0.06]} />
+                        <meshStandardMaterial color={soilColor} roughness={0.95} flatShading />
+                    </mesh>
+                ))}
+
+                {/* Crop shoots on alternating rows */}
+                {[-0.25, -0.05, 0.15].map((z, i) => (
+                    <group key={`crops-${i}`}>
+                        {[-0.38, -0.3, -0.22, -0.14].map((x, j) => (
+                            <mesh key={j} position={[x, 0.06, z]} castShadow>
+                                <boxGeometry args={[0.02, 0.06, 0.02]} />
+                                <meshStandardMaterial color={cropColor} roughness={0.8} flatShading />
+                            </mesh>
+                        ))}
+                    </group>
+                ))}
+
+                {/* Barn - stone foundation */}
+                <mesh position={[0.22, 0.06, 0]} receiveShadow castShadow>
+                    <boxGeometry args={[0.35, 0.12, 0.4]} />
+                    <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
+                </mesh>
+
+                {/* Barn - wooden walls */}
+                <mesh position={[0.22, 0.22, 0]} castShadow>
+                    <boxGeometry args={[0.3, 0.2, 0.35]} />
+                    <meshStandardMaterial color={woodColor} roughness={0.85} flatShading />
+                </mesh>
+
+                {/* Barn - thatched roof */}
+                <mesh position={[0.22, 0.42, 0]} rotation={[0, 0, 0]} castShadow>
+                    <coneGeometry args={[0.3, 0.25, 4]} />
+                    <meshStandardMaterial color={thatchColor} roughness={0.95} flatShading />
+                </mesh>
+
+                {/* Barn door */}
+                <mesh position={[0.22, 0.18, 0.18]} castShadow>
+                    <boxGeometry args={[0.12, 0.16, 0.02]} />
+                    <meshStandardMaterial color="#3D2817" roughness={0.8} />
+                </mesh>
+
+                {/* Grain storage pot */}
+                <mesh position={[0.42, 0.1, -0.15]} castShadow>
+                    <cylinderGeometry args={[0.04, 0.06, 0.12, 8]} />
+                    <meshStandardMaterial color="#A0522D" roughness={0.8} flatShading />
+                </mesh>
+
+                {/* Wooden fence posts */}
+                {[-0.42, -0.42, -0.42].map((x, i) => (
+                    <mesh key={`fence-${i}`} position={[x, 0.08, -0.2 + i * 0.2]} castShadow>
+                        <boxGeometry args={[0.03, 0.12, 0.03]} />
+                        <meshStandardMaterial color={woodColor} roughness={0.9} flatShading />
+                    </mesh>
+                ))}
+
+                {/* Fence rail */}
+                <mesh position={[-0.42, 0.1, 0]} castShadow>
+                    <boxGeometry args={[0.02, 0.02, 0.4]} />
+                    <meshStandardMaterial color={woodColor} roughness={0.9} />
+                </mesh>
+            </group>
+        </group>
+    );
+};
+
+export const Workshop3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
+    // Ancient blacksmith/craftsman workshop with forge, anvil, and chimney
+    const stoneColor = "#8B8178"; // Rough grey stone
+    const darkStone = "#5C534A"; // Dark stone for forge
+    const woodColor = "#5D4E37"; // Timber frame
+    const metalColor = "#696969"; // Iron/steel grey
+    const fireColor = "#FF6B35"; // Forge glow
+    const roofColor = "#6B4226"; // Dark wood roof
+
+    return (
+        <group position={position}>
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                {/* Stone foundation */}
+                <mesh position={[0, 0.06, 0]} receiveShadow castShadow>
+                    <boxGeometry args={[0.7, 0.12, 0.55]} />
+                    <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
+                </mesh>
+
+                {/* Main workshop walls */}
+                <mesh position={[0, 0.28, 0]} castShadow>
+                    <boxGeometry args={[0.6, 0.32, 0.45]} />
+                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
+                </mesh>
+
+                {/* Timber frame beams (cross-hatched) */}
+                <mesh position={[0, 0.35, 0.23]} castShadow>
+                    <boxGeometry args={[0.55, 0.04, 0.02]} />
+                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                </mesh>
+                <mesh position={[-0.15, 0.28, 0.23]} castShadow>
+                    <boxGeometry args={[0.04, 0.28, 0.02]} />
+                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                </mesh>
+                <mesh position={[0.15, 0.28, 0.23]} castShadow>
+                    <boxGeometry args={[0.04, 0.28, 0.02]} />
+                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                </mesh>
+
+                {/* Sloped roof */}
+                <mesh position={[0, 0.52, 0]} rotation={[0, 0, 0]} castShadow>
+                    <coneGeometry args={[0.48, 0.3, 4]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.85} flatShading />
+                </mesh>
+
+                {/* Stone chimney */}
+                <mesh position={[0.2, 0.65, -0.1]} castShadow>
+                    <boxGeometry args={[0.1, 0.35, 0.1]} />
+                    <meshStandardMaterial color={darkStone} roughness={0.9} flatShading />
+                </mesh>
+
+                {/* Chimney cap */}
+                <mesh position={[0.2, 0.84, -0.1]} castShadow>
+                    <boxGeometry args={[0.14, 0.04, 0.14]} />
+                    <meshStandardMaterial color={darkStone} roughness={0.85} flatShading />
+                </mesh>
+
+                {/* Forge opening (glowing) */}
+                <mesh position={[-0.22, 0.2, 0.23]} castShadow>
+                    <boxGeometry args={[0.15, 0.12, 0.02]} />
+                    <meshStandardMaterial color={fireColor} roughness={0.3} emissive={fireColor} emissiveIntensity={0.6} />
+                </mesh>
+
+                {/* Anvil outside */}
+                <mesh position={[-0.35, 0.08, 0.2]} castShadow>
+                    <boxGeometry args={[0.08, 0.04, 0.05]} />
+                    <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} flatShading />
+                </mesh>
+                {/* Anvil top */}
+                <mesh position={[-0.35, 0.12, 0.2]} castShadow>
+                    <boxGeometry args={[0.12, 0.03, 0.06]} />
+                    <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} flatShading />
+                </mesh>
+
+                {/* Workshop door */}
+                <mesh position={[0.05, 0.2, 0.23]} castShadow>
+                    <boxGeometry args={[0.14, 0.24, 0.02]} />
+                    <meshStandardMaterial color="#3D2817" roughness={0.8} />
+                </mesh>
+            </group>
+        </group>
+    );
+};
+
+export const Library3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
+    // Ancient library/scriptorium with columns, scroll alcoves, and domed roof
+    const marbleColor = "#E0D8C8"; // Warm marble
+    const columnColor = "#D4CAB8"; // Column marble
+    const roofColor = "#7B6B5A"; // Terracotta/stone roof
+    const scrollColor = "#DEB887"; // Papyrus scroll color
+    const baseColor = "#B8A88A"; // Stone base
+
+    return (
+        <group position={position}>
+            <group position={[0, 0.3, 0]} scale={[0.85, 0.85, 0.85]}>
+                {/* Stepped base platform */}
+                <mesh position={[0, 0.04, 0]} receiveShadow castShadow>
+                    <boxGeometry args={[0.85, 0.08, 0.65]} />
+                    <meshStandardMaterial color={baseColor} roughness={0.85} flatShading />
+                </mesh>
+                <mesh position={[0, 0.12, 0]} receiveShadow castShadow>
+                    <boxGeometry args={[0.75, 0.08, 0.55]} />
+                    <meshStandardMaterial color={marbleColor} roughness={0.8} flatShading />
+                </mesh>
+
+                {/* Main building body */}
+                <mesh position={[0, 0.32, 0]} castShadow>
+                    <boxGeometry args={[0.65, 0.32, 0.45]} />
+                    <meshStandardMaterial color={marbleColor} roughness={0.75} flatShading />
+                </mesh>
+
+                {/* Front columns (4 columns) */}
+                {[-0.24, -0.08, 0.08, 0.24].map((x, i) => (
+                    <group key={`col-${i}`} position={[x, 0.36, 0.26]}>
+                        <mesh castShadow>
+                            <cylinderGeometry args={[0.035, 0.045, 0.36, 8]} />
+                            <meshStandardMaterial color={columnColor} roughness={0.7} flatShading />
+                        </mesh>
+                        {/* Column capital */}
+                        <mesh position={[0, 0.2, 0]} castShadow>
+                            <boxGeometry args={[0.08, 0.04, 0.08]} />
+                            <meshStandardMaterial color={marbleColor} roughness={0.6} flatShading />
+                        </mesh>
+                    </group>
+                ))}
+
+                {/* Triangular pediment (like a classical library facade) */}
+                <mesh position={[0, 0.56, 0.22]} rotation={[Math.PI/2, 0, 0]} castShadow>
+                    <coneGeometry args={[0.36, 0.18, 3]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.8} flatShading />
+                </mesh>
+
+                {/* Main flat roof */}
+                <mesh position={[0, 0.5, 0]} castShadow>
+                    <boxGeometry args={[0.7, 0.04, 0.5]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.8} flatShading />
+                </mesh>
+
+                {/* Small dome on top (knowledge/wisdom symbol) */}
+                <mesh position={[0, 0.6, -0.05]} castShadow>
+                    <sphereGeometry args={[0.12, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.7} flatShading />
+                </mesh>
+
+                {/* Scroll alcoves on side wall (3 niches) */}
+                {[-0.12, 0, 0.12].map((z, i) => (
+                    <group key={`alcove-${i}`} position={[0.33, 0.32, z]}>
+                        {/* Niche shadow */}
+                        <mesh castShadow>
+                            <boxGeometry args={[0.02, 0.1, 0.08]} />
+                            <meshStandardMaterial color="#4A4035" roughness={0.9} />
+                        </mesh>
+                        {/* Scroll inside */}
+                        <mesh position={[0.02, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+                            <cylinderGeometry args={[0.02, 0.02, 0.07, 6]} />
+                            <meshStandardMaterial color={scrollColor} roughness={0.7} flatShading />
+                        </mesh>
+                    </group>
+                ))}
+
+                {/* Entrance doorway */}
+                <mesh position={[0, 0.25, 0.23]} castShadow>
+                    <boxGeometry args={[0.14, 0.22, 0.02]} />
+                    <meshStandardMaterial color="#2D2817" roughness={0.8} />
+                </mesh>
+            </group>
+        </group>
+    );
+};
+
+export const Barracks3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
+    // Military barracks with training yard, weapon racks, and watchtower
+    const stoneColor = "#9B8B7A"; // Rough stone
+    const darkStone = "#6B5D4F"; // Dark accent stone
+    const woodColor = "#5D4E37"; // Dark timber
+    const roofColor = "#4A3728"; // Dark thatched/wood roof
+    const metalColor = "#808080"; // Iron weapons
+    const bannerColor = "#8B0000"; // Dark red military banner
+
+    return (
+        <group position={position}>
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                {/* Stone foundation platform */}
+                <mesh position={[0, 0.04, 0]} receiveShadow castShadow>
+                    <boxGeometry args={[0.8, 0.08, 0.6]} />
+                    <meshStandardMaterial color={darkStone} roughness={0.9} flatShading />
+                </mesh>
+
+                {/* Main barracks building */}
+                <mesh position={[-0.1, 0.24, -0.05]} castShadow>
+                    <boxGeometry args={[0.5, 0.32, 0.4]} />
+                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
+                </mesh>
+
+                {/* Barracks flat/sloped roof */}
+                <mesh position={[-0.1, 0.44, -0.05]} castShadow>
+                    <boxGeometry args={[0.55, 0.06, 0.45]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.9} flatShading />
+                </mesh>
+                {/* Roof ridge */}
+                <mesh position={[-0.1, 0.52, -0.05]} castShadow>
+                    <coneGeometry args={[0.32, 0.15, 4]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.9} flatShading />
+                </mesh>
+
+                {/* Watchtower on corner */}
+                <mesh position={[0.28, 0.4, 0.18]} castShadow>
+                    <boxGeometry args={[0.15, 0.55, 0.15]} />
+                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
+                </mesh>
+                {/* Watchtower top */}
+                <mesh position={[0.28, 0.72, 0.18]} castShadow>
+                    <boxGeometry args={[0.2, 0.06, 0.2]} />
+                    <meshStandardMaterial color={darkStone} roughness={0.85} flatShading />
+                </mesh>
+                {/* Watchtower pointed roof */}
+                <mesh position={[0.28, 0.82, 0.18]} castShadow>
+                    <coneGeometry args={[0.12, 0.15, 4]} />
+                    <meshStandardMaterial color={roofColor} roughness={0.9} flatShading />
+                </mesh>
+
+                {/* Weapon rack */}
+                <group position={[0.32, 0.12, -0.15]}>
+                    {/* Rack frame */}
+                    <mesh castShadow>
+                        <boxGeometry args={[0.04, 0.2, 0.15]} />
+                        <meshStandardMaterial color={woodColor} roughness={0.8} flatShading />
+                    </mesh>
+                    {/* Spears/weapons on rack */}
+                    {[-0.04, 0, 0.04].map((z, i) => (
+                        <mesh key={i} position={[0.03, 0.05, z]} castShadow>
+                            <cylinderGeometry args={[0.008, 0.008, 0.25, 4]} />
+                            <meshStandardMaterial color={metalColor} roughness={0.5} metalness={0.4} />
+                        </mesh>
+                    ))}
+                </group>
+
+                {/* Training dummy */}
+                <group position={[-0.38, 0.12, 0.2]}>
+                    {/* Post */}
+                    <mesh castShadow>
+                        <cylinderGeometry args={[0.02, 0.02, 0.2, 6]} />
+                        <meshStandardMaterial color={woodColor} roughness={0.8} />
+                    </mesh>
+                    {/* Crossbar */}
+                    <mesh position={[0, 0.08, 0]} castShadow>
+                        <boxGeometry args={[0.15, 0.03, 0.03]} />
+                        <meshStandardMaterial color={woodColor} roughness={0.8} />
+                    </mesh>
+                </group>
+
+                {/* Military banner on watchtower */}
+                <mesh position={[0.28, 0.9, 0.18]} castShadow>
+                    <cylinderGeometry args={[0.008, 0.008, 0.18, 4]} />
+                    <meshStandardMaterial color={woodColor} roughness={0.8} />
+                </mesh>
+                <mesh position={[0.32, 0.92, 0.18]} castShadow>
+                    <boxGeometry args={[0.08, 0.1, 0.01]} />
+                    <meshStandardMaterial color={bannerColor} roughness={0.7} flatShading />
+                </mesh>
+
+                {/* Barracks door */}
+                <mesh position={[-0.1, 0.18, 0.16]} castShadow>
+                    <boxGeometry args={[0.14, 0.22, 0.02]} />
+                    <meshStandardMaterial color="#2D2817" roughness={0.8} />
+                </mesh>
+
+                {/* Window slits */}
+                {[-0.25, 0.05].map((x, i) => (
+                    <mesh key={i} position={[x, 0.32, 0.16]} castShadow>
+                        <boxGeometry args={[0.04, 0.1, 0.02]} />
+                        <meshStandardMaterial color="#1A1A1A" roughness={0.9} />
+                    </mesh>
+                ))}
+            </group>
+        </group>
+    );
+};
+
 export const Wonder3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
     return (
         <group position={position}>

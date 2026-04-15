@@ -7,16 +7,24 @@ const LandingPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center p-4 relative"
+      // The page scrolls if the card is taller than viewport (we also reset
+      // the body's overflow-hidden for this route). Background uses `contain`
+      // on narrow desktops so the painting fits without cropping and the
+      // unused area fades to slate. At larger sizes this still looks full.
+      className="min-h-screen w-full flex items-start md:items-center justify-center p-4 md:p-6 relative overflow-y-auto"
       style={{
-        backgroundImage: 'url("/images/tower-of-babel.jpg")'
+        backgroundImage: 'url("/images/tower-of-babel.jpg")',
+        backgroundSize: 'contain',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#0f172a',
       }}
     >
       {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
-      {/* Main Card */}
-      <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden relative z-10 border border-white/20">
+      {/* Main Card — smaller max-width so the painting shows on the sides */}
+      <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl max-w-3xl w-full overflow-hidden relative z-10 border border-white/20 my-auto">
 
         {/* Header Section */}
         <div className="text-center pt-12 pb-8 px-6">

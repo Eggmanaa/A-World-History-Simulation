@@ -1,5 +1,5 @@
 
-import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock, VictoryCondition } from './types';
+import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock, VictoryCondition, RespawnCiv, RespawnBonus } from './types';
 
 export const HEX_SIZE = 1.0;
 export const MAP_RADIUS = 9;
@@ -8,7 +8,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'egypt', name: 'Ancient Egypt', regions: ['Egypt', 'North Africa', 'Fertile Crescent'],
         traits: ['Industrious', 'Wisdom'],
-        baseStats: { martial: 5, defense: 5, faith: 10, industry: 10, fertility: 2 },
+        baseStats: { martial: 3, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 3, faithYield: 3, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#eab308', accent: '#2563eb' },
         centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains, TerrainType.Grassland],
@@ -17,7 +17,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'greece', name: 'Ancient Greece', regions: ['Greece', 'Aegean', 'Europe'],
         traits: ['Intelligence', 'Beauty'],
-        baseStats: { martial: 7, defense: 5, faith: 5, industry: 5, fertility: 2 },
+        baseStats: { martial: 3, defense: 2, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 5, cultureYield: 5, faithYield: 2, capacity: 8 },
         waterResource: 'Lake', isIsland: true,
         colors: { base: '#3b82f6', accent: '#f8fafc' },
         centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Mountain],
@@ -26,7 +26,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'rome', name: 'Roman Empire', regions: ['Italia', 'Rome', 'Europe'],
         traits: ['Strength', 'Industrious'],
-        baseStats: { martial: 10, defense: 8, faith: 5, industry: 8, fertility: 2 },
+        baseStats: { martial: 4, defense: 3, faith: 2, industry: 5, fertility: 2, productionIncome: 5, scienceYield: 3, cultureYield: 3, faithYield: 2, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#dc2626', accent: '#fcd34d' },
         centerBiomes: [TerrainType.Grassland, TerrainType.Plains, TerrainType.River],
@@ -35,7 +35,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'china', name: 'Ancient China', regions: ['China', 'Asia'],
         traits: ['Industrious', 'Intelligence'],
-        baseStats: { martial: 8, defense: 6, faith: 5, industry: 10, fertility: 2 },
+        baseStats: { martial: 3, defense: 4, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 4, cultureYield: 3, faithYield: 2, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#ca8a04', accent: '#ef4444' },
         centerBiomes: [TerrainType.River, TerrainType.Plains, TerrainType.Forest],
@@ -44,7 +44,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'germania', name: 'Germania', regions: ['Germania', 'Teutons', 'Europe'],
         traits: ['Strength', 'Health'],
-        baseStats: { martial: 10, defense: 6, faith: 4, industry: 4, fertility: 2 },
+        baseStats: { martial: 5, defense: 2, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 1, cultureYield: 1, faithYield: 2, capacity: 10 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#14532d', accent: '#a3e635' },
         centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Grassland],
@@ -53,7 +53,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'phoenicia', name: 'Phoenicia', regions: ['Phoenicia', 'Fertile Crescent'],
         traits: ['Beauty', 'Creativity'],
-        baseStats: { martial: 5, defense: 5, faith: 5, industry: 7, fertility: 2 },
+        baseStats: { martial: 2, defense: 2, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 4, faithYield: 2, capacity: 8 },
         waterResource: 'Ocean', isIsland: false,
         colors: { base: '#7e22ce', accent: '#f0abfc' },
         centerBiomes: [TerrainType.Plains, TerrainType.Desert],
@@ -62,7 +62,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'india', name: 'Ancient India', regions: ['India', 'Asia'],
         traits: ['Wisdom', 'Creativity'],
-        baseStats: { martial: 6, defense: 5, faith: 10, industry: 6, fertility: 2 },
+        baseStats: { martial: 2, defense: 3, faith: 5, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 4, cultureYield: 3, faithYield: 5, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#f97316', accent: '#10b981' },
         centerBiomes: [TerrainType.River, TerrainType.Grassland, TerrainType.Forest],
@@ -71,7 +71,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'mesopotamia', name: 'Mesopotamia', regions: ['Mesopotamia', 'Fertile Crescent'],
         traits: ['Intelligence', 'Industrious'],
-        baseStats: { martial: 6, defense: 5, faith: 8, industry: 8, fertility: 2 },
+        baseStats: { martial: 2, defense: 2, faith: 4, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 5, cultureYield: 3, faithYield: 4, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#1e3a8a', accent: '#fbbf24' },
         centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains],
@@ -80,7 +80,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'persia', name: 'Persian Empire', regions: ['Persia', 'Asia', 'Fertile Crescent'],
         traits: ['Strength', 'Beauty'],
-        baseStats: { martial: 12, defense: 6, faith: 6, industry: 6, fertility: 2 },
+        baseStats: { martial: 4, defense: 3, faith: 4, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 3, cultureYield: 3, faithYield: 4, capacity: 15 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#9d174d', accent: '#fbbf24' },
         centerBiomes: [TerrainType.Plains, TerrainType.Mountain, TerrainType.Desert],
@@ -89,7 +89,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'sparta', name: 'Sparta', regions: ['Greece', 'Laconia', 'Europe'],
         traits: ['Strength', 'Health'],
-        baseStats: { martial: 15, defense: 10, faith: 3, industry: 4, fertility: 2 },
+        baseStats: { martial: 7, defense: 4, faith: 1, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 1, cultureYield: 2, faithYield: 1, capacity: 15 },
         waterResource: 'Lake', isIsland: true,
         colors: { base: '#7f1d1d', accent: '#94a3b8' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Plains],
@@ -98,7 +98,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'anatolia', name: 'Anatolia', regions: ['Anatolia', 'Fertile Crescent'],
         traits: ['Strength', 'Industrious'],
-        baseStats: { martial: 8, defense: 6, faith: 5, industry: 7, fertility: 2 },
+        baseStats: { martial: 3, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 3, faithYield: 3, capacity: 10 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#92400e', accent: '#fcd34d' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Grassland],
@@ -107,7 +107,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'crete', name: 'Minoan Crete', regions: ['Crete', 'Aegean', 'Europe'],
         traits: ['Beauty', 'Creativity'],
-        baseStats: { martial: 4, defense: 4, faith: 5, industry: 6, fertility: 2 },
+        baseStats: { martial: 2, defense: 3, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 4, cultureYield: 5, faithYield: 3, capacity: 8 },
         waterResource: 'Ocean', isIsland: true,
         colors: { base: '#0d9488', accent: '#ccfbf1' },
         centerBiomes: [TerrainType.Grassland, TerrainType.Plains],
@@ -116,7 +116,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'gaul', name: 'Gaul', regions: ['Gaul', 'Celts', 'Europe'],
         traits: ['Strength', 'Health'],
-        baseStats: { martial: 8, defense: 5, faith: 4, industry: 5, fertility: 2 },
+        baseStats: { martial: 4, defense: 2, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 3, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#166534', accent: '#a3e635' },
         centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Plains],
@@ -125,7 +125,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'carthage', name: 'Carthage', regions: ['Carthage', 'North Africa', 'Phoenicia'],
         traits: ['Beauty', 'Strength'],
-        baseStats: { martial: 9, defense: 7, faith: 5, industry: 7, fertility: 2 },
+        baseStats: { martial: 3, defense: 2, faith: 2, industry: 5, fertility: 2, productionIncome: 5, scienceYield: 2, cultureYield: 3, faithYield: 2, capacity: 8 },
         waterResource: 'Ocean', isIsland: false,
         colors: { base: '#7c3aed', accent: '#c4b5fd' },
         centerBiomes: [TerrainType.Plains, TerrainType.Desert, TerrainType.Ocean],
@@ -134,7 +134,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'macedon', name: 'Macedonia', regions: ['Macedon', 'Greece', 'Europe'],
         traits: ['Strength', 'Beauty'],
-        baseStats: { martial: 12, defense: 6, faith: 5, industry: 6, fertility: 2 },
+        baseStats: { martial: 5, defense: 3, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 2, capacity: 10 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#1e40af', accent: '#fbbf24' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Grassland],
@@ -143,7 +143,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'assyria', name: 'Assyrian Empire', regions: ['Assyria', 'Mesopotamia', 'Fertile Crescent'],
         traits: ['Strength', 'Industrious'],
-        baseStats: { martial: 12, defense: 7, faith: 5, industry: 7, fertility: 2 },
+        baseStats: { martial: 6, defense: 3, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 1, faithYield: 2, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#450a0a', accent: '#f59e0b' },
         centerBiomes: [TerrainType.Plains, TerrainType.River, TerrainType.Desert],
@@ -152,7 +152,7 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'cush', name: 'Kingdom of Kush', regions: ['Cush', 'Nubia', 'Africa'],
         traits: ['Strength', 'Health'],
-        baseStats: { martial: 7, defense: 6, faith: 6, industry: 6, fertility: 2 },
+        baseStats: { martial: 3, defense: 3, faith: 4, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 3, cultureYield: 3, faithYield: 4, capacity: 15 },
         waterResource: 'River', isIsland: false,
         colors: { base: '#854d0e', accent: '#fef08a' },
         centerBiomes: [TerrainType.River, TerrainType.Desert, TerrainType.Plains],
@@ -161,11 +161,65 @@ export const CIV_PRESETS: CivPreset[] = [
     {
         id: 'israel', name: 'Ancient Israel', regions: ['Israel', 'Fertile Crescent'],
         traits: ['Wisdom', 'Faith'],
-        baseStats: { martial: 5, defense: 5, faith: 12, industry: 5, fertility: 2 },
+        baseStats: { martial: 2, defense: 4, faith: 7, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 3, cultureYield: 2, faithYield: 7, capacity: 10 },
         waterResource: 'Lake', isIsland: false,
         colors: { base: '#2563eb', accent: '#ffffff' },
         centerBiomes: [TerrainType.Plains, TerrainType.Mountain, TerrainType.Desert],
         edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Ocean]
+    },
+    {
+        id: 'troy', name: 'Troy', regions: ['Troy', 'Northwest Anatolia', 'Asia Minor'],
+        traits: ['Strength', 'Beauty'],
+        baseStats: { martial: 3, defense: 6, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 3, faithYield: 2, capacity: 8 },
+        waterResource: 'Ocean', isIsland: false,
+        colors: { base: '#92400e', accent: '#fef3c7' },
+        centerBiomes: [TerrainType.Ocean, TerrainType.Plains, TerrainType.Mountain],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Ocean, TerrainType.Forest]
+    },
+    {
+        id: 'scythia', name: 'Scythia', regions: ['Scythia', 'Central Asia', 'Steppes'],
+        traits: ['Strength', 'Health'],
+        baseStats: { martial: 5, defense: 1, faith: 1, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 1, cultureYield: 2, faithYield: 2, capacity: 6 },
+        waterResource: 'Well', isIsland: false,
+        colors: { base: '#7f1d1d', accent: '#fcd34d' },
+        centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Desert],
+        edgeBiomes: [TerrainType.Grassland, TerrainType.Desert, TerrainType.Mountain]
+    },
+    {
+        id: 'olmec', name: 'Olmec Civilization', regions: ['Mesoamerica', 'Yucatan', 'Americas'],
+        traits: ['Creativity', 'Wisdom'],
+        baseStats: { martial: 2, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 5, faithYield: 3, capacity: 15 },
+        waterResource: 'River', isIsland: false,
+        colors: { base: '#15803d', accent: '#fcd34d' },
+        centerBiomes: [TerrainType.River, TerrainType.Forest, TerrainType.Marsh],
+        edgeBiomes: [TerrainType.Forest, TerrainType.Marsh, TerrainType.Grassland]
+    },
+    {
+        id: 'korea', name: 'Ancient Korea', regions: ['Korean Peninsula', 'Asia'],
+        traits: ['Intelligence', 'Creativity'],
+        baseStats: { martial: 2, defense: 4, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 5, cultureYield: 3, faithYield: 3, capacity: 15 },
+        waterResource: 'River', isIsland: false,
+        colors: { base: '#0ea5e9', accent: '#f8fafc' },
+        centerBiomes: [TerrainType.River, TerrainType.Mountain, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Ocean]
+    },
+    {
+        id: 'khmer', name: 'Khmer Empire', regions: ['Southeast Asia', 'Cambodia', 'Asia'],
+        traits: ['Creativity', 'Wisdom'],
+        baseStats: { martial: 3, defense: 2, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 2, cultureYield: 4, faithYield: 5, capacity: 15 },
+        waterResource: 'River', isIsland: false,
+        colors: { base: '#6b21a8', accent: '#fcd34d' },
+        centerBiomes: [TerrainType.River, TerrainType.Forest, TerrainType.Marsh],
+        edgeBiomes: [TerrainType.Forest, TerrainType.Marsh, TerrainType.Grassland]
+    },
+    {
+        id: 'ethiopia', name: 'Aksum (Ethiopia)', regions: ['Ethiopia', 'East Africa', 'Africa'],
+        traits: ['Wisdom', 'Faith'],
+        baseStats: { martial: 3, defense: 4, faith: 5, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 3, faithYield: 5, capacity: 10 },
+        waterResource: 'Lake', isIsland: false,
+        colors: { base: '#15803d', accent: '#fef08a' },
+        centerBiomes: [TerrainType.River, TerrainType.Mountain, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Grassland]
     }
 ];
 
@@ -365,51 +419,192 @@ export const TIMELINE_EVENTS: TimelineEvent[] = [
     { year: 362, name: "Julian the Apostate", desc: "End of simulation." }
 ];
 
+// WONDERS — one per civ, permanent. Rebalanced so each wonder's effect is
+// worth roughly its cost in Production Pool, with some flavor premium for
+// being a once-per-civ "defining achievement". Baseline: buildings give
+// ~0.2-0.3 stat per Prod spent (Barracks +3 Martial / 10 Prod = 0.3; Farm +1
+// Cap + 1 Prod Income / 5 = 0.4). A wonder should feel meaningfully stronger
+// than stacking equivalent buildings, but not game-ending. Each is also
+// tuned to a distinct playstyle so no single wonder is "best".
 export const WONDERS_LIST: WonderDefinition[] = [
-    { id: 'pyramids', name: 'Great Pyramids', cost: 50, era: 'Ancient', minYear: -3000, effects: "+10 Faith, +5 Culture, +20 Industry", bonus: { faith: 10, culture: 5, production: 20 } },
-    { id: 'gardens', name: 'Hanging Gardens', cost: 40, era: 'Ancient', minYear: -1300, effects: "+10 Capacity, +5 Culture", bonus: { culture: 5, populationCapacity: 10 } },
-    { id: 'wall', name: 'Great Wall', cost: 50, era: 'Ancient', minYear: -1300, effects: "+15 Defense", bonus: { defense: 15 } },
-    { id: 'ishtar', name: 'Gates of Ishtar', cost: 40, era: 'Ancient', minYear: -1300, effects: "+2 Martial, +15 Defense, +2 Culture", bonus: { martial: 2, defense: 15, culture: 2 } },
-    { id: 'colossus', name: 'Colossus', cost: 35, era: 'Ancient', minYear: -1300, effects: "+1 Diplomacy (Alliance)", bonus: { diplomacy: 1 } },
-    
-    { id: 'colosseum', name: 'Colosseum', cost: 40, era: 'Classical', minYear: -300, effects: "+2 Martial, +5 Culture", bonus: { martial: 2, culture: 5 } },
+    // ANCIENT ERA (available early)
+    { id: 'pyramids', name: 'Great Pyramids', cost: 50, era: 'Ancient', minYear: -3000, effects: "+8 Faith, +5 Culture, +10 Industry", bonus: { faith: 8, culture: 5, production: 10 } },
+    { id: 'gardens', name: 'Hanging Gardens', cost: 40, era: 'Ancient', minYear: -1300, effects: "+10 Capacity, +6 Culture", bonus: { culture: 6, populationCapacity: 10 } },
+    { id: 'wall', name: 'Great Wall', cost: 50, era: 'Ancient', minYear: -1300, effects: "+15 Martial, +3 Culture", bonus: { defense: 15, culture: 3 } },
+    { id: 'ishtar', name: 'Gates of Ishtar', cost: 45, era: 'Ancient', minYear: -1300, effects: "+12 Martial, +4 Culture", bonus: { martial: 10, defense: 2, culture: 4 } },
+    { id: 'colossus', name: 'Colossus', cost: 35, era: 'Ancient', minYear: -1300, effects: "+3 Diplomacy, +4 Culture, +2 Martial", bonus: { diplomacy: 3, culture: 4, martial: 2 } },
+
+    // CLASSICAL ERA
+    { id: 'colosseum', name: 'Colosseum', cost: 40, era: 'Classical', minYear: -300, effects: "+5 Martial, +8 Culture", bonus: { martial: 5, culture: 8 } },
     { id: 'library', name: 'Great Library', cost: 45, era: 'Classical', minYear: -300, effects: "+15 Science, +5 Culture", bonus: { science: 15, culture: 5 } },
-    { id: 'lighthouse', name: 'Great Lighthouse', cost: 35, era: 'Classical', minYear: -300, effects: "+3 Diplomacy, +5 Culture", bonus: { culture: 5, diplomacy: 3 } },
+    { id: 'lighthouse', name: 'Great Lighthouse', cost: 35, era: 'Classical', minYear: -300, effects: "+3 Diplomacy, +5 Culture, +2 Industry", bonus: { culture: 5, diplomacy: 3, production: 2 } },
     { id: 'zeus', name: 'Statue of Zeus', cost: 40, era: 'Classical', minYear: -500, effects: "+10 Martial, +5 Faith", bonus: { martial: 10, faith: 5 } },
-    { id: 'oracle', name: 'Oracle', cost: 35, era: 'Classical', minYear: -500, effects: "+10 Culture", bonus: { culture: 10 } },
-    { id: 'artemis', name: 'Temple of Artemis', cost: 35, era: 'Classical', minYear: -500, effects: "+2 Martial, +1 Defense, +3 Culture", bonus: { martial: 2, defense: 1, culture: 3 } },
-    
-    { id: 'hagia', name: 'Hagia Sophia', cost: 50, era: 'Late', minYear: 44, effects: "+12 Faith, +8 Culture", bonus: { faith: 12, culture: 8 } },
-    { id: 'justinian', name: 'Walls of Justinian', cost: 50, era: 'Late', minYear: 44, effects: "Impenetrable Defense (+20)", bonus: { defense: 20 } },
-    { id: 'hippodrome', name: 'Hippodrome', cost: 40, era: 'Late', minYear: 44, effects: "+8 Culture", bonus: { culture: 8 } }
+    { id: 'oracle', name: 'Oracle', cost: 35, era: 'Classical', minYear: -500, effects: "+10 Culture, +3 Faith", bonus: { culture: 10, faith: 3 } },
+    { id: 'artemis', name: 'Temple of Artemis', cost: 35, era: 'Classical', minYear: -500, effects: "+6 Martial, +4 Culture, +2 Faith", bonus: { martial: 4, defense: 2, culture: 4, faith: 2 } },
+
+    // LATE ERA (expensive but era-defining)
+    { id: 'hagia', name: 'Hagia Sophia', cost: 50, era: 'Late', minYear: 44, effects: "+12 Faith, +8 Culture, +2 Diplomacy", bonus: { faith: 12, culture: 8, diplomacy: 2 } },
+    { id: 'justinian', name: 'Walls of Justinian', cost: 50, era: 'Late', minYear: 44, effects: "+25 Martial, +3 Culture (impenetrable fortifications)", bonus: { defense: 25, culture: 3 } },
+    { id: 'hippodrome', name: 'Hippodrome', cost: 40, era: 'Late', minYear: 44, effects: "+10 Culture, +2 Diplomacy, +3 Industry (games & trade)", bonus: { culture: 10, diplomacy: 2, production: 3 } },
 ];
 
+// RELIGION TENETS — redesigned so every tenet has a real, sizeable effect
+// that matches the weight of "founding a religion" (10 Faith, 1 Temple,
+// unlocked era). Every tenet now rewards a distinct playstyle: military,
+// economic, scientific, cultural, spiritual, diplomatic.
 export const RELIGION_TENETS: ReligionTenet[] = [
-    { id: 'holy_war', name: 'Holy War', description: '+2 Martial per converted neighbor.' },
-    { id: 'polytheism', name: 'Polytheism', description: '+2 Faith per Temple.' },
-    { id: 'scriptures', name: 'Holy Scriptures', description: 'Double Faith output.' },
-    { id: 'philosophy', name: 'Philosophy', description: 'Convert 50% Faith to Science.' },
-    { id: 'asceticism', name: 'Asceticism', description: '-5 Pop Cap, +10 Faith.' },
-    { id: 'monotheism', name: 'Monotheism', description: '+5 Faith, removes other faiths.' },
-    { id: 'medicine', name: 'Medicine', description: '+5 Population Capacity.' },
-    { id: 'evangelism', name: 'Evangelism', description: 'Religion spreads faster (UI-level effect).' },
-    { id: 'christianity', name: 'Christianity', description: '+1 Faith, +1 Culture.' }
+    { id: 'holy_war',    name: 'Holy War',        description: '+2 Martial per converted neighbor. +1 Martial baseline.' },
+    { id: 'polytheism',  name: 'Polytheism',      description: '+2 Faith per Temple. +1 Faith Yield.' },
+    { id: 'scriptures',  name: 'Holy Scriptures', description: 'Double Faith output. +2 Science Total when chosen.' },
+    { id: 'philosophy',  name: 'Philosophy',      description: '+50% Faith counts as Science. +2 Culture Yield.' },
+    { id: 'asceticism',  name: 'Asceticism',      description: '-3 Pop Cap but +15 Faith and +1 Faith Yield.' },
+    { id: 'monotheism',  name: 'Monotheism',      description: '+5 Faith, +2 Faith Yield, religion spreads to weaker neighbors automatically each turn.' },
+    { id: 'medicine',    name: 'Medicine',        description: '+5 Capacity, +1 Fertility (healthier cities).' },
+    { id: 'evangelism',  name: 'Evangelism',      description: '+1 Faith Yield. Religion spreads even against neighbors with equal Faith.' },
+    { id: 'christianity', name: 'Universal Faith', description: '+3 Faith, +2 Culture, +1 Diplomacy. Fellow-faith allies give +1 Martial each.' },
 ];
 
+// ============================================================
+// RESPAWN CIVILIZATIONS (12 total)
+// Players who are conquered respawn as one of these, based on current turn.
+// Stats are boosted relative to starting civs to keep them competitive.
+// ============================================================
+export const RESPAWN_CIVS: RespawnCiv[] = [
+    {
+        id: 'ptolemaic_egypt', name: 'Ptolemaic Egypt', availableTurn: 15, region: 'Egypt',
+        baseStats: { martial: 3, defense: 3, faith: 2, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 4, cultureYield: 4, faithYield: 2, capacity: 12 },
+        trait: 'Hellenistic Hybrid', traitDescription: 'Blend of Greek and Egyptian culture. +2 Science Total and +2 Culture Total on Research or Develop actions.',
+        waterResource: 'River', colors: { base: '#d4a017', accent: '#1e40af' },
+        centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Ocean]
+    },
+    {
+        id: 'seleucid', name: 'Seleucid Empire', availableTurn: 15, region: 'Persia/Mesopotamia',
+        baseStats: { martial: 4, defense: 3, faith: 2, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 3, cultureYield: 3, faithYield: 2, capacity: 12 },
+        trait: 'Successor State', traitDescription: 'Inheritor of Alexander\'s eastern empire. Start with +5 Martial on first attack. +1 to all yields for 3 turns.',
+        waterResource: 'River', colors: { base: '#4338ca', accent: '#fbbf24' },
+        centerBiomes: [TerrainType.Plains, TerrainType.River, TerrainType.Desert],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Desert, TerrainType.HighMountain]
+    },
+    {
+        id: 'parthia', name: 'Parthian Empire', availableTurn: 16, region: 'Persia',
+        baseStats: { martial: 4, defense: 4, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 3, capacity: 12 },
+        trait: 'Parthian Shot', traitDescription: 'Master horse archers. +3 Martial when defending. After losing a battle, gain +2 Martial temporarily.',
+        waterResource: 'River', colors: { base: '#7f1d1d', accent: '#d4a017' },
+        centerBiomes: [TerrainType.Plains, TerrainType.Desert, TerrainType.Mountain],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Plains]
+    },
+    {
+        id: 'numidia', name: 'Numidia', availableTurn: 16, region: 'North Africa',
+        baseStats: { martial: 4, defense: 2, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 3, capacity: 10 },
+        trait: 'Desert Cavalry', traitDescription: 'Elite Numidian cavalry. +3 Martial when attacking. Can raid: gain +1 Prod Pool per attack regardless of outcome.',
+        waterResource: 'Lake', colors: { base: '#a16207', accent: '#fef3c7' },
+        centerBiomes: [TerrainType.Desert, TerrainType.Plains, TerrainType.Grassland],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Ocean]
+    },
+    {
+        id: 'nabataea', name: 'Nabataea', availableTurn: 17, region: 'Arabia',
+        baseStats: { martial: 2, defense: 4, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 2, cultureYield: 3, faithYield: 3, capacity: 10 },
+        trait: 'Caravan Masters', traitDescription: 'Masters of desert trade. Trade routes give +3 instead of +2. +1 Production Pool per active trade route.',
+        waterResource: 'Well', colors: { base: '#b45309', accent: '#fef08a' },
+        centerBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Plains],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.HighMountain]
+    },
+    {
+        id: 'maurya', name: 'Maurya Empire', availableTurn: 17, region: 'India',
+        baseStats: { martial: 4, defense: 3, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 3, faithYield: 3, capacity: 14 },
+        trait: 'War Elephants', traitDescription: 'Devastating elephant corps. +4 Martial on first attack each game. +2 Martial permanently from organized empire.',
+        waterResource: 'River', colors: { base: '#c2410c', accent: '#fcd34d' },
+        centerBiomes: [TerrainType.River, TerrainType.Grassland, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Forest]
+    },
+    {
+        id: 'dacia', name: 'Dacia', availableTurn: 19, region: 'Eastern Europe',
+        baseStats: { martial: 4, defense: 4, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 3, capacity: 12 },
+        trait: 'Mountain Fortress', traitDescription: 'Impregnable mountain strongholds. Walls grant +8 Martial instead of +5. +2 Martial while defending.',
+        waterResource: 'River', colors: { base: '#4a5568', accent: '#a3bffa' },
+        centerBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Plains],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Forest]
+    },
+    {
+        id: 'iberia', name: 'Iberia', availableTurn: 19, region: 'Iberian Peninsula',
+        baseStats: { martial: 3, defense: 3, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 3, faithYield: 3, capacity: 12 },
+        trait: 'Hill Forts', traitDescription: 'Guerrilla resistance. +2 Martial permanently. When attacked by a stronger civ, gain +3 Martial for that battle.',
+        waterResource: 'River', colors: { base: '#9f1239', accent: '#fda4af' },
+        centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Forest],
+        edgeBiomes: [TerrainType.Ocean, TerrainType.Mountain, TerrainType.Desert]
+    },
+    {
+        id: 'aksumite', name: 'Aksumite Empire', availableTurn: 22, region: 'East Africa',
+        baseStats: { martial: 3, defense: 3, faith: 4, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 3, cultureYield: 3, faithYield: 4, capacity: 12 },
+        trait: 'Trade Crossroads', traitDescription: 'Gateway between Africa and Arabia. +2 to all trade bonuses. Temples grant +3 Faith on Worship instead of +2.',
+        waterResource: 'Lake', colors: { base: '#065f46', accent: '#fcd34d' },
+        centerBiomes: [TerrainType.Mountain, TerrainType.Grassland, TerrainType.Plains],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Forest]
+    },
+    {
+        id: 'sassanid', name: 'Sassanid Persia', availableTurn: 22, region: 'Persia',
+        baseStats: { martial: 5, defense: 4, faith: 3, industry: 4, fertility: 2, productionIncome: 4, scienceYield: 3, cultureYield: 3, faithYield: 3, capacity: 14 },
+        trait: 'Immortals Reborn', traitDescription: 'Resurrected Persian military elite. +3 Martial permanently. Cannot lose more than 2 Martial from any single event.',
+        waterResource: 'River', colors: { base: '#701a75', accent: '#fbbf24' },
+        centerBiomes: [TerrainType.Plains, TerrainType.Desert, TerrainType.Mountain],
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Mountain]
+    },
+    {
+        id: 'gothic', name: 'Gothic Kingdoms', availableTurn: 23, region: 'Northern Europe',
+        baseStats: { martial: 5, defense: 2, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 1, cultureYield: 2, faithYield: 3, capacity: 12 },
+        trait: 'Migration', traitDescription: 'Mobile warrior culture. Can relocate territory once. +2 Martial when attacking civs with higher Culture Total.',
+        waterResource: 'River', colors: { base: '#1c1917', accent: '#dc2626' },
+        centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Plains],
+        edgeBiomes: [TerrainType.Mountain, TerrainType.River, TerrainType.Grassland]
+    },
+    {
+        id: 'hunnic', name: 'Hunnic Empire', availableTurn: 24, region: 'Central Asia/Europe',
+        baseStats: { martial: 7, defense: 1, faith: 2, industry: 2, fertility: 2, productionIncome: 2, scienceYield: 1, cultureYield: 1, faithYield: 2, capacity: 10 },
+        trait: 'Terror of Nations', traitDescription: 'Pure military devastation. +5 Martial on first attack. Adjacent civs suffer -1 Martial while you exist. Cannot build Wonders.',
+        waterResource: 'Lake', colors: { base: '#292524', accent: '#b91c1c' },
+        centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Plains],
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Forest]
+    },
+];
+
+// ============================================================
+// RESPAWN BONUS OPTIONS
+// Conquered player picks ONE when respawning
+// ============================================================
+export const RESPAWN_BONUSES: RespawnBonus[] = [
+    { id: 'martial_boost', name: 'Military Legacy', description: '+2 Martial', effects: { martial: 2 } },
+    { id: 'defense_boost', name: 'Fortified Start', description: '+2 Martial (from prepared defenses)', effects: { defense: 2 } },
+    { id: 'production_boost', name: 'Economic Foundation', description: '+1 Production Income, +3 Prod Pool', effects: { productionIncome: 1, productionPool: 3 } },
+    { id: 'science_boost', name: 'Inherited Knowledge', description: '+3 Science Total', effects: { science: 3 } },
+    { id: 'culture_boost', name: 'Cultural Heritage', description: '+3 Culture Total', effects: { culture: 3 } },
+    { id: 'faith_boost', name: 'Religious Tradition', description: '+3 Faith Total', effects: { faith: 3 } },
+    { id: 'capacity_boost', name: 'Population Surge', description: '+2 Capacity', effects: { capacity: 2 } },
+];
+
+// SCIENCE UNLOCKS — redesigned so every level is a meaningful, balanced
+// bonus. The old unlocks ("attack through forest/river/ocean/mountains") were
+// dead mechanics because combat is adjacency-based, not terrain-blocked. The
+// wall-bypass unlock at L30 is retained because it IS wired into combat math
+// (attackNeighbor in GameApp.tsx uses it). Everything else now grants
+// persistent stat bonuses that compound across levels, so science-focused
+// civs see continuous return on investment instead of cosmetic milestones.
 export const SCIENCE_UNLOCKS: ScienceUnlock[] = [
-    { level: 5, effect: 'Level 1: Can attack through marsh', unlocks: 'attack_marsh' },
-    { level: 10, effect: 'Level 2: Can attack through forest', unlocks: 'attack_forest' },
-    { level: 15, effect: 'Level 3: +1 martial bonus', statBonus: { martial: 1 } },
-    { level: 20, effect: 'Level 4: +2 industry bonus', statBonus: { industry: 2 } },
-    { level: 25, effect: 'Level 5: Can attack over rivers', unlocks: 'attack_river' },
-    { level: 30, effect: 'Level 6: Bypass basic walls in combat', unlocks: 'bypass_walls' },
-    { level: 40, effect: 'Level 8: +3 martial, +2 defense bonus', statBonus: { martial: 3, defense: 2 } },
-    { level: 50, effect: 'Level 10: Can attack over ocean', unlocks: 'attack_ocean' },
-    { level: 60, effect: 'Level 12: +5 martial bonus', statBonus: { martial: 5 } },
-    { level: 75, effect: 'Level 15: Can attack over mountains', unlocks: 'attack_mountains' },
-    { level: 80, effect: 'Level 16: +5 housing capacity', statBonus: { capacity: 5 } },
+    { level: 5,  effect: 'Pottery: +1 Capacity, +1 Fertility',          statBonus: { capacity: 1, fertility: 1 } },
+    { level: 10, effect: 'Bronze Working: +3 Martial',                  statBonus: { martial: 2, defense: 1 } },
+    { level: 15, effect: 'Writing: +2 Culture, +1 Diplomacy',           statBonus: { culture: 2, diplomacy: 1 } },
+    { level: 20, effect: 'Irrigation: +2 Industry, +1 Capacity',        statBonus: { industry: 2, capacity: 1 } },
+    { level: 25, effect: 'Masonry: +2 Martial, +2 Capacity',            statBonus: { defense: 2, capacity: 2 } },
+    { level: 30, effect: 'Siege Engineering: Bypass walls, +2 Martial', unlocks: 'bypass_walls', statBonus: { martial: 2 } },
+    { level: 40, effect: 'Steel: +5 Martial',                           statBonus: { martial: 3, defense: 2 } },
+    { level: 50, effect: 'Currency: +2 Industry, +2 Diplomacy',         statBonus: { industry: 2, diplomacy: 2 } },
+    { level: 60, effect: 'Philosophy: +3 Culture, +2 Faith',            statBonus: { culture: 3, faith: 2 } },
+    { level: 75, effect: 'Engineering: +3 Industry, +3 Capacity',       statBonus: { industry: 3, capacity: 3 } },
+    { level: 80, effect: 'Printing Press: +3 Culture, +3 Faith, +2 Diplomacy', statBonus: { culture: 3, faith: 3, diplomacy: 2 } },
 ];
 
+// LEGACY: kept only so old saves that hold generic neighbor IDs don't break.
+// New games use buildCivNeighbors() which returns real adjacent civs.
 export const GENERATE_NEIGHBORS = (year: number): NeighborCiv[] => {
     const baseStrength = Math.abs(year) > 2000 ? 3 : Math.abs(year) > 500 ? 8 : 15;
     return [
@@ -417,6 +612,46 @@ export const GENERATE_NEIGHBORS = (year: number): NeighborCiv[] => {
         { id: 'n2', name: 'Rival City-State', martial: baseStrength, defense: 5, faith: 3, isConquered: false, relationship: 'Neutral' },
         { id: 'n3', name: 'Foreign Empire', martial: Math.floor(baseStrength * 1.5), defense: 10, faith: 5, isConquered: false, relationship: 'Neutral' },
     ];
+};
+
+// Build neighbors from actual adjacent civilizations. Every NPC neighbor is
+// a real preset civ with its authentic stats, so attacking "Carthage" means
+// you're fighting the actual Carthage preset — and conquest removes them as
+// a future threat. Neighbor Martial includes their Defense (folded), an
+// Island bonus, AND their trait multipliers so they're a real opponent and
+// not a punching bag.
+export const buildCivNeighbors = (
+    playerPresetId: string,
+    adjacencyMap: Record<string, string[]>,
+    civPresets: CivPreset[],
+): NeighborCiv[] => {
+    const neighborIds = adjacencyMap[playerPresetId] || [];
+    return neighborIds
+        .map((id): NeighborCiv | null => {
+            const preset = civPresets.find((p) => p.id === id);
+            if (!preset) return null;
+            const b = preset.baseStats;
+            // Apply trait multipliers so a Strength civ next door is actually
+            // strong. Without this, Sparta vs Greek = 58 vs 5 (trivial).
+            // Match the player-side rules in calculateStats: Strength × 2.
+            let m = b.martial + b.defense;
+            if (preset.traits.includes('Strength')) m *= 2;
+            if (preset.isIsland) m += 3; // mirror player-side island terrain bonus
+            // Cultural-stage Barbarism multiplier (* 1.5) — neighbors start
+            // at Barbarism so they get the same 50% Martial uplift the player
+            // does until they're displaced.
+            m = Math.floor(m * 1.5);
+            return {
+                id,
+                name: preset.name,
+                martial: m,
+                defense: 0,
+                faith: b.faith + (preset.traits.includes('Wisdom') ? b.faith : 0),
+                isConquered: false,
+                relationship: 'Neutral',
+            };
+        })
+        .filter((n): n is NeighborCiv => n !== null);
 };
 
 export interface Technology {
@@ -437,46 +672,131 @@ export const TECHNOLOGIES: Technology[] = [
     { id: 'engineering', name: 'Engineering', year: -300, effect: 'industry_bonus_5', description: '+5 Industry', requires: 'mathematics' },
 ];
 
+// CULTURAL STAGE MULTIPLIERS — applied in calculateStats.
+// Each stage reflects a distinct era of civ development. Progressing through
+// stages (driven by total Culture) is the main payoff for investing in the
+// Develop action, Amphitheatres, Wonders, and cultural tenets. Thresholds:
+//   Barbarism (start) -> Classical (20) -> Imperial (50)
+//   -> Enlightenment (100) -> Modern (200)
+// Decline is special: it's entered only via penalty events, not by threshold.
 export const CULTURAL_STAGE_MULTIPLIERS = {
-    barbarism: { martial: 1.5, fertility: 1.3, science: 0.5, faith: 0.5, industry: 0.8 },
-    classical: { martial: 1.0, fertility: 1.0, science: 1.5, faith: 1.3, industry: 1.2 },
-    imperial: { martial: 1.3, fertility: 0.8, science: 1.2, faith: 1.0, industry: 1.5 },
-    decline: { martial: 0.7, fertility: 0.5, science: 0.8, faith: 1.2, industry: 0.6 },
+    barbarism:     { martial: 1.5, fertility: 1.3, science: 0.5, faith: 0.5, industry: 0.8 },
+    classical:     { martial: 1.0, fertility: 1.0, science: 1.5, faith: 1.3, industry: 1.2 },
+    imperial:      { martial: 1.3, fertility: 0.8, science: 1.2, faith: 1.0, industry: 1.5 },
+    enlightenment: { martial: 1.1, fertility: 1.0, science: 2.0, faith: 1.2, industry: 1.5 },
+    modern:        { martial: 1.2, fertility: 1.2, science: 2.0, faith: 1.2, industry: 2.0 },
+    decline:       { martial: 0.7, fertility: 0.5, science: 0.8, faith: 1.2, industry: 0.6 },
 };
 
+// CULTURAL STAGE THRESHOLDS — culture totals required to enter each stage.
+// Kept here (not inlined) so gameplay, UI, and documentation share one source
+// of truth. Edit this table to retune pacing without hunting through JSX.
+export const CULTURAL_STAGE_THRESHOLDS: { stage: 'Classical' | 'Imperial' | 'Enlightenment' | 'Modern'; minCulture: number; flavor: string }[] = [
+    { stage: 'Classical',     minCulture: 20,  flavor: 'Formal arts, written language, civic identity.' },
+    { stage: 'Imperial',      minCulture: 50,  flavor: 'Cultural reach extends beyond borders. Diplomacy matters.' },
+    { stage: 'Enlightenment', minCulture: 100, flavor: 'Science and philosophy flourish. Research pays double.' },
+    { stage: 'Modern',        minCulture: 200, flavor: 'A civilization at its zenith. Every yield amplified.' },
+];
+
+// VICTORY CONDITIONS — four paths, each with a target score tuned to be
+// achievable in a 24-turn game if the civ specializes. Each condition also
+// publishes a `recipe` of line items the UI reads to show granular progress,
+// so students see exactly what's contributing and what to invest in next.
+// Targets were calibrated against a typical Egypt run: ~4 base production,
+// ~3 per-turn yields, modest combat / wonder engagement.
 export const VICTORY_CONDITIONS: Record<string, VictoryCondition> = {
     military: {
         name: 'Conquest',
-        description: 'Control the most territory through warfare',
+        description: 'Conquer 5 civilizations through decisive victories.',
         icon: 'Sword',
-        calculate: (state) => {
-            const territory = state.tiles?.filter((t: any) => t.building).length || 0;
-            return territory + (state.warsWon || 0) * 5;
+        // BALANCE RATIONALE: Egypt (median civ) has 6 neighbors. Respawn civs
+        // appear on turn 15+, so there's a steady supply of new targets if the
+        // board thins out. Reaching Martial 15+ by turn 5-6 is achievable
+        // with a Barracks (+3) + Bronze Working unlock (+2) + a respawn bonus,
+        // and the margin-6 decisive victory requirement means you can't just
+        // squeak through — you need a real military civ. Five conquests over
+        // 24 turns = roughly one per 4-5 turns with Martial-focused play.
+        target: 5,
+        calculate: (state) => state.conqueredTerritories || 0,
+        recipe: (state) => {
+            const conquered = state.conqueredTerritories || 0;
+            const warsWon = state.warsWon || 0;
+            const territory = state.tiles?.filter((t: any) => t.building && t.building !== 'None').length || 0;
+            return [
+                { label: 'Civilizations conquered', value: conquered, points: conquered, formula: '1 pt per decisive conquest (the only thing that counts toward victory)' },
+                { label: 'Total battles won',      value: warsWon,   points: 0,         formula: 'Informational — non-decisive wins don\'t conquer' },
+                { label: 'Tiles with buildings',   value: territory, points: 0,         formula: 'Informational — shows civ footprint' },
+            ];
         }
     },
     scientific: {
         name: 'Innovation',
-        description: 'Advance science to the highest level',
+        description: 'Advance science to the highest level and collect historical technologies.',
         icon: 'FlaskConical',
+        target: 70,
         calculate: (state) => {
             const science = state.civilization?.stats?.science || 0;
-            return science + (state.technologies?.length || 0) * 3;
+            return science + (state.civilization?.technologies?.length || 0) * 3;
+        },
+        recipe: (state) => {
+            const science = state.civilization?.stats?.science || 0;
+            const techs = state.civilization?.technologies?.length || 0;
+            return [
+                { label: 'Science Total',    value: science, points: science,  formula: '1 pt per Science' },
+                { label: 'Technologies',     value: techs,   points: techs * 3, formula: '3 pts per technology' },
+            ];
         }
     },
     cultural: {
         name: 'Legacy',
-        description: 'Build the most wonders and cultural achievements',
+        description: 'Amass Culture, erect Wonders, and reach advanced Cultural Stages.',
         icon: 'Landmark',
+        target: 120,
         calculate: (state) => {
-            return (state.wondersBuilt?.length || 0) * 10 + (state.civilization?.stats?.industry || 0);
+            const culture = state.civilization?.stats?.culture || 0;
+            const wonders = (state.wondersBuilt?.length || 0) * 10;
+            const stage = state.civilization?.culturalStage;
+            const stageBonus = stage === 'Modern' ? 60
+                : stage === 'Enlightenment' ? 45
+                : stage === 'Imperial' ? 30
+                : stage === 'Classical' ? 15
+                : 0;
+            const amphitheatres = (state.civilization?.buildings?.amphitheatres || 0) * 3;
+            return culture + wonders + stageBonus + amphitheatres;
+        },
+        recipe: (state) => {
+            const culture = state.civilization?.stats?.culture || 0;
+            const wonders = state.wondersBuilt?.length || 0;
+            const stage = state.civilization?.culturalStage;
+            const stageBonus = stage === 'Modern' ? 60
+                : stage === 'Enlightenment' ? 45
+                : stage === 'Imperial' ? 30
+                : stage === 'Classical' ? 15
+                : 0;
+            const amphitheatres = state.civilization?.buildings?.amphitheatres || 0;
+            return [
+                { label: 'Culture Total',         value: culture,       points: culture,          formula: '1 pt per Culture' },
+                { label: 'Wonders built',         value: wonders,       points: wonders * 10,     formula: '10 pts per Wonder' },
+                { label: `Stage: ${stage}`,       value: stageBonus > 0 ? 1 : 0, points: stageBonus, formula: 'Classical 15 · Imperial 30 · Enlightenment 45 · Modern 60' },
+                { label: 'Amphitheatres',         value: amphitheatres, points: amphitheatres * 3, formula: '3 pts each' },
+            ];
         }
     },
     religious: {
         name: 'Faith',
-        description: 'Spread your religion to the most civilizations',
+        description: 'Grow spiritual power and spread your religion to neighboring civs.',
         icon: 'Scroll',
+        target: 30,
         calculate: (state) => {
             return (state.civilization?.stats?.faith || 0) + (state.religionSpread || 0) * 5;
+        },
+        recipe: (state) => {
+            const faith = state.civilization?.stats?.faith || 0;
+            const spread = state.religionSpread || 0;
+            return [
+                { label: 'Faith Total',            value: faith,  points: faith,     formula: '1 pt per Faith' },
+                { label: 'Neighbors converted',    value: spread, points: spread * 5, formula: '5 pts per conversion' },
+            ];
         }
     }
 };

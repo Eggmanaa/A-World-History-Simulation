@@ -170,11 +170,11 @@ export const AdjacentCivs: React.FC<AdjacentCivsProps> = ({
                   )}
                 </div>
 
-                {/* Defensive Info */}
+                {/* Military Strength */}
                 <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800/50 border border-slate-700">
                   <Shield className="w-4 h-4 text-slate-400 flex-shrink-0" />
                   <span className="text-xs text-slate-400">
-                    Defense: <span className="text-slate-200 font-semibold">12</span>
+                    Martial: <span className="text-slate-200 font-semibold">12</span>
                   </span>
                 </div>
               </div>

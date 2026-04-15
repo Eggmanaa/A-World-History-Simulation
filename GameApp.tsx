@@ -23,8 +23,13 @@ import {
   TowerControl,
   Globe,
   MapPin,
+  Zap,
+  RotateCcw,
+  AlertTriangle,
+  Trophy,
 } from "lucide-react";
 import MapScene from "./components/MapScene";
+import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
 import { useGameSync } from "./hooks/useGameSync";
 import { useAutoSave } from "./hooks/useAutoSave";
 import {
@@ -34,9 +39,12 @@ import {
   WONDERS_LIST,
   RELIGION_TENETS,
   GENERATE_NEIGHBORS,
+  buildCivNeighbors,
   SCIENCE_UNLOCKS,
   TECHNOLOGIES,
   CULTURAL_STAGE_MULTIPLIERS,
+  CULTURAL_STAGE_THRESHOLDS,
+  VICTORY_CONDITIONS,
 } from "./constants";
 import {
   TileData,
@@ -55,8 +63,26 @@ import {
   TurnDecision,
   Treaty,
   TreatyType,
+  TurnPhaseV2,
+  PlayerActionType,
+  TurnResolution,
+  CombatLogEntry,
 } from "./types";
-import { getAdjacentCivs, areAdjacent } from "./adjacency";
+import { getAdjacentCivs, areAdjacent, CIV_ADJACENCY } from "./adjacency";
+import { WORLD_EVENTS } from "./worldEvents";
+import {
+  calculateIncome,
+  executeAction,
+  getNewlyUnlockedActions,
+  ACTION_DEFINITIONS,
+} from "./actionSystem";
+import {
+  calculateConquestRewards,
+  getAvailableRespawnCivs,
+  getRespawnBonuses,
+  generateConquestTiles,
+} from "./conquestSystem";
+import { RESPAWN_CIVS, RESPAWN_BONUSES } from "./constants";
 
 // --- HELPER LOGIC ---
 
@@ -85,6 +111,163 @@ const checkSavingThrow = (
   return false;
 };
 
+// Rich stat explanations used by the left-sidebar click-to-expand info panels.
+// Each entry is keyed by the info ID and supplies a title, detailed body, and
+// optional list of "how to raise it" bullets. Kept as data (not JSX) so it's
+// easy to edit copy without touching the render.
+const STAT_EXPLANATIONS: Record<string, {
+  title: string;
+  body: string;
+  raise?: string[];
+  affects?: string[];
+}> = {
+  martial: {
+    title: 'Martial',
+    body: 'Your unified combat stat — used for BOTH attack rolls and defense against raids. Every former Defense source (walls, terrain, Archimedes Tower, cultural prestige, Holy War, Masonry tech, peace treaties) is now folded into Martial so a single number tells you how strong your civ is in combat.',
+    raise: [
+      'Population: every 4 pop adds +1 Martial (citizen militia).',
+      'Build Barracks (+3 each) or Walls (+1 each, +2 with Troy) — all stack into Martial.',
+      'Archimedes Tower gives +20 Martial (requires 30 Science).',
+      'Terrain: mountains, hills, islands, and rivers contribute Martial.',
+      'Science: Bronze Working +3, Masonry +2, Steel +5, Siege Engineering +2, Iron Working path +5.',
+      'Religion tenet: Holy War adds +2 per converted neighbor, +1 baseline.',
+      'Cultural Prestige: +1 Martial per 10 Culture Total.',
+      'Peace treaties: +1 Martial each; Military treaties: +3 Martial each.',
+      'Trait bonus: Strength doubles your Martial total.',
+      'Cultural Stages (Imperial/Modern) scale Martial.',
+    ],
+    affects: ['Attack rolls (vs target Martial + Defense)', 'Raid mitigation each turn', 'Conquest victory progress'],
+  },
+  faith: {
+    title: 'Faith',
+    body: 'Spiritual power. Needed to found a religion (10 Faith + 1 Temple) and required for conversion attempts against neighbors. Many religion tenets scale with Faith.',
+    raise: [
+      'Temples give +2 baseline Faith and boost Faith Yield.',
+      'Religion tenets (Monotheism +5, Scriptures doubles, Asceticism +15).',
+      'Trait bonus: Wisdom doubles Faith.',
+      'Worship action adds your Faith Yield.',
+    ],
+    affects: ['Religion founding', 'Conversion success vs neighbors', 'Philosophy tenet (converts 50% to Science)'],
+  },
+  culture: {
+    title: 'Culture',
+    body: 'Arts, customs, and identity. Drives progression through Cultural Stages and contributes directly to the Legacy victory score. Also grants passive Cultural Prestige bonuses to Defense and Diplomacy.',
+    raise: [
+      'Develop action: +Culture Yield and +2 per Amphitheatre.',
+      'Amphitheatres give +3 base Culture.',
+      'Wonders (Oracle +10, Hanging Gardens +5, Pyramids +5, and more).',
+      'Religion tenets: Philosophy, Universal Faith, Scriptures.',
+      'Science unlocks: Writing, Philosophy, Printing Press.',
+      'Cultural treaties: +2 Culture per active treaty.',
+      'Trait bonus: Creativity doubles Culture.',
+    ],
+    affects: ['Cultural Stage progression', 'Legacy victory score', 'Cultural Prestige passive bonuses (Defense, Diplomacy)'],
+  },
+  science: {
+    title: 'Science',
+    body: 'Your civilization\'s knowledge. Reaching science thresholds permanently unlocks stat bonuses and abilities like siege engineering. Contributes to the Innovation victory score.',
+    raise: [
+      'Research action: +Science Yield and +2 per Library.',
+      'Libraries give +2 yield on Research.',
+      'Religion tenet: Scriptures (+2) and Philosophy (converts Faith).',
+      'Wonders: Great Library (+15).',
+      'Trait bonus: Intelligence doubles Science.',
+      'Cultural Stages (Classical/Enlightenment/Modern) scale Science heavily.',
+    ],
+    affects: ['Science unlock milestones (every 5–80)', 'Wall-bypass in combat (30+)', 'Innovation victory'],
+  },
+  diplomacy: {
+    title: 'Diplomacy',
+    body: 'Your ability to form alliances and conduct treaty-based negotiations. Forming alliances requires at least 1 Diplomacy. Passive boost from Cultural Prestige (every 20 Culture = +1 Diplomacy).',
+    raise: [
+      'Form alliances via the Action phase Diplomacy action.',
+      'Science unlocks: Writing, Currency, Printing Press.',
+      'Religion tenet: Universal Faith.',
+      'Trait bonus: Beauty adds +1 Diplomacy.',
+      'Cultural Prestige: +1 Diplomacy per 20 Culture Total.',
+    ],
+    affects: ['Alliance formation', 'Treaty-based relationships'],
+  },
+  cultural_stage: {
+    title: 'Cultural Stage',
+    body: 'Your civilization\'s overall cultural maturity. Advances automatically as Culture Total reaches each threshold. Each stage applies a distinct set of percentage modifiers to your core stats.',
+    raise: [
+      'Barbarism (start): +50% Martial, +30% Fertility. Science, Faith, Industry reduced.',
+      'Classical (20 Culture): +50% Science, +30% Faith, +20% Industry.',
+      'Imperial (50 Culture): +30% Martial, +50% Industry, +20% Science. Fertility -20%.',
+      'Enlightenment (100 Culture): +100% Science, +50% Industry, +20% Faith.',
+      'Modern (200 Culture): Every major yield amplified.',
+      'Decline is only entered via penalty events, not by culture drop.',
+    ],
+    affects: ['All stat calculations via CULTURAL_STAGE_MULTIPLIERS'],
+  },
+  technologies: {
+    title: 'Technologies',
+    body: 'Concrete inventions you\'ve earned, usually by advancing through the timeline or via world events. Unlike Science-level thresholds, these are specific named technologies with one-off effects (e.g., Bronze Working doubles Martial).',
+    affects: ['Per-tech multipliers and gated abilities applied in calculateStats.'],
+  },
+  industry: {
+    title: 'Industry',
+    body: 'Your raw production capacity. Each turn it generates Production Pool income that funds the Build Phase. Higher Industry means more buildings per turn. Wonder and Workshop costs all pull from the Production Pool, not Industry directly.',
+    raise: [
+      'Population: every 5 pop adds +1 Industry (workers).',
+      'Workshops give +2 Production Income each.',
+      'Farms give +1 Production Income each (plus +1 Capacity).',
+      'Trait bonus: Industrious doubles Industry.',
+      'Science unlocks: Irrigation (+2), Currency (+2), Engineering (+3).',
+      'Cultural Stages (Imperial +50%, Modern +100%) scale Industry.',
+      'Wonders: Pyramids grant +20 Production when built.',
+    ],
+    affects: ['Production Pool income each turn', 'Build Phase capacity', 'Wonder construction'],
+  },
+  houses: {
+    title: 'Houses & Population',
+    body: 'Every House on the map supports 1 Population (2 if the Advanced Agriculture tech is unlocked). Population is your civilization\'s people — and people DO things. Bigger population = stronger army, more production, more scholars and artists. This is why you want to Grow.',
+    raise: [
+      'Grow action builds up to 2 Houses per turn (limited by Fertility).',
+      'Farms raise Capacity (+1) so Population can keep growing.',
+      'Hanging Gardens wonder: +10 Capacity.',
+      'Religion tenet Medicine: +5 Capacity, +1 Fertility.',
+      'Science unlocks Pottery, Irrigation, Masonry, Engineering, Printing Press all add Capacity.',
+      'Cultural Stages with positive Fertility multipliers (Barbarism, Modern) accelerate natural growth.',
+    ],
+    affects: [
+      'Every 4 Population: +1 Martial (citizen militia join your army).',
+      'Every 5 Population: +1 Industry / Production Income (workers produce more).',
+      'Fills up each turn via natural growth until you hit Capacity, then stalls.',
+      'Raids cost Population first — a healthy civ absorbs losses; a small civ feels them.',
+      'If Population ever reaches 0 and Houses hit 0, your civilization falls and must respawn.',
+    ],
+  },
+  fertility: {
+    title: 'Fertility',
+    body: 'How many Houses you can build per turn. Gates population growth. High Fertility lets your civilization expand quickly; low Fertility means slow organic growth even with open Capacity.',
+    raise: [
+      'Trait bonus: Health trait adds +2 Fertility.',
+      'Science unlocks: Pottery (+1), Engineering (+3).',
+      'Religion tenet: Medicine adds +1 Fertility.',
+      'World events and timeline bonuses.',
+    ],
+    affects: ['Houses built per turn', 'Population growth rate'],
+  },
+};
+
+// Shared Cultural Stage resolver. Returns the highest stage whose threshold
+// the civ's culture clears, but never downgrades from Decline (which is set
+// only by penalty events, not by culture drops).
+const resolveCulturalStage = (
+  currentStage: string | undefined,
+  culture: number,
+): 'Barbarism' | 'Classical' | 'Imperial' | 'Enlightenment' | 'Modern' | 'Decline' => {
+  if (currentStage === 'Decline') return 'Decline';
+  // Walk thresholds high-to-low; first match wins.
+  const sorted = [...CULTURAL_STAGE_THRESHOLDS].sort((a, b) => b.minCulture - a.minCulture);
+  for (const t of sorted) {
+    if (culture >= t.minCulture) return t.stage;
+  }
+  return 'Barbarism';
+};
+
 const calculateStats = (
   tiles: TileData[],
   civData: any,
@@ -105,54 +288,145 @@ const calculateStats = (
     }
   });
 
-  if (civData.isIsland) terrainDefense += 7;
+  // Island bonus reduced from +7 → +3 to keep total martial in line with
+  // the rest of the balance pass (Sparta + Strength + island + Barbarism
+  // multipliers used to push Martial above 100).
+  if (civData.isIsland) terrainDefense += 3;
 
   // 2. Building Bonuses
   const buildings = tiles
     .map((t) => t.building)
     .filter((b) => b !== BuildingType.None);
+  // Tile-based building bonus accumulators. ONLY structural fields (martial,
+  // capacity, yield rates) are accumulated here. Faith Total and Culture
+  // Total grants from Temple and Amphitheatre are one-shot increments
+  // applied at placement time in handleTileClick so they enter the running
+  // total once and aren't re-added every render.
+  //
+  //   Farm         +1 Capacity, +1 Production Income per tile
+  //   Workshop     +2 Production Income per tile
+  //   Library      +2 Science Yield per tile
+  //   Barracks     +3 Martial per tile
+  //   Temple       +1 Faith Yield per tile (one-time +2 Faith Total at place)
+  //   Amphitheatre +2 Culture Yield per tile (one-time +3 Culture at place)
+  //   Wall         +3 Martial + +1 Capacity per tile (Troy: +6 Martial)
+  //   ArchTower    +10 Martial per tile (requires 30 Science to build)
   let buildingDefense = 0;
-  let buildingFaith = 0;
-  let buildingCulture = 0;
+  let buildingMartial = 0;
+  let buildingCapacity = 0;
+  let buildingProductionIncome = 0;
+  let buildingScienceYield = 0;
+  let buildingCultureYield = 0;
+  let buildingFaithYield = 0;
 
   buildings.forEach((b) => {
-    if (b === BuildingType.Wall) {
-      // Troy Bonus: Double wall effectiveness
-      buildingDefense += civData.flags.troyWallDouble ? 2 : 1;
+    if (b === BuildingType.Farm) {
+      buildingCapacity += 1;
+      buildingProductionIncome += 1;
     }
-    if (b === BuildingType.Temple) buildingFaith += 2;
+    if (b === BuildingType.Workshop) {
+      buildingProductionIncome += 2;
+    }
+    if (b === BuildingType.Library) {
+      buildingScienceYield += 2;
+    }
+    if (b === BuildingType.Barracks) {
+      buildingMartial += 3;
+    }
+    if (b === BuildingType.Wall) {
+      // Sidegrade with Barracks: Wall = +3 Martial + +1 Capacity, Barracks =
+      // +3 Martial only. Troy's flag doubles wall martial to +6.
+      const wallMartial = civData.flags.troyWallDouble ? 6 : 3;
+      buildingDefense += wallMartial;
+      buildingCapacity += 1;
+    }
+    if (b === BuildingType.Temple) {
+      buildingFaithYield += 1;
+    }
     if (b === BuildingType.Amphitheatre) {
-      buildingCulture += 3;
+      buildingCultureYield += 2;
     }
     if (b === BuildingType.ArchimedesTower) {
-      buildingDefense += 20;
+      // Keep as a mid-tier rather than the old blow-out +20. Archimedes
+      // Tower now gives +10 Martial (still substantial — a little less than
+      // two Barracks at half the build footprint).
+      buildingDefense += 10;
     }
   });
 
   // 3. Base + Multipliers
-  let martial = civData.baseStats.martial;
-  let defense = civData.baseStats.defense + terrainDefense + buildingDefense;
-  let faith = civData.baseStats.faith + buildingFaith;
-  let culture = civData.stats.culture + buildingCulture;
-  let science = civData.stats.science;
+  // NOTE: Defense was collapsed into Martial so a single stat governs both
+  // offensive and defensive combat. Every former Defense source (base
+  // defense, terrain, walls, Archimedes Tower, cultural prestige, peace
+  // treaties, Holy War, Masonry, etc.) now feeds Martial. The `defense`
+  // return value is retained at 0 for backward compatibility with existing
+  // types but is no longer consulted in combat or raid math.
+  //
+  // STAT DERIVATION CONTRACT
+  //
+  // Two distinct categories. Get this wrong and you double-count buildings
+  // every recompute (Iteration 5 had this exact bug for Capacity).
+  //
+  // ACCUMULATING totals — built up by player actions (Worship, Develop,
+  // Research, world events). The stored value IS the truth. calculateStats
+  // must NOT add building bonuses to these or they compound each render
+  // (e.g., 1 Amphitheatre on the map would add +3 Culture every turn
+  // instead of the intended +3 once at placement time).
+  //   - science  : reads stats.science, no building add.
+  //   - culture  : reads stats.culture, no building add.
+  //   - faith    : reads stats.faith,   no building add.
+  //   - diplomacy: reads stats.diplomacy.
+  //
+  // STRUCTURAL stats — derived from the current map + civ definition.
+  // Buildings ADD here because losing the building loses the bonus.
+  //   - martial         : base + defense + terrain + buildings + traits + …
+  //   - industry        : base + terrain.
+  //   - capacity        : baseStats.capacity + buildings.
+  //   - fertility       : baseStats.fertility (+ trait/event bumps).
+  //   - productionIncome: base + buildings (Workshops/Farms).
+  //   - scienceYield    : base + Library tile bonuses.
+  //   - cultureYield    : base + Amphitheatre tile bonuses.
+  //   - faithYield      : base + Temple tile bonuses.
+  let martial = civData.baseStats.martial + civData.baseStats.defense + terrainDefense + buildingDefense + buildingMartial;
+  let faith = civData.stats.faith ?? civData.baseStats.faith;        // ACCUMULATING
+  let culture = civData.stats.culture || 0;                          // ACCUMULATING
+  let science = civData.stats.science || 0;                          // ACCUMULATING
+  // Diplomacy is fully DERIVED — every source (Beauty trait, religion
+  // tenets, science unlocks, wonders, cultural prestige) re-applies each
+  // render. It starts from 0 and accumulates only via in-render bonuses, so
+  // we don't read stored stats.diplomacy here (that would compound).
+  let diplomacy = 0;
   let fertility = civData.baseStats.fertility;
   let industry = civData.baseStats.industry + terrainIndustry;
-  let diplomacy = civData.stats.diplomacy || 0;
-  let populationCapacity = civData.stats.capacity;
+  let populationCapacity = (civData.baseStats.capacity || 10) + buildingCapacity;
+  let productionIncome = (civData.baseStats.productionIncome ?? civData.baseStats.industry) + buildingProductionIncome;
+  let scienceYield = (civData.baseStats.scienceYield ?? Math.max(1, Math.floor(civData.baseStats.industry / 3))) + buildingScienceYield;
+  let cultureYield = (civData.baseStats.cultureYield ?? Math.max(1, Math.floor(civData.baseStats.faith / 3))) + buildingCultureYield;
+  let faithYield = (civData.baseStats.faithYield ?? Math.max(1, Math.floor(civData.baseStats.faith / 2))) + buildingFaithYield;
 
-  // Wonder Bonuses
+  // Wonder Bonuses — Defense wonder bonuses are folded into Martial.
+  // WONDER bonuses
+  // ACCUMULATING fields (faith, culture, science) get their wonder bonus
+  // applied ONCE in handleActionSelect when the wonder is built (it sets
+  // bonusChanges.faith etc.). Re-adding them here every render would double
+  // them each turn — same bug as the building one-shot fix above.
+  // STRUCTURAL fields (martial, capacity, productionIncome via 'production')
+  // are derived each render so we DO add them here so they always reflect
+  // the current built-wonder state.
   if (civData.builtWonderId) {
     const wonder = WONDERS_LIST.find((w) => w.id === civData.builtWonderId);
     if (wonder && wonder.bonus) {
-      if (wonder.bonus.defense) buildingDefense += wonder.bonus.defense;
-      if (wonder.bonus.faith) buildingFaith += wonder.bonus.faith;
-      if (wonder.bonus.culture) buildingCulture += wonder.bonus.culture;
+      if (wonder.bonus.defense) martial += wonder.bonus.defense; // folds into Martial
       if (wonder.bonus.martial) martial += wonder.bonus.martial;
-      if (wonder.bonus.science) science += wonder.bonus.science;
       if (wonder.bonus.diplomacy) diplomacy += wonder.bonus.diplomacy;
       if (wonder.bonus.populationCapacity)
         populationCapacity += wonder.bonus.populationCapacity;
-      if (wonder.bonus.production) industry += wonder.bonus.production;
+      if (wonder.bonus.production) {
+        industry += wonder.bonus.production;
+        productionIncome += wonder.bonus.production;
+      }
+      // wonder.bonus.faith / culture / science are applied at build time,
+      // NOT here, so they don't compound across renders.
     }
   }
 
@@ -164,66 +438,117 @@ const calculateStats = (
   ) {
     const tenets = civData.religion.tenets;
 
+    // Each tenet has a real, proportionate effect. Multiple tenets stack.
+    // IMPORTANT: tenets MAY adjust YIELDS (per-turn rates that recompute
+    // each render) and STRUCTURAL stats (martial, capacity, fertility,
+    // diplomacy). They MUST NOT add to ACCUMULATING stats (faith, culture,
+    // science totals) — that compounds each render into exponential growth.
     if (tenets.includes("monotheism")) {
-      faith += 5;
+      // +2 Faith Yield/turn. Auto-spread handled in handleIncomeComplete.
+      faithYield += 2;
     }
     if (tenets.includes("polytheism")) {
-      // +2 Faith per temple
+      // +1 Faith Yield per Temple, +1 baseline.
       const templeCount = tiles.filter(
         (t) => t.building === BuildingType.Temple,
       ).length;
-      faith += templeCount * 2;
+      faithYield += templeCount + 1;
     }
     if (tenets.includes("holy_war")) {
-      // +2 Martial per converted neighbor
+      // +2 Martial per converted neighbor + 1 baseline (Martial is derived
+      // each render so this is safe).
       const convertedCount = neighbors.filter(
         (n) => n.religion === civData.religion.name,
       ).length;
-      martial += convertedCount * 2;
+      martial += convertedCount * 2 + 1;
     }
     if (tenets.includes("scriptures")) {
-      // Double faith output
-      faith *= 2;
+      // Double Faith YIELD per turn + +1 Science Yield.
+      faithYield = Math.max(2, faithYield * 2);
+      scienceYield += 1;
     }
     if (tenets.includes("philosophy")) {
-      // Convert 50% of faith to science
-      science += Math.floor(faith * 0.5);
+      // Faith powers science: convert ~25% of stored Faith Total into a
+      // Science Yield bump per turn (capped so it can't blow up).
+      const conversion = Math.min(8, Math.floor((civData.stats.faith || 0) * 0.25));
+      scienceYield += conversion;
+      cultureYield += 1;
     }
     if (tenets.includes("medicine")) {
-      // Add +5 population capacity
+      // +5 Capacity, +1 Fertility (both derived each render — safe).
       populationCapacity += 5;
+      fertility += 1;
     }
     if (tenets.includes("asceticism")) {
-      // -5 pop cap, +10 faith
-      populationCapacity -= 5;
-      faith += 10;
+      // Tighter pop cap, bigger faith yield per turn.
+      populationCapacity -= 3;
+      faithYield += 3;
     }
-    // evangelism: affects religion spreading speed (UI-level, not stat calc)
+    if (tenets.includes("evangelism")) {
+      // +1 Faith Yield baseline; conversion logic handled in spreadReligion.
+      faithYield += 1;
+    }
     if (tenets.includes("christianity")) {
-      faith += 1;
-      culture += 1;
+      // Universal Faith: +1 Faith Yield, +1 Culture Yield, +1 Diplomacy,
+      // +1 Martial per fellow-faith ally.
+      faithYield += 1;
+      cultureYield += 1;
+      diplomacy += 1;
+      const allyCount = neighbors.filter(
+        (n) => n.relationship === 'Ally' && n.religion === civData.religion.name,
+      ).length;
+      martial += allyCount;
     }
   }
 
-  // Apply Traits
+  // Apply Traits — multipliers attach to per-turn capability (Martial,
+  // Industry, Yields), NOT accumulated totals. Multiplying totals on every
+  // render makes them grow exponentially (Wisdom × Faith × every recompute).
+  // Strength × Martial and Industrious × Industry are safe because those
+  // stats are derived from base + buildings each render and never stored as
+  // running totals.
   if (civData.traits.includes("Strength")) martial *= 2;
-  if (civData.traits.includes("Industrious")) industry *= 2;
-  if (civData.traits.includes("Intelligence"))
-    science = Math.max(1, science * 2);
-  if (civData.traits.includes("Wisdom")) faith *= 2;
-  if (civData.traits.includes("Health")) fertility += 2;
-  if (civData.traits.includes("Beauty")) diplomacy += 1;
-  if (civData.traits.includes("Creativity")) culture *= 2;
+  if (civData.traits.includes("Industrious")) {
+    industry *= 2;
+    productionIncome *= 2;
+  }
+  if (civData.traits.includes("Intelligence")) {
+    scienceYield = Math.max(2, scienceYield * 2);
+  }
+  if (civData.traits.includes("Wisdom")) {
+    faithYield = Math.max(2, faithYield * 2);
+  }
+  if (civData.traits.includes("Creativity")) {
+    cultureYield = Math.max(2, cultureYield * 2);
+  }
+  if (civData.traits.includes("Health")) {
+    fertility += 3;        // growth specialists
+    populationCapacity += 3; // healthier civs can house more
+  }
+  if (civData.traits.includes("Beauty")) {
+    diplomacy += 2;
+    cultureYield += 1;     // fashion/art radiate soft power per turn
+  }
 
   // Apply Science Level Unlocks
+  // ACCUMULATING bonuses (faith/culture/science) are routed to the per-turn
+  // YIELDS so they don't compound each render. STRUCTURAL bonuses
+  // (martial/industry/capacity/fertility/diplomacy) are added directly since
+  // those stats are derived from baseStats each render anyway.
   SCIENCE_UNLOCKS.forEach((unlock) => {
     if (science >= unlock.level && unlock.statBonus) {
       Object.entries(unlock.statBonus).forEach(([key, val]) => {
-        if (key === "martial") martial += val;
-        if (key === "industry") industry += val;
-        if (key === "faith") faith += val;
-        if (key === "defense") defense += val;
-        if (key === "capacity") populationCapacity += val;
+        if (key === "martial")   martial += val;
+        if (key === "industry")  industry += val;
+        if (key === "defense")   martial += val; // Defense folded into Martial
+        if (key === "capacity")  populationCapacity += val;
+        if (key === "fertility") fertility += val;
+        if (key === "diplomacy") diplomacy += val;
+        // Accumulating stats route to yield so they're additive per-turn
+        // instead of compounding each render.
+        if (key === "faith")     faithYield += val;
+        if (key === "culture")   cultureYield += val;
+        if (key === "science")   scienceYield += val;
       });
     }
   });
@@ -247,7 +572,12 @@ const calculateStats = (
     });
   }
 
-  // Apply Cultural Stage Multipliers
+  // Apply Cultural Stage Multipliers — these scale per-turn capability
+  // (Martial in combat, Industry into Production Pool income, Fertility
+  // into population growth, Faith Yield and Science Yield into per-turn
+  // gains). They DO NOT touch the accumulated totals (Science and Faith
+  // totals) — multiplying a running total each render would erase progress
+  // on Barbarism (×0.5) every turn the player stays in that stage.
   const stageKey =
     (civData.culturalStage?.toLowerCase() as keyof typeof CULTURAL_STAGE_MULTIPLIERS) ||
     "barbarism";
@@ -255,9 +585,10 @@ const calculateStats = (
   if (stageMultipliers) {
     martial = Math.floor(martial * stageMultipliers.martial);
     fertility = Math.floor(fertility * stageMultipliers.fertility);
-    science = Math.floor(science * stageMultipliers.science);
-    faith = Math.floor(faith * stageMultipliers.faith);
     industry = Math.floor(industry * stageMultipliers.industry);
+    // Yield multipliers (per-turn gains) instead of total multipliers.
+    scienceYield = Math.max(1, Math.floor(scienceYield * stageMultipliers.science));
+    faithYield = Math.max(1, Math.floor(faithYield * stageMultipliers.faith));
   }
 
   // Apply Turn Bonus (Cultural Choice)
@@ -277,12 +608,36 @@ const calculateStats = (
     industry += tradeTreatyCount * 2;
     culture += culturalTreatyCount * 2;
     martial += militaryTreatyCount * 3;
-    defense += peaceTreatyCount * 1;
+    martial += peaceTreatyCount * 1; // Defense folded in.
   }
+
+  // Cultural Prestige — soft-power effects that scale with Culture total.
+  // Every 10 Culture grants +1 Martial (prestige hardens you against both
+  // attack and raid because rivals respect/admire you). Every 20 Culture
+  // grants +1 Diplomacy (cultural cachet opens doors). This turns Culture
+  // into a live, always-on stat.
+  const culturalPrestigeMartial = Math.floor(culture / 10);
+  const culturalPrestigeDiplomacy = Math.floor(culture / 20);
+  martial += culturalPrestigeMartial;
+  diplomacy += culturalPrestigeDiplomacy;
+
+  // POPULATION BONUSES — the reason to build Houses and grow population. A
+  // larger population means more citizens working the fields, defending the
+  // city, producing art, and advancing knowledge. This makes Grow, Farms,
+  // and Capacity investments pay off across combat and economy.
+  //   - Every 4 Population: +1 Martial (citizen militia)
+  //   - Every 5 Population: +1 Industry / Production Income (workers)
+  // (Culture/Science/Faith yields aren't separately returned by this
+  //  function — those are applied to stats.scienceYield / etc. directly in
+  //  their own update paths. We keep this section focused on what
+  //  calculateStats actually outputs.)
+  const pop = civData.stats.population || 0;
+  martial += Math.floor(pop / 4);
+  industry += Math.floor(pop / 5);
 
   return {
     martial: Math.floor(martial),
-    defense: Math.floor(defense),
+    defense: 0, // Collapsed into Martial. Retained in type for compatibility.
     faith: Math.floor(faith),
     culture: Math.floor(culture),
     science: Math.floor(science),
@@ -290,6 +645,13 @@ const calculateStats = (
     industry: Math.floor(industry),
     diplomacy: diplomacy,
     capacity: Math.floor(populationCapacity),
+    // Yield rates are derived each render — never overwrite stored stats with
+    // a stale value. Returning them lets callers spread these into civ.stats
+    // and have building Yield bonuses always reflect the current map.
+    productionIncome: Math.max(0, Math.floor(productionIncome)),
+    scienceYield: Math.max(1, Math.floor(scienceYield)),
+    cultureYield: Math.max(1, Math.floor(cultureYield)),
+    faithYield: Math.max(1, Math.floor(faithYield)),
   };
 };
 
@@ -301,8 +663,17 @@ const App: React.FC = () => {
   // --- STATE ---
   const [tiles, setTiles] = useState<TileData[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "build" | "world" | "wonders" | "religion" | "war" | "scoreboard"
+    "build" | "science" | "culture" | "world" | "wonders" | "religion" | "war" | "victory" | "scoreboard"
   >("build");
+  // Tracks which stat/block in the left sidebar is currently expanded for
+  // its rich explanation. null = nothing expanded. Click again to collapse.
+  const [expandedInfo, setExpandedInfo] = useState<string | null>(null);
+  // When a world event grants a FREE building placement (e.g. "Pray to the
+  // Gods" in the Thera Eruption event gifts a Temple), we route the player
+  // into idle placement mode first. This ref remembers which phase to resume
+  // after they drop the building on a tile. Using a ref (not state) keeps
+  // React from re-rendering just because the target changed mid-turn.
+  const pendingPostFreePlacementPhase = useRef<TurnPhaseV2 | null>(null);
   const [gameState, setGameState] = useState<GameState>({
     simulationId: "demo",
     year: -50000,
@@ -315,8 +686,9 @@ const App: React.FC = () => {
     neighbors: [],
     pendingTurnChoice: false,
     currentEventPopup: null,
-    gameFlags: { warUnlocked: false, religionUnlocked: false },
+    gameFlags: { warUnlocked: true, religionUnlocked: true },
     warsWon: 0,
+    combatLog: [],
     religionSpread: 0,
     wondersBuilt: [],
     gameEnded: false,
@@ -324,6 +696,19 @@ const App: React.FC = () => {
     tradedThisTurn: [],
     fogOfWar: true,
     pendingTreaty: null,
+    // V2 turn flow fields
+    turnPhase: 'idle' as TurnPhaseV2,
+    currentWorldEvent: null,
+    currentCivEvent: null,
+    selectedWorldChoice: null,
+    selectedPlayerAction: null,
+    turnResolution: null,
+    actionPlacements: 0,
+    turnNumber: 0,
+    conqueredTerritories: 0,
+    pendingRespawn: false,
+    respawnOptions: [],
+    conquestReward: null,
   });
 
   // Temporary storage for the active turn bonus
@@ -349,6 +734,9 @@ const App: React.FC = () => {
     warDeclarations: [],
     allianceOffers: [],
     submitted: false,
+    v2Action: null,
+    v2ActionParams: null,
+    finalStats: {},
   });
 
   // When teacher advances timeline, trigger local advance
@@ -363,12 +751,184 @@ const App: React.FC = () => {
     }
   }, [syncState.serverTimelineIndex]);
 
+  // --- LOCAL SAVE/LOAD (Single Player) ---
+  const SAVE_KEY = 'throughhistory_save';
+  const isSinglePlayer = !syncState.isOnline;
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  // NOTE: these useState hooks are declared here (earlier than their siblings
+  // below) because the save/load useEffects reference them. Declaring them
+  // later causes a TDZ ReferenceError during the initial render, or
+  // re-renders with stale values if they aren't in the effect's dep array.
+  const [takenRespawnIds, setTakenRespawnIds] = useState<string[]>([]);
+  const [v2IncomeMessages, setV2IncomeMessages] = useState<string[]>([]);
+  const [v2TurnResolution, setV2TurnResolution] = useState<TurnResolution | null>(null);
+  const [v2StatsBefore, setV2StatsBefore] = useState<Record<string, number>>({});
+  const [v2UnlockedActions, setV2UnlockedActions] = useState<typeof ACTION_DEFINITIONS>([]);
+  const [showRespawnPanel, setShowRespawnPanel] = useState(false);
+  // Tracks whether the player has ever had a non-zero population. Without
+  // this guard, the respawn effect would fire at game start (everyone begins
+  // with houses:0 / population:0) — and again every time the player resets
+  // (since refs persist across React state changes). Declared here so
+  // resetGame below can clear it back to false for a fresh run.
+  const hasEverHadPopulation = useRef(false);
+
+  // Load saved game on mount (single player only).
+  // Restores the full game state including turn-phase data so a player can
+  // resume mid-turn (e.g., in the middle of a world event or build phase).
+  useEffect(() => {
+    if (!gameState.hasStarted && !autoStarted.current) {
+      try {
+        const saved = localStorage.getItem(SAVE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.gameState && parsed.tiles) {
+            // Re-derive structural stats on load — diplomacy is now fully
+            // derived (calc starts from 0), so the saved value would be
+            // stale. Same for martial/industry/yields after our refactor.
+            // Run calculateStats and merge the recomputed fields into the
+            // restored stats so the player sees correct numbers immediately.
+            try {
+              const recomputed = calculateStats(
+                parsed.tiles,
+                parsed.gameState.civilization,
+                {},
+                parsed.gameState.neighbors || [],
+                parsed.gameState.treaties || [],
+              );
+              parsed.gameState.civilization.stats = {
+                ...parsed.gameState.civilization.stats,
+                ...recomputed,
+              };
+            } catch (recErr) {
+              // Defensive: if recompute fails, fall back to saved values.
+              console.warn('Failed to re-derive stats on load:', recErr);
+            }
+            setGameState(parsed.gameState);
+            setTiles(parsed.tiles);
+            if (parsed.takenRespawnIds) setTakenRespawnIds(parsed.takenRespawnIds);
+            if (parsed.v2IncomeMessages) setV2IncomeMessages(parsed.v2IncomeMessages);
+            if (parsed.v2TurnResolution) setV2TurnResolution(parsed.v2TurnResolution);
+            if (parsed.v2StatsBefore) setV2StatsBefore(parsed.v2StatsBefore);
+            if (parsed.v2UnlockedActions) setV2UnlockedActions(parsed.v2UnlockedActions);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load saved game:', e);
+      }
+    }
+  }, []);
+
+  // Auto-save to localStorage every 10 seconds and on beforeunload (single player).
+  // Saves all turn-phase scratch state so a mid-turn reload restores correctly.
+  useEffect(() => {
+    if (!gameState.hasStarted || !isSinglePlayer) return;
+
+    const saveToLocal = () => {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          gameState,
+          tiles,
+          takenRespawnIds,
+          v2IncomeMessages,
+          v2TurnResolution,
+          v2StatsBefore,
+          v2UnlockedActions,
+          savedAt: Date.now(),
+        }));
+      } catch (e) {
+        console.warn('Failed to save game locally:', e);
+      }
+    };
+
+    const interval = setInterval(saveToLocal, 10000);
+
+    const handleBeforeUnload = () => {
+      saveToLocal();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Also save on visibility change (tab switch, minimize)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') saveToLocal();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [gameState, tiles, isSinglePlayer, takenRespawnIds, v2IncomeMessages, v2TurnResolution, v2StatsBefore, v2UnlockedActions]);
+
+  const resetGame = () => {
+    localStorage.removeItem(SAVE_KEY);
+    setTiles([]);
+    setGameState({
+      simulationId: "demo",
+      year: -50000,
+      timelineIndex: 0,
+      hasStarted: false,
+      civilization: null as any,
+      selectedAction: null,
+      placingWonder: false,
+      messages: [],
+      neighbors: [],
+      pendingTurnChoice: false,
+      currentEventPopup: null,
+      gameFlags: { warUnlocked: true, religionUnlocked: true },
+      warsWon: 0,
+    combatLog: [],
+      religionSpread: 0,
+      wondersBuilt: [],
+      gameEnded: false,
+      treaties: [],
+      tradedThisTurn: [],
+      fogOfWar: true,
+      pendingTreaty: null,
+      turnPhase: 'idle' as TurnPhaseV2,
+      currentWorldEvent: null,
+      currentCivEvent: null,
+      selectedWorldChoice: null,
+      selectedPlayerAction: null,
+      turnResolution: null,
+      actionPlacements: 0,
+      turnNumber: 0,
+      conqueredTerritories: 0,
+      pendingRespawn: false,
+      respawnOptions: [],
+      conquestReward: null,
+    });
+    // Clear every piece of ancillary state so a fresh game starts truly fresh.
+    setTakenRespawnIds([]);
+    setV2TurnResolution(null);
+    setV2UnlockedActions([]);
+    setV2IncomeMessages([]);
+    setV2StatsBefore({});
+    setConquestMessages([]);
+    setConquestTargetName('');
+    setShowConquestReward(false);
+    setShowRespawnPanel(false);
+    setShowResetConfirm(false);
+    // Refs survive React state changes — explicitly reset them so a fresh
+    // game doesn't carry over respawn-trigger or pending-placement guards
+    // from the previous run.
+    hasEverHadPopulation.current = false;
+    pendingPostFreePlacementPhase.current = null;
+  };
+
   // --- ACTIONS ---
 
   const startGame = (preset: CivPreset) => {
     const newTiles = generateMap(preset);
 
     setTiles(newTiles);
+    // V2: Calculate starting yields from preset
+    const startingProductionIncome = preset.baseStats.productionIncome || preset.baseStats.industry;
+    const startingScienceYield = preset.baseStats.scienceYield || Math.max(1, Math.floor(preset.baseStats.industry / 3));
+    const startingCultureYield = preset.baseStats.cultureYield || Math.max(1, Math.floor(preset.baseStats.faith / 3));
+    const startingFaithYield = preset.baseStats.faithYield || Math.max(1, Math.floor(preset.baseStats.faith / 2));
+    const startingCapacity = preset.baseStats.capacity || WATER_CAPACITIES[preset.waterResource];
+
     setGameState({
       simulationId: "sim-1",
       year: -8500,
@@ -378,10 +938,23 @@ const App: React.FC = () => {
       placingWonder: false,
       pendingTurnChoice: false,
       currentEventPopup: null,
-      messages: [`Welcome to ${preset.name}. The year is 8500 BCE.`],
-      neighbors: GENERATE_NEIGHBORS(-8500),
-      gameFlags: { warUnlocked: false, religionUnlocked: false },
+      messages: [
+        `Welcome to ${preset.name}. The year is 8500 BCE.`,
+        `Grow your Population: every 4 Pop = +1 Martial, every 5 Pop = +1 Industry.`,
+        `Turn flow: Events → pick 1 Action → Build Phase → End Turn.`,
+      ],
+      // Neighbors are now real adjacent civilizations pulled from the
+      // adjacency map + civ presets. Attacking "Mesopotamia" means fighting
+      // the actual Mesopotamia civ; a decisive victory removes it from the
+      // map for the rest of the game. Fallback to legacy generics only if
+      // this civ has no adjacency entry (defensive — every shipped civ does).
+      neighbors: (() => {
+        const real = buildCivNeighbors(preset.id, CIV_ADJACENCY, CIV_PRESETS);
+        return real.length > 0 ? real : GENERATE_NEIGHBORS(-8500);
+      })(),
+      gameFlags: { warUnlocked: true, religionUnlocked: true },
       warsWon: 0,
+    combatLog: [],
       religionSpread: 0,
       wondersBuilt: [],
       gameEnded: false,
@@ -389,6 +962,19 @@ const App: React.FC = () => {
       tradedThisTurn: [],
       fogOfWar: true,
       pendingTreaty: null,
+      // V2 turn flow state
+      turnPhase: 'idle' as TurnPhaseV2,
+      currentWorldEvent: null,
+      currentCivEvent: null,
+      selectedWorldChoice: null,
+      selectedPlayerAction: null,
+      turnResolution: null,
+      actionPlacements: 0,
+      turnNumber: 0,
+      conqueredTerritories: 0,
+      pendingRespawn: false,
+      respawnOptions: [],
+      conquestReward: null,
       civilization: {
         presetId: preset.id,
         name: preset.name,
@@ -410,6 +996,10 @@ const App: React.FC = () => {
         builtWonderId: null,
         religion: { name: null, tenets: [] },
         buildings: {
+          farms: 0,
+          workshops: 0,
+          libraries: 0,
+          barracks: 0,
           temples: 0,
           walls: 0,
           amphitheatres: 0,
@@ -419,16 +1009,26 @@ const App: React.FC = () => {
           houses: 0,
           housesBuiltThisTurn: 0,
           population: 0,
-          capacity: WATER_CAPACITIES[preset.waterResource],
+          capacity: startingCapacity,
           fertility: preset.baseStats.fertility,
           industry: preset.baseStats.industry,
           industryLeft: preset.baseStats.industry,
-          martial: preset.baseStats.martial,
-          defense: preset.baseStats.defense,
+          // Defense was folded into Martial — initialize the displayed value
+          // accordingly so the stat sheet shows the correct combat strength
+          // before calculateStats gets a chance to run.
+          martial: preset.baseStats.martial + preset.baseStats.defense,
+          defense: 0,
           science: 0,
           culture: 0,
           faith: preset.baseStats.faith,
           diplomacy: 0,
+          // V2 yields and pool
+          productionPool: startingProductionIncome * 3, // Start with 3 turns of income
+          productionIncome: startingProductionIncome,
+          scienceYield: startingScienceYield,
+          cultureYield: startingCultureYield,
+          faithYield: startingFaithYield,
+          tempDefenseBonus: 0,
         },
       },
     });
@@ -574,11 +1174,759 @@ const App: React.FC = () => {
     };
   };
 
-  // Triggered by clicking "Advance Timeline"
+  // ============================================================
+  // V2 TURN FLOW: Income → World Event → Civ Event → Action → Resolution
+  // ============================================================
+
+  // v2IncomeMessages, v2TurnResolution, v2StatsBefore, v2UnlockedActions are
+  // declared earlier (near the save/load block) to avoid TDZ.
+  const [conquestMessages, setConquestMessages] = useState<string[]>([]);
+  const [conquestTargetName, setConquestTargetName] = useState<string>('');
+  const [showConquestReward, setShowConquestReward] = useState(false);
+  // showRespawnPanel is declared earlier to keep respawn trigger useEffect valid.
+  // takenRespawnIds is declared earlier (near the save/load block) to avoid TDZ.
+
+  // hasEverHadPopulation is declared earlier so resetGame can clear it.
+  useEffect(() => {
+    const pop = gameState.civilization?.stats?.population ?? 0;
+    if (pop > 0) hasEverHadPopulation.current = true;
+  }, [gameState.civilization?.stats?.population]);
+
+  // Auto-trigger the respawn panel when the player has been wiped out.
+  // "Wiped out" = houses at 0 AND population at 0 AFTER they had at least one
+  // turn with population. Without that second guard we'd show the defeat
+  // screen during the pre-first-turn initial state.
+  useEffect(() => {
+    if (!gameState.hasStarted || !gameState.civilization) return;
+    if (showRespawnPanel) return;
+    if (!hasEverHadPopulation.current) return;
+    const pop = gameState.civilization.stats?.population ?? 1;
+    const houses = gameState.civilization.stats?.houses ?? 1;
+    if (pop <= 0 && houses <= 0) {
+      setShowRespawnPanel(true);
+    }
+  }, [gameState.civilization?.stats?.population, gameState.civilization?.stats?.houses, gameState.hasStarted, showRespawnPanel]);
+
+  // Triggered by clicking "Advance Turn"
   const initiateAdvance = () => {
-    setGameState((prev) => ({ ...prev, pendingTurnChoice: true }));
+    // Snapshot stats before turn
+    const before: Record<string, number> = {};
+    Object.entries(gameState.civilization.stats).forEach(([k, v]) => {
+      if (typeof v === 'number') before[k] = v;
+    });
+    setV2StatsBefore(before);
+
+    // Calculate income
+    const incomeResult = calculateIncome(gameState);
+    setV2IncomeMessages(incomeResult.messages);
+
+    // Apply income changes immediately
+    setGameState((prev) => ({
+      ...prev,
+      turnPhase: 'income' as TurnPhaseV2,
+      civilization: {
+        ...prev.civilization,
+        stats: { ...prev.civilization.stats, ...incomeResult.statChanges },
+      },
+    }));
   };
 
+  // After income phase, move to unlocks (if any) then world event
+  const handleIncomeComplete = () => {
+    const nextTurn = (gameState.turnNumber || 0) + 1;
+    const worldEvent = WORLD_EVENTS.find(e => e.turn === nextTurn) || null;
+
+    // Check for newly unlocked actions
+    const newActions = getNewlyUnlockedActions(nextTurn);
+    const unlockMessages = newActions.map(a => `NEW ACTION UNLOCKED: ${a.name} - ${a.unlockMessage}`);
+
+    // RELIGION AUTO-SPREAD — if the civ has Monotheism or Evangelism tenet,
+    // their religion attempts to spread to one unconverted neighbor each turn
+    // (highest-faith neighbor still below threshold). This is the mechanic
+    // the tenet descriptions promise; without it, the Religious victory path
+    // is nearly impossible for classroom games.
+    const religion = gameState.civilization.religion;
+    const tenets = religion?.tenets || [];
+    const hasMonotheism = tenets.includes('monotheism');
+    const hasEvangelism = tenets.includes('evangelism');
+    const autoSpreadMessages: string[] = [];
+    let autoSpreadNeighbors = gameState.neighbors;
+    let autoSpreadConversions = 0;
+    if (religion?.name && (hasMonotheism || hasEvangelism)) {
+      const myFaith = gameState.civilization.stats.faith;
+      // Monotheism: any neighbor with lower OR equal Faith converts.
+      // Evangelism: only lower-Faith neighbors convert, one per turn.
+      const candidates = gameState.neighbors.filter((n) => {
+        if (n.isConquered) return false;
+        if (n.religion === religion.name) return false;
+        return hasMonotheism ? myFaith >= n.faith : myFaith > n.faith;
+      });
+      // Sort: prefer the easiest conversion (lowest-Faith neighbor).
+      candidates.sort((a, b) => a.faith - b.faith);
+      // Monotheism converts up to 2 per turn; Evangelism converts 1.
+      const maxConversions = hasMonotheism ? 2 : 1;
+      const targets = candidates.slice(0, maxConversions);
+      if (targets.length > 0) {
+        const targetIds = new Set(targets.map((t) => t.id));
+        autoSpreadNeighbors = gameState.neighbors.map((n) =>
+          targetIds.has(n.id) ? { ...n, religion: religion.name } : n,
+        );
+        autoSpreadConversions = targets.length;
+        targets.forEach((t) => {
+          autoSpreadMessages.push(`${religion.name} spread to ${t.name} (Faith ${myFaith} vs ${t.faith}).`);
+        });
+      }
+    }
+
+    // If there are new unlocks, show the unlock notification phase first
+    if (newActions.length > 0) {
+      setV2UnlockedActions(newActions);
+      setGameState((prev) => ({
+        ...prev,
+        turnNumber: nextTurn,
+        turnPhase: 'unlocks' as TurnPhaseV2,
+        currentWorldEvent: worldEvent,
+        neighbors: autoSpreadNeighbors,
+        religionSpread: (prev.religionSpread || 0) + autoSpreadConversions,
+        messages: [...autoSpreadMessages, ...unlockMessages, ...prev.messages],
+      }));
+    } else {
+      setV2UnlockedActions([]);
+      setGameState((prev) => ({
+        ...prev,
+        turnNumber: nextTurn,
+        // TURN FLOW: Events (this phase) -> Action (one strategic pick) ->
+        // Build Phase (continuous, exit via End Turn). Build happens AFTER
+        // action so the player knows their action's production grant before
+        // spending.
+        turnPhase: worldEvent ? 'world_event' as TurnPhaseV2 : 'action' as TurnPhaseV2,
+        currentWorldEvent: worldEvent,
+        neighbors: autoSpreadNeighbors,
+        religionSpread: (prev.religionSpread || 0) + autoSpreadConversions,
+        messages: [...autoSpreadMessages, ...unlockMessages, ...prev.messages],
+      }));
+    }
+  };
+
+  // After viewing unlocked actions, proceed to world event
+  const handleUnlocksAcknowledge = () => {
+    const worldEvent = gameState.currentWorldEvent;
+    setV2UnlockedActions([]);
+    setGameState((prev) => ({
+      ...prev,
+      turnPhase: worldEvent ? 'world_event' as TurnPhaseV2 : 'action' as TurnPhaseV2,
+    }));
+  };
+
+  // Handle world event A/B/C choice
+  const handleWorldEventChoice = (choice: 'A' | 'B' | 'C') => {
+    const event = gameState.currentWorldEvent;
+    if (!event) return;
+
+    const selectedChoice = event.choices.find(c => c.id === choice);
+    if (!selectedChoice) return;
+
+    // Apply global effects
+    const globalMessages: string[] = [];
+    const globalChanges: Partial<GameState['civilization']['stats']> = {};
+
+    event.globalEffects.forEach(effect => {
+      if (effect.message) globalMessages.push(effect.message);
+      if (effect.type === 'modify_stat' && effect.stat && effect.value) {
+        const current = (gameState.civilization.stats as any)[effect.stat] ?? 0;
+        (globalChanges as any)[effect.stat] = current + effect.value;
+      }
+      if (effect.type === 'modify_yield' && effect.stat && effect.value) {
+        const yieldKey = effect.stat === 'industry' ? 'productionIncome' :
+          effect.stat === 'science' ? 'scienceYield' :
+          effect.stat === 'culture' ? 'cultureYield' :
+          effect.stat === 'faith' ? 'faithYield' : effect.stat;
+        const current = (gameState.civilization.stats as any)[yieldKey] ?? 0;
+        (globalChanges as any)[yieldKey] = current + effect.value;
+      }
+      if (effect.type === 'lose_population' && effect.value) {
+        const pop = gameState.civilization.stats.population;
+        globalChanges.population = Math.max(0, pop - effect.value);
+        globalChanges.houses = Math.max(0, (gameState.civilization.stats.houses) - effect.value);
+        globalMessages.push(`-${effect.value} Population.`);
+      }
+    });
+
+    // Apply choice effects
+    const choiceMessages: string[] = [];
+    const choiceChanges: Partial<GameState['civilization']['stats']> = {};
+
+    // Track any free building grants from the choice so we can force the
+    // player into placement mode immediately after the modal closes.
+    let pendingFreeBuilding: BuildingType | null = null;
+
+    // Event condition check: effects can be gated by flavor conditions like
+    // 'river_civ' (has a River water resource) or 'island_civ' (isIsland
+    // flag). An effect whose condition fails is skipped so non-river civs
+    // don't get the "+1 Prod from Nile flooding" bonus, etc.
+    const civPreset = CIV_PRESETS.find((p) => p.id === gameState.civilization.presetId);
+    const civHasBuilding = (bt: BuildingType) =>
+      tiles.some((t) => t.building === bt);
+    const meetsCondition = (condition?: string): boolean => {
+      if (!condition) return true;
+      switch (condition) {
+        case 'river_civ':   return civPreset?.waterResource === 'River';
+        case 'island_civ':  return !!civPreset?.isIsland;
+        case 'has_temple':  return civHasBuilding(BuildingType.Temple);
+        case 'has_wall':    return civHasBuilding(BuildingType.Wall);
+        case 'has_library': return civHasBuilding(BuildingType.Library);
+        case 'has_barracks':return civHasBuilding(BuildingType.Barracks);
+        case 'has_farm':    return civHasBuilding(BuildingType.Farm);
+        default: return true; // Unknown condition — allow by default.
+      }
+    };
+
+    selectedChoice.effects.forEach(effect => {
+      if (!meetsCondition(effect.condition)) return;
+      if (effect.message) choiceMessages.push(effect.message);
+      if (effect.type === 'modify_stat' && effect.stat && effect.value) {
+        const currentBase = (gameState.civilization.stats as any)[effect.stat] ?? 0;
+        const globalMod = (globalChanges as any)[effect.stat];
+        const current = globalMod !== undefined ? globalMod : currentBase;
+        (choiceChanges as any)[effect.stat] = current + effect.value;
+      }
+      if (effect.type === 'modify_yield' && effect.stat && effect.value) {
+        const yieldKey = effect.stat === 'industry' ? 'productionIncome' :
+          effect.stat === 'science' ? 'scienceYield' :
+          effect.stat === 'culture' ? 'cultureYield' :
+          effect.stat === 'faith' ? 'faithYield' : effect.stat;
+        const currentBase = (gameState.civilization.stats as any)[yieldKey] ?? 0;
+        const globalMod = (globalChanges as any)[yieldKey];
+        const current = globalMod !== undefined ? globalMod : currentBase;
+        (choiceChanges as any)[yieldKey] = current + effect.value;
+      }
+      if (effect.type === 'lose_population' && effect.value) {
+        const pop = choiceChanges.population ?? globalChanges.population ?? gameState.civilization.stats.population;
+        choiceChanges.population = Math.max(0, pop - effect.value);
+        choiceChanges.houses = Math.max(0, (choiceChanges.houses ?? globalChanges.houses ?? gameState.civilization.stats.houses) - effect.value);
+      }
+      // Free building grant — the player has to actually place the gifted
+      // building on the map before the turn continues. Currently the only
+      // event that fires this is "Pray to the Gods" granting a Temple.
+      if (effect.type === 'gain_building' && !pendingFreeBuilding) {
+        const msg = (effect.message || '').toLowerCase();
+        if (msg.includes('temple')) pendingFreeBuilding = BuildingType.Temple;
+        else if (msg.includes('wall')) pendingFreeBuilding = BuildingType.Wall;
+        else if (msg.includes('farm')) pendingFreeBuilding = BuildingType.Farm;
+        else if (msg.includes('workshop')) pendingFreeBuilding = BuildingType.Workshop;
+        else if (msg.includes('library')) pendingFreeBuilding = BuildingType.Library;
+        else if (msg.includes('barracks')) pendingFreeBuilding = BuildingType.Barracks;
+        else if (msg.includes('amphitheatre') || msg.includes('amphitheater')) pendingFreeBuilding = BuildingType.Amphitheatre;
+        else pendingFreeBuilding = BuildingType.Temple; // sensible default
+      }
+    });
+
+    // Check for civ-specific event
+    const civEvent = event.civSpecificEvents.find(
+      ce => ce.civId === gameState.civilization.presetId
+    ) || null;
+
+    // Update game flags from event unlocks
+    const newGameFlags = { ...gameState.gameFlags };
+    if (event.unlocks) {
+      if (event.unlocks.includes('religion')) newGameFlags.religionUnlocked = true;
+      if (event.unlocks.includes('warfare')) newGameFlags.warUnlocked = true;
+    }
+
+    // If a free building was granted, detour into placement mode now. We'll
+    // resume the normal next phase (civ_event or action) after the player
+    // drops the building on a tile. The queued phase is parked on the ref.
+    const intendedNextPhase: TurnPhaseV2 = civEvent ? 'civ_event' : 'action';
+    const nextPhase: TurnPhaseV2 = pendingFreeBuilding ? 'idle' : intendedNextPhase;
+    if (pendingFreeBuilding) {
+      pendingPostFreePlacementPhase.current = intendedNextPhase;
+    }
+
+    setGameState((prev) => ({
+      ...prev,
+      selectedWorldChoice: choice,
+      turnPhase: nextPhase,
+      currentCivEvent: civEvent,
+      gameFlags: newGameFlags,
+      selectedAction: pendingFreeBuilding ?? prev.selectedAction,
+      selectedPlayerAction: pendingFreeBuilding ? ('build' as PlayerActionType) : prev.selectedPlayerAction,
+      actionPlacements: pendingFreeBuilding ? 1 : prev.actionPlacements,
+      civilization: {
+        ...prev.civilization,
+        stats: {
+          ...prev.civilization.stats,
+          ...globalChanges,
+          ...choiceChanges,
+        },
+      },
+      messages: [
+        `WORLD EVENT: ${event.name} - Choice ${choice}`,
+        ...(pendingFreeBuilding ? [`Select a tile to place your free ${pendingFreeBuilding}.`] : []),
+        ...choiceMessages,
+        ...globalMessages,
+        ...prev.messages,
+      ],
+    }));
+  };
+
+  // Handle civ-specific event acknowledgment
+  const handleCivEventAck = () => {
+    const civEvent = gameState.currentCivEvent;
+    if (!civEvent) {
+      // If called from income complete (no civ event), go to world event phase
+      handleIncomeComplete();
+      return;
+    }
+
+    // Apply civ event effects
+    const civMessages: string[] = [];
+    const civChanges: Partial<GameState['civilization']['stats']> = {};
+
+    civEvent.effects.forEach(effect => {
+      if (effect.message) civMessages.push(effect.message);
+      if (effect.type === 'modify_stat' && effect.stat && effect.value) {
+        const current = (gameState.civilization.stats as any)[effect.stat] ?? 0;
+        (civChanges as any)[effect.stat] = current + effect.value;
+      }
+      if (effect.type === 'modify_yield' && effect.stat && effect.value) {
+        const yieldKey = effect.stat === 'industry' ? 'productionIncome' :
+          effect.stat === 'science' ? 'scienceYield' :
+          effect.stat === 'culture' ? 'cultureYield' :
+          effect.stat === 'faith' ? 'faithYield' : effect.stat;
+        const current = (gameState.civilization.stats as any)[yieldKey] ?? 0;
+        (civChanges as any)[yieldKey] = current + effect.value;
+      }
+      if (effect.type === 'lose_population' && effect.value) {
+        const pop = gameState.civilization.stats.population;
+        civChanges.population = Math.max(0, pop - effect.value);
+        civChanges.houses = Math.max(0, gameState.civilization.stats.houses - effect.value);
+      }
+    });
+
+    setGameState((prev) => ({
+      ...prev,
+      turnPhase: 'action' as TurnPhaseV2,
+      currentCivEvent: null,
+      civilization: {
+        ...prev.civilization,
+        stats: { ...prev.civilization.stats, ...civChanges },
+      },
+      messages: [...civMessages, ...prev.messages],
+    }));
+  };
+
+  // BUILD PHASE: handle a building selection from the build phase modal.
+  // Deducts cost and enters idle mode so the user can click a tile to place.
+  // After placement, handleTileClick routes the turn back to the 'action' phase.
+  const handleBuildPhaseSelect = (buildingTypeStr: string) => {
+    const buildingTypeEnum = (BuildingType as any)[buildingTypeStr] as BuildingType;
+    if (!buildingTypeEnum || !(buildingTypeEnum in BUILDING_COSTS)) {
+      addMessage(`Unknown building type: ${buildingTypeStr}`);
+      return;
+    }
+    const cost = BUILDING_COSTS[buildingTypeEnum] || 0;
+
+    if (gameState.civilization.stats.productionPool < cost) {
+      addMessage(`Not enough Production Pool. Need ${cost}.`);
+      return;
+    }
+
+    setGameState((prev) => ({
+      ...prev,
+      selectedPlayerAction: 'build',
+      selectedAction: buildingTypeEnum,
+      actionPlacements: 1,
+      turnPhase: 'idle' as TurnPhaseV2,
+      civilization: {
+        ...prev.civilization,
+        stats: {
+          ...prev.civilization.stats,
+          productionPool: prev.civilization.stats.productionPool - cost,
+        },
+      },
+      messages: [`Select a tile to place your ${buildingTypeStr} (${cost} Production).`, ...prev.messages],
+    }));
+  };
+
+  // BUILD PHASE: End Turn — finalize the turn. If an action was taken this
+  // turn, a turnResolution was already stashed by handleActionSelect. If the
+  // player ended without taking an action (just built), synthesize a minimal
+  // resolution so the ResolutionPanel still shows.
+  const handleBuildPhaseSkip = () => {
+    setGameState((prev) => {
+      let res = prev.turnResolution;
+      if (!res) {
+        res = {
+          turn: prev.turnNumber || 1,
+          incomeGained: prev.civilization.stats.productionIncome || prev.civilization.stats.industry,
+          populationChange: 0,
+          worldEventName: prev.currentWorldEvent?.name || 'None',
+          choiceMade: prev.selectedWorldChoice || 'A',
+          choiceEffects: [],
+          civEventName: prev.currentCivEvent?.name,
+          civEventEffects: prev.currentCivEvent?.effects.map((e) => e.message || '') || [],
+          actionTaken: (prev.selectedPlayerAction as any) || ('build' as any),
+          actionEffects: ['Turn ended.'],
+          statsBefore: v2StatsBefore,
+          statsAfter: prev.civilization.stats as any,
+        };
+        setV2TurnResolution(res);
+      }
+      return {
+        ...prev,
+        turnPhase: 'resolution' as TurnPhaseV2,
+        turnResolution: res,
+      };
+    });
+  };
+
+  // Handle action selection and execution
+  const handleActionSelect = (actionId: PlayerActionType, params?: any) => {
+    // For worship with foundReligion: use the existing foundReligion logic
+    if (actionId === 'worship' && params?.foundReligion) {
+      foundReligion(params.tenetId, params.religionName);
+      // Go to resolution after founding
+      const turnRes: TurnResolution = {
+        turn: gameState.turnNumber || 1,
+        incomeGained: gameState.civilization.stats.productionIncome || gameState.civilization.stats.industry,
+        populationChange: 0,
+        worldEventName: gameState.currentWorldEvent?.name || 'None',
+        choiceMade: gameState.selectedWorldChoice || 'A',
+        choiceEffects: [],
+        actionTaken: actionId,
+        actionEffects: [`Founded religion: ${params.religionName}`],
+        statsBefore: v2StatsBefore,
+        statsAfter: { ...gameState.civilization.stats } as any,
+      };
+      setV2TurnResolution(turnRes);
+      setGameState((prev) => ({
+        ...prev,
+        turnPhase: 'resolution' as TurnPhaseV2,
+        selectedPlayerAction: actionId,
+        turnResolution: turnRes,
+      }));
+      return;
+    }
+
+    // For wonder action: handle investment with wonderId
+    if (actionId === 'wonder' && params?.wonderId && params?.amount) {
+      const wonder = WONDERS_LIST.find(w => w.id === params.wonderId);
+      if (!wonder) { addMessage('Invalid wonder.'); return; }
+
+      const investment = Math.min(params.amount, gameState.civilization.stats.productionPool);
+      if (investment >= wonder.cost) {
+        // Full wonder completion: apply bonuses and enable placement
+        const bonusChanges: any = {};
+        if (wonder.bonus.production) bonusChanges.productionIncome = (gameState.civilization.stats.productionIncome || 0) + wonder.bonus.production;
+        if (wonder.bonus.science) bonusChanges.science = (gameState.civilization.stats.science || 0) + wonder.bonus.science;
+        if (wonder.bonus.culture) bonusChanges.culture = (gameState.civilization.stats.culture || 0) + wonder.bonus.culture;
+        if (wonder.bonus.faith) bonusChanges.faith = (gameState.civilization.stats.faith || 0) + wonder.bonus.faith;
+        if (wonder.bonus.martial) bonusChanges.martial = (gameState.civilization.stats.martial || 0) + wonder.bonus.martial;
+        if (wonder.bonus.defense) bonusChanges.defense = (gameState.civilization.stats.defense || 0) + wonder.bonus.defense;
+        if (wonder.bonus.populationCapacity) bonusChanges.capacity = (gameState.civilization.stats.capacity || 0) + wonder.bonus.populationCapacity;
+
+        setGameState((prev) => ({
+          ...prev,
+          placingWonder: true,
+          selectedPlayerAction: actionId,
+          turnPhase: 'idle' as TurnPhaseV2,
+          civilization: {
+            ...prev.civilization,
+            builtWonderId: wonder.id,
+            stats: {
+              ...prev.civilization.stats,
+              ...bonusChanges,
+              productionPool: prev.civilization.stats.productionPool - investment,
+            },
+          },
+          wondersBuilt: [...prev.wondersBuilt, wonder],
+          messages: [`Built Wonder: ${wonder.name}! Place it on the map.`, ...prev.messages],
+        }));
+        return;
+      }
+    }
+
+    // Recompute structural stats (especially yields) so an action like
+    // Research/Develop/Worship reads the freshest scienceYield/cultureYield/
+    // faithYield. Without this, a Library built mid-turn wouldn't apply its
+    // +2 Science Yield to a Research action picked the same turn.
+    const freshDerived = calculateStats(
+      tiles,
+      gameState.civilization,
+      {},
+      gameState.neighbors,
+      gameState.treaties,
+    );
+    const civWithFreshYields = {
+      ...gameState.civilization,
+      stats: { ...gameState.civilization.stats, ...freshDerived },
+    };
+    const stateForAction = { ...gameState, civilization: civWithFreshYields };
+    const result = executeAction(actionId, stateForAction, params);
+
+    // If the action enables map placement (grow/build), go to a special state
+    if (result.enableMapPlacement) {
+      setGameState((prev) => ({
+        ...prev,
+        selectedPlayerAction: actionId,
+        selectedAction: result.enableMapPlacement === 'house' ? BuildingType.House :
+          result.enableMapPlacement === 'wall' ? BuildingType.Wall : null,
+        actionPlacements: result.maxPlacements || 0,
+        turnPhase: 'idle' as TurnPhaseV2, // Let them interact with the map
+        civilization: {
+          ...prev.civilization,
+          stats: { ...prev.civilization.stats, ...result.statChanges },
+        },
+        messages: [...result.messages, ...prev.messages],
+      }));
+      return;
+    }
+
+    // For non-map actions, record the result but advance to BUILD PHASE (not
+    // resolution). The build phase is continuous and ends only when the
+    // player clicks End Turn, at which point we'll show resolution using the
+    // v2TurnResolution we're stashing here.
+    const turnRes: TurnResolution = {
+      turn: gameState.turnNumber || 1,
+      incomeGained: gameState.civilization.stats.productionIncome || gameState.civilization.stats.industry,
+      populationChange: (gameState.civilization.stats.population + (result.statChanges.population || 0)) - (v2StatsBefore.population || 0),
+      worldEventName: gameState.currentWorldEvent?.name || 'None',
+      choiceMade: gameState.selectedWorldChoice || 'A',
+      choiceEffects: [],
+      civEventName: gameState.currentCivEvent?.name,
+      civEventEffects: gameState.currentCivEvent?.effects.map(e => e.message || '') || [],
+      actionTaken: actionId,
+      actionEffects: result.messages,
+      statsBefore: v2StatsBefore,
+      statsAfter: { ...gameState.civilization.stats, ...result.statChanges } as any,
+    };
+
+    setV2TurnResolution(turnRes);
+
+    // Apply treaty if created
+    const newTreaties = result.newTreaty
+      ? [...gameState.treaties, result.newTreaty]
+      : gameState.treaties;
+
+    // CONQUEST: when the Attack action yields a victory, actually record it.
+    let updatedNeighbors = gameState.neighbors;
+    let additionalWarsWon = 0;
+    let additionalConquered = 0;
+    let lootTiles: TileData[] = [];
+    let combatLogEntry: CombatLogEntry | null = null;
+    if (actionId === 'attack' && result.combatResult) {
+      const cr = result.combatResult;
+      const decisive = cr.won && (cr.margin ?? 0) >= 6;
+      if (cr.won) additionalWarsWon = 1;
+      if (decisive && params?.targetId) {
+        const target = gameState.neighbors.find((n) => n.id === params.targetId);
+        if (target && !target.isConquered) {
+          additionalConquered = 1;
+          updatedNeighbors = gameState.neighbors.map((n) =>
+            n.id === params.targetId ? { ...n, isConquered: true, relationship: 'Neutral' as const } : n,
+          );
+          try {
+            lootTiles = generateConquestTiles(tiles, 2);
+          } catch (e) {
+            lootTiles = [];
+          }
+        }
+      }
+      // Build a war-tab log entry describing this attack.
+      const outcome: CombatLogEntry['outcome'] = decisive
+        ? 'decisive_victory'
+        : cr.won
+          ? 'victory'
+          : (cr.margin === 0 ? 'stalemate' : 'defeat');
+      combatLogEntry = {
+        turn: gameState.turnNumber || 1,
+        target: cr.target,
+        attackTotal: 0, // we don't expose raw rolls outside executeAction; see margin
+        defendTotal: 0,
+        margin: cr.margin ?? 0,
+        outcome,
+        conquered: decisive,
+        popLost: (result.statChanges as any)?.population !== undefined
+          ? Math.max(0, (gameState.civilization.stats.population || 0) - ((result.statChanges as any).population || 0))
+          : 0,
+        martialLost: (result.statChanges as any)?.martial !== undefined
+          ? Math.max(0, (gameState.civilization.stats.martial || 0) - ((result.statChanges as any).martial || 0))
+          : 0,
+        loot: outcome === 'decisive_victory'
+          ? { culture: 3, production: 3 }
+          : outcome === 'victory'
+            ? { culture: 2, production: 2 }
+            : undefined,
+      };
+    }
+    if (lootTiles.length > 0) {
+      setTiles((prev) => [...prev, ...lootTiles]);
+    }
+
+    setGameState((prev) => ({
+      ...prev,
+      turnPhase: 'build_phase' as TurnPhaseV2,
+      selectedPlayerAction: actionId,
+      turnResolution: turnRes,
+      treaties: newTreaties,
+      neighbors: updatedNeighbors,
+      warsWon: (prev.warsWon || 0) + additionalWarsWon,
+      conqueredTerritories: (prev.conqueredTerritories || 0) + additionalConquered,
+      combatLog: combatLogEntry
+        ? [...(prev.combatLog || []), combatLogEntry]
+        : (prev.combatLog || []),
+      civilization: {
+        ...prev.civilization,
+        stats: { ...prev.civilization.stats, ...result.statChanges },
+      },
+      messages: [...result.messages, ...prev.messages],
+    }));
+
+    // Track the V2 action in the multiplayer turn decision so the teacher's
+    // dashboard can see what each student did this turn (research/attack/etc.).
+    // The buildActions list is populated separately by handleTileClick as
+    // students place buildings during the continuous Build Phase.
+    if (syncState.isOnline) {
+      setPendingDecision((prev) => ({
+        ...prev,
+        v2Action: actionId,
+        v2ActionParams: params || null,
+        warDeclarations:
+          actionId === 'attack' && params?.targetId
+            ? [...prev.warDeclarations, params.targetId]
+            : prev.warDeclarations,
+        allianceOffers:
+          actionId === 'diplomacy' && params?.allyId
+            ? [...prev.allianceOffers, params.allyId]
+            : prev.allianceOffers,
+      }));
+    }
+  };
+
+  // Handle resolution dismissal - end of turn
+  const handleResolutionDismiss = () => {
+    // MULTIPLAYER SYNC — send this turn's full decision (V2 action + any
+    // queued building placements + treaties + final stat snapshot) to the
+    // server before advancing locally. Fire-and-forget: if the request fails
+    // we still progress the game so a flaky network doesn't strand a student.
+    if (syncState.isOnline) {
+      const finalStats: Record<string, number> = {
+        martial: gameState.civilization.stats.martial || 0,
+        faith: gameState.civilization.stats.faith || 0,
+        industry: gameState.civilization.stats.industry || 0,
+        science: gameState.civilization.stats.science || 0,
+        culture: gameState.civilization.stats.culture || 0,
+        population: gameState.civilization.stats.population || 0,
+        houses: gameState.civilization.stats.houses || 0,
+        productionPool: gameState.civilization.stats.productionPool || 0,
+      };
+      const decisionToSubmit: TurnDecision = {
+        ...pendingDecision,
+        finalStats,
+        submitted: true,
+      };
+      // Don't await — continue local advance immediately.
+      submitTurn(decisionToSubmit).catch((e) =>
+        console.warn('submitTurn failed:', e),
+      );
+      // Reset for the next turn.
+      setPendingDecision({
+        culturalFocus: null,
+        buildActions: [],
+        warDeclarations: [],
+        allianceOffers: [],
+        submitted: false,
+        v2Action: null,
+        v2ActionParams: null,
+        finalStats: {},
+      });
+    }
+
+    // Also run the legacy timeline event processing for compatibility
+    const nextIndex = gameState.timelineIndex + 1;
+    if (nextIndex < TIMELINE_EVENTS.length) {
+      const event = TIMELINE_EVENTS[nextIndex];
+
+      // Process legacy events for tech unlocks, flags, etc.
+      const eventResult = processTimelineEvent(
+        event,
+        gameState.civilization,
+        gameState.gameFlags,
+        gameState.neighbors,
+      );
+
+      // Update cultural stage using the shared threshold table so Barbarism
+      // -> Classical -> Imperial -> Enlightenment -> Modern progression stays
+      // consistent with the UI and victory scoring.
+      const stage = resolveCulturalStage(
+        gameState.civilization.culturalStage,
+        gameState.civilization.stats.culture,
+      );
+
+      // Decrement treaty timers
+      const updatedTreaties = gameState.treaties
+        .map(t => ({ ...t, turnsRemaining: t.turnsRemaining - 1 }))
+        .filter(t => t.turnsRemaining > 0);
+
+      // V2 STAT RECOMPUTE — calculateStats applies traits, building bonuses,
+      // science unlocks, religion tenets, cultural stage multipliers, and
+      // treaty bonuses. Without this call, all of those derived bonuses
+      // would never reach the displayed stats. We pass the up-to-date civ
+      // (with current stage) so stage multipliers fire correctly.
+      const recomputed = calculateStats(
+        tiles,
+        { ...gameState.civilization, culturalStage: stage },
+        {},
+        gameState.neighbors,
+        updatedTreaties,
+      );
+
+      setGameState((prev) => ({
+        ...prev,
+        year: event.year,
+        timelineIndex: nextIndex,
+        turnPhase: 'idle' as TurnPhaseV2,
+        currentWorldEvent: null,
+        currentCivEvent: null,
+        selectedWorldChoice: null,
+        selectedPlayerAction: null,
+        turnResolution: null,
+        pendingTurnChoice: false,
+        currentEventPopup: null,
+        actionPlacements: 0,
+        treaties: updatedTreaties,
+        tradedThisTurn: [],
+        gameFlags: { ...prev.gameFlags, ...eventResult.newGameFlags },
+        neighbors: [
+          ...prev.neighbors,
+          ...eventResult.neighborsToAdd,
+        ],
+        civilization: {
+          ...prev.civilization,
+          culturalStage: stage,
+          technologies: eventResult.newTechnologies,
+          flags: { ...prev.civilization.flags, ...eventResult.newFlags },
+          stats: {
+            ...prev.civilization.stats,
+            ...recomputed,                 // overwrite derived stats
+            housesBuiltThisTurn: 0,
+            industryLeft: recomputed.industry,
+          },
+        },
+      }));
+    } else {
+      // Game ended
+      setGameState((prev) => ({
+        ...prev,
+        turnPhase: 'idle' as TurnPhaseV2,
+        gameEnded: true,
+      }));
+    }
+
+    setV2TurnResolution(null);
+  };
+
+  // Legacy compatibility
   const closeEventPopup = () => {
     setGameState((prev) => ({ ...prev, currentEventPopup: null }));
   };
@@ -663,10 +2011,11 @@ const App: React.FC = () => {
       });
     }
 
-    // Unlock Cultural Stages
-    let stage = gameState.civilization.culturalStage;
-    if (mergedStats.culture > 20 && stage === "Barbarism") stage = "Classical";
-    if (mergedStats.culture > 50 && stage === "Classical") stage = "Imperial";
+    // Unlock Cultural Stages using shared threshold resolver.
+    const stage = resolveCulturalStage(
+      gameState.civilization.culturalStage,
+      mergedStats.culture,
+    );
 
     // Decrement treaty timers and remove expired ones (Feature 1)
     const updatedTreaties = gameState.treaties
@@ -754,15 +2103,40 @@ const App: React.FC = () => {
         return;
       }
 
-      // In single-player, apply immediately
+      // In single-player, apply immediately. Return to build_phase so the
+      // player can continue building or click End Turn to resolve.
       const newTiles = [...tiles];
       newTiles[tileIndex] = { ...tile, building: BuildingType.Wonder };
       setTiles(newTiles);
-      setGameState((prev) => ({
-        ...prev,
-        placingWonder: false,
-        messages: ["Wonder placed successfully!", ...prev.messages],
-      }));
+      setGameState((prev) => {
+        // Stash a resolution snapshot for when End Turn fires.
+        const wonder = WONDERS_LIST.find((w) => w.id === prev.civilization.builtWonderId);
+        const turnRes: TurnResolution = {
+          turn: prev.turnNumber || 1,
+          incomeGained: prev.civilization.stats.productionIncome || prev.civilization.stats.industry,
+          populationChange: 0,
+          worldEventName: prev.currentWorldEvent?.name || 'None',
+          choiceMade: prev.selectedWorldChoice || 'A',
+          choiceEffects: [],
+          civEventName: prev.currentCivEvent?.name,
+          civEventEffects: prev.currentCivEvent?.effects.map((e) => e.message || '') || [],
+          actionTaken: 'wonder',
+          actionEffects: [`Built Wonder: ${wonder?.name || 'Unknown'} and placed it on the map.`],
+          statsBefore: v2StatsBefore,
+          statsAfter: prev.civilization.stats as any,
+        };
+        setV2TurnResolution(turnRes);
+        return {
+          ...prev,
+          placingWonder: false,
+          selectedPlayerAction: 'wonder' as PlayerActionType,
+          selectedAction: null,
+          actionPlacements: 0,
+          turnPhase: 'build_phase' as TurnPhaseV2,
+          turnResolution: turnRes,
+          messages: ['Wonder placed successfully!', ...prev.messages],
+        };
+      });
       return;
     }
 
@@ -789,11 +2163,7 @@ const App: React.FC = () => {
       // --- HOUSE PLACEMENT LOGIC ---
 
       // 1. Check Terrain
-      if (
-        restrictedForBuildings.includes(tile.terrain) &&
-        tile.terrain !== TerrainType.Plains &&
-        tile.terrain !== TerrainType.Grassland
-      ) {
+      if (restrictedForBuildings.includes(tile.terrain)) {
         addMessage("Cannot build houses on this terrain.");
         return;
       }
@@ -815,7 +2185,12 @@ const App: React.FC = () => {
       }
     } else {
       // --- OTHER STRUCTURE LOGIC ---
-      let cost = BUILDING_COSTS[selectedAction];
+      const cost = BUILDING_COSTS[selectedAction];
+      // V2 BUILD PHASE: cost is already deducted from productionPool in
+      // handleBuildPhaseSelect, so we must NOT check against industryLeft
+      // (which is a legacy V1 stat and will usually be too low to pass).
+      // V1 legacy paths still check industryLeft.
+      const isV2BuildPhaseFlow = gameState.selectedPlayerAction === 'build';
 
       // China Great Wall Discount
       if (
@@ -826,7 +2201,7 @@ const App: React.FC = () => {
         // Handled in buildWonder usually, but just in case of direct costs
       }
 
-      if (civilization.stats.industryLeft < cost) {
+      if (!isV2BuildPhaseFlow && civilization.stats.industryLeft < cost) {
         addMessage(`Not enough Industry. Need ${cost}.`);
         return;
       }
@@ -866,33 +2241,86 @@ const App: React.FC = () => {
     setGameState((prev) => {
       const civ = prev.civilization;
       const cost = BUILDING_COSTS[selectedAction];
+      // V2 build-phase deducted cost from productionPool earlier in
+      // handleBuildPhaseSelect. V1 legacy paths still deduct from industryLeft.
+      const isV2BuildPhaseFlow = prev.selectedPlayerAction === 'build';
 
       let newHouses = civ.stats.houses;
       let newIndustry = civ.stats.industryLeft;
       let newHousesBuilt = civ.stats.housesBuiltThisTurn;
       const newBuildings = { ...civ.buildings };
+      const statBonus: Partial<typeof civ.stats> = {};
 
       if (selectedAction === BuildingType.House) {
         newHouses += 1;
         newHousesBuilt += 1;
       } else {
-        newIndustry -= cost;
-        if (selectedAction === BuildingType.Temple) newBuildings.temples++;
+        if (!isV2BuildPhaseFlow) newIndustry -= cost;
+        // STRUCTURAL building bonuses (martial, capacity, yield rates) are
+        // re-derived in calculateStats from tile counts on every recompute.
+        // ACCUMULATING bonuses (faith, culture totals) need a one-time bump
+        // here at placement so they enter the running total without then
+        // being added again every recompute (which would be exponential).
+        if (selectedAction === BuildingType.Farm) newBuildings.farms++;
+        if (selectedAction === BuildingType.Workshop) newBuildings.workshops++;
+        if (selectedAction === BuildingType.Library) newBuildings.libraries++;
+        if (selectedAction === BuildingType.Barracks) newBuildings.barracks++;
+        if (selectedAction === BuildingType.Temple) {
+          newBuildings.temples++;
+          // One-time +2 Faith Total grant (per Temple). Yield grows via calc.
+          statBonus.faith = (civ.stats.faith || 0) + 2;
+        }
         if (selectedAction === BuildingType.Wall) newBuildings.walls++;
-        if (selectedAction === BuildingType.Amphitheatre)
+        if (selectedAction === BuildingType.Amphitheatre) {
           newBuildings.amphitheatres++;
-        if (selectedAction === BuildingType.ArchimedesTower)
-          newBuildings.archimedes_towers++;
+          // One-time +3 Culture Total grant (per Amphitheatre).
+          statBonus.culture = (civ.stats.culture || 0) + 3;
+        }
+        if (selectedAction === BuildingType.ArchimedesTower) newBuildings.archimedes_towers++;
       }
+
+      // Decrement placement counter for v2 flow
+      const remainingPlacements = (prev.actionPlacements || 1) - 1;
+
+      // NEW TURN FLOW: after any tile placement (build or action-required),
+      // the player returns to the Build Phase for continuous building. The
+      // turn ends only when the player clicks End Turn on the Build Phase
+      // panel. No more auto-advance to resolution from tile clicks.
+      const isV2Action = prev.selectedPlayerAction !== null;
+      const placementsDone = isV2Action && remainingPlacements <= 0;
+      const shouldReturnToBuild = placementsDone;
+      // If this placement was a FREE grant from a world event, resume the
+      // deferred phase (civ_event or action) the ref stashed earlier. That
+      // overrides the default "return to build phase" behaviour so the turn
+      // flow continues where the event left off.
+      const deferredPhase = pendingPostFreePlacementPhase.current;
+      const consumeFreePlacement = shouldReturnToBuild && deferredPhase !== null;
+      if (consumeFreePlacement) {
+        pendingPostFreePlacementPhase.current = null;
+      }
+
+      const nextSelectedPlayerAction = shouldReturnToBuild && prev.selectedPlayerAction === 'build'
+        ? null
+        : prev.selectedPlayerAction;
+      const nextTurnPhase = consumeFreePlacement
+        ? (deferredPhase as TurnPhaseV2)
+        : shouldReturnToBuild
+          ? ('build_phase' as TurnPhaseV2)
+          : prev.turnPhase;
 
       return {
         ...prev,
-        selectedAction: null,
+        selectedPlayerAction: nextSelectedPlayerAction,
+        selectedAction: shouldReturnToBuild ? null : prev.selectedAction,
+        actionPlacements: remainingPlacements,
+        turnPhase: nextTurnPhase,
+        turnResolution: prev.turnResolution,
         civilization: {
           ...civ,
           buildings: newBuildings,
           stats: {
             ...civ.stats,
+            ...statBonus,
             houses: newHouses,
             housesBuiltThisTurn: newHousesBuilt,
             industryLeft: newIndustry,
@@ -947,10 +2375,10 @@ const App: React.FC = () => {
     const { civilization, gameFlags } = gameState;
 
     if (civilization.flags.religionFound) return;
-    if (!gameFlags.religionUnlocked && gameState.year < -1000) {
-      addMessage("Too early for organized religion (Wait for 1000 BCE).");
-      return;
-    }
+    // Religion is unlocked from the start (no year gate). The Worship action
+    // requires a Temple and Faith ≥ 10 to actually found, which gives the
+    // pacing without the historical-year guesswork.
+    void gameFlags;
     if (civilization.buildings.temples < 1) {
       addMessage("Must build a Temple first.");
       return;
@@ -991,7 +2419,16 @@ const App: React.FC = () => {
     const neighbor = gameState.neighbors.find((n) => n.id === neighborId);
     if (!neighbor) return;
 
-    if (gameState.civilization.stats.faith > neighbor.faith + 2) {
+    // Evangelism lowers the required faith margin. Monotheism removes the
+    // margin entirely (only need to match/exceed neighbor faith).
+    const tenets = gameState.civilization.religion?.tenets || [];
+    const margin = tenets.includes('monotheism')
+      ? 0
+      : tenets.includes('evangelism')
+        ? 0
+        : 2;
+
+    if (gameState.civilization.stats.faith >= neighbor.faith + margin) {
       setGameState((prev) => ({
         ...prev,
         neighbors: prev.neighbors.map((n) =>
@@ -999,6 +2436,7 @@ const App: React.FC = () => {
             ? { ...n, religion: prev.civilization.religion.name || "Our Faith" }
             : n,
         ),
+        religionSpread: (prev.religionSpread || 0) + 1,
         messages: [
           `Spread religion to ${neighbor.name}! They now follow your faith.`,
           ...prev.messages,
@@ -1006,7 +2444,7 @@ const App: React.FC = () => {
       }));
     } else {
       addMessage(
-        `Failed to convert ${neighbor.name} (Their Faith: ${neighbor.faith} vs Your Faith: ${gameState.civilization.stats.faith})`,
+        `Failed to convert ${neighbor.name} (Their Faith: ${neighbor.faith} vs Your Faith: ${gameState.civilization.stats.faith}${margin > 0 ? `, need +${margin}` : ''})`,
       );
     }
   };
@@ -1102,12 +2540,20 @@ const App: React.FC = () => {
     }));
   };
 
+  // LEGACY — no longer wired to any UI button. Combat in V2 goes through the
+  // Action phase's Attack option (see actionSystem.ts). Kept here in case we
+  // need a direct combat trigger for scripted events or future UI, but the
+  // side-panel Attack buttons now show guidance text pointing players to the
+  // Action phase.
   const attackNeighbor = (neighborId: string) => {
     const { gameFlags } = gameState;
-    if (!gameFlags.warUnlocked && gameState.year < -670) {
-      addMessage("Warfare not unlocked until 670 BCE or Event.");
+    if (gameState.turnPhase && gameState.turnPhase !== 'idle') {
+      addMessage("Finish the current turn phase before launching an attack.");
       return;
     }
+    // Warfare is now available from the start (gated by turn 3 unlock on the
+    // Attack action itself, not by historical year). Keeping warUnlocked=true
+    // by default removes the 670 BCE block.
 
     const neighbor = gameState.neighbors.find((n) => n.id === neighborId);
     if (!neighbor || neighbor.isConquered) return;
@@ -1137,21 +2583,19 @@ const App: React.FC = () => {
     const attackRoll = Math.floor(Math.random() * 20) + 1;
     const attackScore = civ.stats.martial + attackRoll + treatyViolationPenalty;
 
-    // Count defender's walls
-    const wallCount = civ.buildings.walls;
-    let wallBonus = wallCount * 3;
+    // Estimate defender's wall strength from their defense stat
+    const estimatedWalls = Math.max(0, Math.floor(neighbor.defense / 5));
+    let wallBonus = estimatedWalls * 3;
     let wallNote = "";
 
-    // Science level bypasses walls
-    if (civ.stats.science >= 6) {
-      // Level 1 walls bypassed
-      wallBonus = Math.max(0, wallBonus - Math.min(wallCount, 1) * 3);
-      wallNote = " (1st level walls bypassed)";
-    }
-    if (civ.stats.science >= 11) {
-      // Level 2 walls also bypassed
-      wallBonus = Math.max(0, wallBonus - Math.min(wallCount, 2) * 3);
-      wallNote = " (all walls bypassed by advanced siege tech)";
+    // Science level bypasses defender walls
+    if (civ.stats.science >= 30) {
+      // SCIENCE_UNLOCKS level 30: "Bypass basic walls in combat"
+      const bypassed = Math.min(estimatedWalls, 2);
+      wallBonus = Math.max(0, wallBonus - bypassed * 3);
+      wallNote = bypassed >= estimatedWalls
+        ? " (all walls bypassed by siege tech)"
+        : ` (${bypassed} walls bypassed by siege tech)`;
     }
 
     // Defense score = (Martial + Defense + Wall bonus) + d20 roll
@@ -1163,8 +2607,8 @@ const App: React.FC = () => {
 
     let resultMsg = "";
     const wallEffectMsg =
-      wallCount > 0
-        ? ` Enemy walls added +${wallCount * 3} defense (${wallCount} walls × 3)${wallNote}.`
+      estimatedWalls > 0
+        ? ` Enemy walls added +${wallBonus} defense (${estimatedWalls} walls)${wallNote}.`
         : "";
 
     // Remove peace treaty if violated
@@ -1175,37 +2619,89 @@ const App: React.FC = () => {
       : gameState.treaties;
 
     if (margin > 15) {
-      // Decisive Victory
+      // Decisive Victory - full conquest with building transfer
+      const isDecisive = true;
+      const defeatedBuildings = { farms: 1, workshops: 1, libraries: 0, barracks: 1, temples: 1, amphitheatres: 0, walls: Math.min(2, neighbor.defense / 5), archimedes_towers: 0 };
+      const conquestResult = calculateConquestRewards(gameState, defeatedBuildings as any, isDecisive);
+      const conquestTiles = generateConquestTiles(tiles, conquestResult.victorTileCount);
+
       resultMsg = `DECISIVE VICTORY! (${attackScore} vs ${defenseScore}) You conquered ${neighbor.name}!${wallEffectMsg}${treatyViolationMsg}`;
+
+      // Add conquest tiles to map
+      setTiles(prev => [...prev, ...conquestTiles]);
+
+      // Show conquest reward panel
+      setConquestMessages(conquestResult.victorMessages);
+      setConquestTargetName(neighbor.name);
+      setShowConquestReward(true);
+
       setGameState((prev) => ({
         ...prev,
         neighbors: prev.neighbors.map((n) =>
           n.id === neighborId ? { ...n, isConquered: true } : n,
         ),
         treaties: treatiesAfterViolation,
+        conqueredTerritories: (prev.conqueredTerritories || 0) + 1,
         civilization: {
           ...prev.civilization,
+          buildings: {
+            ...prev.civilization.buildings,
+            farms: prev.civilization.buildings.farms + (conquestResult.victorBuildingGains.farms || 0),
+            workshops: prev.civilization.buildings.workshops + (conquestResult.victorBuildingGains.workshops || 0),
+            libraries: prev.civilization.buildings.libraries + (conquestResult.victorBuildingGains.libraries || 0),
+            barracks: prev.civilization.buildings.barracks + (conquestResult.victorBuildingGains.barracks || 0),
+            temples: prev.civilization.buildings.temples + (conquestResult.victorBuildingGains.temples || 0),
+            amphitheatres: prev.civilization.buildings.amphitheatres + (conquestResult.victorBuildingGains.amphitheatres || 0),
+            walls: prev.civilization.buildings.walls + (conquestResult.victorBuildingGains.walls || 0),
+            archimedes_towers: prev.civilization.buildings.archimedes_towers + (conquestResult.victorBuildingGains.archimedes_towers || 0),
+          },
           stats: {
             ...prev.civilization.stats,
-            martial: prev.civilization.stats.martial + 5,
+            ...conquestResult.victorStatChanges,
           },
         },
         messages: [resultMsg, ...prev.messages],
       }));
     } else if (margin > 0) {
-      // Narrow Victory
+      // Narrow Victory - conquest with smaller building transfer
+      const isDecisive = false;
+      const defeatedBuildings = { farms: 1, workshops: 0, libraries: 0, barracks: 0, temples: 1, amphitheatres: 0, walls: Math.min(1, neighbor.defense / 5), archimedes_towers: 0 };
+      const conquestResult = calculateConquestRewards(gameState, defeatedBuildings as any, isDecisive);
+      const conquestTiles = generateConquestTiles(tiles, conquestResult.victorTileCount);
       const lostHouses = Math.max(1, Math.floor(civ.stats.houses * 0.1));
+
       resultMsg = `Narrow Victory! (${attackScore} vs ${defenseScore}) You defeated ${neighbor.name} but lost ${lostHouses} houses.${wallEffectMsg}${treatyViolationMsg}`;
+
+      // Add conquest tiles to map
+      setTiles(prev => [...prev, ...conquestTiles]);
+
+      setConquestMessages(conquestResult.victorMessages);
+      setConquestTargetName(neighbor.name);
+      setShowConquestReward(true);
+
       setGameState((prev) => ({
         ...prev,
         neighbors: prev.neighbors.map((n) =>
           n.id === neighborId ? { ...n, isConquered: true } : n,
         ),
         treaties: treatiesAfterViolation,
+        conqueredTerritories: (prev.conqueredTerritories || 0) + 1,
         civilization: {
           ...prev.civilization,
+          buildings: {
+            ...prev.civilization.buildings,
+            farms: prev.civilization.buildings.farms + (conquestResult.victorBuildingGains.farms || 0),
+            workshops: prev.civilization.buildings.workshops + (conquestResult.victorBuildingGains.workshops || 0),
+            libraries: prev.civilization.buildings.libraries + (conquestResult.victorBuildingGains.libraries || 0),
+            barracks: prev.civilization.buildings.barracks + (conquestResult.victorBuildingGains.barracks || 0),
+            temples: prev.civilization.buildings.temples + (conquestResult.victorBuildingGains.temples || 0),
+            amphitheatres: prev.civilization.buildings.amphitheatres + (conquestResult.victorBuildingGains.amphitheatres || 0),
+            walls: prev.civilization.buildings.walls + (conquestResult.victorBuildingGains.walls || 0),
+            archimedes_towers: prev.civilization.buildings.archimedes_towers + (conquestResult.victorBuildingGains.archimedes_towers || 0),
+          },
           stats: {
             ...prev.civilization.stats,
+            ...conquestResult.victorStatChanges,
             houses: Math.max(1, prev.civilization.stats.houses - lostHouses),
           },
         },
@@ -1231,6 +2727,108 @@ const App: React.FC = () => {
         messages: [resultMsg, ...prev.messages],
       }));
     }
+
+    // Advance to resolution phase so the turn completes. Without this, players
+    // who attack via the legacy neighbor-card button get stuck with no way to
+    // end their turn. The decisive/narrow victory paths also show the conquest
+    // reward modal in parallel; that's fine because the conquest modal is its
+    // own overlay.
+    const turnRes: TurnResolution = {
+      turn: gameState.turnNumber || 1,
+      incomeGained: civ.stats.productionIncome || civ.stats.industry,
+      populationChange: 0,
+      worldEventName: gameState.currentWorldEvent?.name || 'None',
+      choiceMade: gameState.selectedWorldChoice || 'A',
+      choiceEffects: [],
+      civEventName: gameState.currentCivEvent?.name,
+      civEventEffects: gameState.currentCivEvent?.effects.map((e) => e.message || '') || [],
+      actionTaken: 'attack',
+      actionEffects: [resultMsg],
+      statsBefore: v2StatsBefore,
+      statsAfter: gameState.civilization.stats as any,
+    };
+    setV2TurnResolution(turnRes);
+    setGameState((prev) => ({
+      ...prev,
+      turnPhase: 'resolution' as TurnPhaseV2,
+      turnResolution: turnRes,
+    }));
+  };
+
+  // Handle respawn: player picks a new civ and bonus
+  const handleRespawn = (civId: string, bonusId: string) => {
+    const respawnCiv = RESPAWN_CIVS.find(c => c.id === civId);
+    const bonus = RESPAWN_BONUSES.find(b => b.id === bonusId);
+    if (!respawnCiv || !bonus) return;
+
+    // Generate fresh map for the respawn civ
+    const respawnPreset: CivPreset = {
+      id: respawnCiv.id,
+      name: respawnCiv.name,
+      regions: [respawnCiv.region],
+      traits: [respawnCiv.trait],
+      baseStats: { ...respawnCiv.baseStats },
+      waterResource: respawnCiv.waterResource,
+      isIsland: false,
+      colors: respawnCiv.colors,
+      centerBiomes: respawnCiv.centerBiomes,
+      edgeBiomes: respawnCiv.edgeBiomes,
+    };
+
+    const newTiles = generateMap(respawnPreset);
+    setTiles(newTiles);
+    setTakenRespawnIds(prev => [...prev, civId]);
+
+    // Apply respawn stats with bonus
+    setGameState((prev) => ({
+      ...prev,
+      pendingRespawn: false,
+      respawnOptions: [],
+      civilization: {
+        ...prev.civilization,
+        presetId: respawnCiv.id,
+        name: respawnCiv.name,
+        regions: [respawnCiv.region],
+        traits: [respawnCiv.trait],
+        culturalStage: 'Barbarism' as const,
+        builtWonderId: null,
+        religion: { name: null, tenets: [] },
+        buildings: { farms: 0, workshops: 0, libraries: 0, barracks: 0, temples: 0, amphitheatres: 0, walls: 0, archimedes_towers: 0 },
+        flags: { ...prev.civilization.flags, conquered: false },
+        baseStats: {
+          martial: respawnCiv.baseStats.martial,
+          defense: respawnCiv.baseStats.defense,
+          faith: respawnCiv.baseStats.faith,
+          industry: respawnCiv.baseStats.industry,
+          fertility: respawnCiv.baseStats.fertility,
+        },
+        stats: {
+          ...prev.civilization.stats,
+          houses: 2,
+          housesBuiltThisTurn: 0,
+          population: 2,
+          capacity: respawnCiv.baseStats.capacity + (bonus.effects.capacity || 0),
+          fertility: respawnCiv.baseStats.fertility,
+          industry: respawnCiv.baseStats.industry,
+          industryLeft: respawnCiv.baseStats.industry,
+          martial: respawnCiv.baseStats.martial + (bonus.effects.martial || 0),
+          defense: respawnCiv.baseStats.defense + (bonus.effects.defense || 0),
+          science: bonus.effects.science || 0,
+          culture: bonus.effects.culture || 0,
+          faith: respawnCiv.baseStats.faith + (bonus.effects.faith || 0),
+          diplomacy: 0,
+          productionPool: (respawnCiv.baseStats.productionIncome * 3) + (bonus.effects.productionPool || 0),
+          productionIncome: respawnCiv.baseStats.productionIncome + (bonus.effects.productionIncome || 0),
+          scienceYield: respawnCiv.baseStats.scienceYield,
+          cultureYield: respawnCiv.baseStats.cultureYield,
+          faithYield: respawnCiv.baseStats.faithYield,
+          tempDefenseBonus: 0,
+        },
+      },
+      messages: [`Respawned as ${respawnCiv.name}! ${bonus.description}. Rise again!`, ...prev.messages],
+    }));
+
+    setShowRespawnPanel(false);
   };
 
   const addMessage = (msg: string) => {
@@ -1315,7 +2913,53 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative">
-      {/* EVENT POPUP MODAL */}
+      {/* V2 TURN PHASE UI */}
+      <TurnPhaseUI
+        phase={gameState.turnPhase || 'idle'}
+        gameState={gameState}
+        worldEvent={gameState.currentWorldEvent || null}
+        civEvent={gameState.currentCivEvent || null}
+        incomeMessages={v2IncomeMessages}
+        unlockedActions={v2UnlockedActions}
+        onUnlocksAcknowledge={handleUnlocksAcknowledge}
+        onWorldEventChoice={handleWorldEventChoice}
+        onCivEventAcknowledge={handleCivEventAck}
+        onBuildPhaseSelect={handleBuildPhaseSelect}
+        onBuildPhaseSkip={handleBuildPhaseSkip}
+        onActionSelect={handleActionSelect}
+        onResolutionDismiss={handleResolutionDismiss}
+        turnResolution={v2TurnResolution}
+        onPhaseRecovery={() => {
+          setGameState((prev) => ({
+            ...prev,
+            turnPhase: 'idle' as TurnPhaseV2,
+            currentWorldEvent: null,
+            currentCivEvent: null,
+          }));
+          setV2TurnResolution(null);
+          setV2UnlockedActions([]);
+        }}
+      />
+
+      {/* CONQUEST REWARD PANEL */}
+      {showConquestReward && (
+        <ConquestRewardPanel
+          messages={conquestMessages}
+          conqueredName={conquestTargetName}
+          onDismiss={() => setShowConquestReward(false)}
+        />
+      )}
+
+      {/* RESPAWN PANEL */}
+      {showRespawnPanel && (
+        <RespawnPanel
+          availableCivs={getAvailableRespawnCivs(gameState.turnNumber || 1, takenRespawnIds)}
+          bonuses={getRespawnBonuses()}
+          onSelect={handleRespawn}
+        />
+      )}
+
+      {/* LEGACY EVENT POPUP MODAL */}
       {gameState.currentEventPopup && (
         <div className="absolute inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
           <div className="bg-slate-800 border border-slate-600 p-8 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col gap-6 relative">
@@ -1595,118 +3239,260 @@ const App: React.FC = () => {
             <MapPin size={16} />
             <span className="hidden sm:inline">Fog</span>
           </button>
+          {isSinglePlayer && (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg font-bold text-sm min-h-[40px] md:min-h-[44px] bg-slate-700 hover:bg-red-700 text-slate-300 hover:text-white transition-colors"
+              title="Reset Game"
+            >
+              <RotateCcw size={16} />
+              <span className="hidden sm:inline">Reset</span>
+            </button>
+          )}
+          {!isSinglePlayer && (
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg font-bold text-sm min-h-[40px] md:min-h-[44px] bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+              title="Refresh Page"
+            >
+              <RotateCcw size={16} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          )}
           <button
             onClick={initiateAdvance}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-indigo-900/20 min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap"
+            disabled={gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-lg min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap transition-colors ${
+              gameState.turnPhase === 'idle' || !gameState.turnPhase
+                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'
+                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+            }`}
           >
-            <Play size={16} fill="currentColor" /> <span className="hidden sm:inline">Advance</span>{" "}
-            Turn
+            <Play size={16} fill="currentColor" />
+            <span className="hidden sm:inline">Turn</span>{" "}
+            {(gameState.turnNumber || 0) + 1}/24
           </button>
         </div>
       </header>
+
+      {/* RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl border border-red-500/50 max-w-sm w-full p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+              <h2 className="text-xl font-bold text-red-400">Reset Game?</h2>
+            </div>
+            <p className="text-sm text-slate-300 mb-6">
+              This will erase all progress for your current civilization and return you to the civilization selection screen. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={resetGame}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold transition-colors"
+              >
+                Reset Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 flex overflow-hidden pb-[56px] md:pb-0">
         {/* LEFT STATS - Hidden on mobile */}
         <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 flex-col z-10 shadow-xl">
           <div className="p-4 border-b border-slate-800 space-y-4">
             <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-orange-400 flex items-center gap-2">
-                  <Home size={14} /> Houses (
-                  {civ.flags.housesSupportTwoPop ? "2x" : "1x"} Pop)
-                </span>
-                <span>
-                  {civ.stats.houses}/{civ.stats.capacity}
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-orange-500 h-full"
-                  style={{
-                    width: `${(civ.stats.houses / civ.stats.capacity) * 100}%`,
-                  }}
-                ></div>
-              </div>
-              <div className="text-xs text-slate-500 mt-1 text-right">
-                Built this turn: {civ.stats.housesBuiltThisTurn}/
-                {civ.stats.fertility}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div
-                className="bg-slate-800 p-2 rounded border border-slate-700"
-                title="Building and manufacturing power. Spend to construct buildings."
+              <button
+                onClick={() => setExpandedInfo(expandedInfo === 'houses' ? null : 'houses')}
+                title={STAT_EXPLANATIONS.houses.body}
+                className={`w-full text-left rounded transition-colors ${expandedInfo === 'houses' ? 'bg-orange-900/20 p-2 -m-1' : 'hover:bg-slate-800/40 p-2 -m-1'}`}
               >
-                <div className="text-xs text-slate-400">Industry</div>
-                <div className="text-lg font-bold text-amber-400">
-                  {civ.stats.industryLeft}
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-orange-400 flex items-center gap-2">
+                    <Home size={14} /> Houses (
+                    {civ.flags.housesSupportTwoPop ? "2x" : "1x"} Pop)
+                    <span className="text-[9px] text-slate-500">{expandedInfo === 'houses' ? '▼' : 'ⓘ'}</span>
+                  </span>
+                  <span>
+                    {civ.stats.houses}/{civ.stats.capacity}
+                  </span>
                 </div>
-              </div>
-              <div
-                className="bg-slate-800 p-2 rounded border border-slate-700"
-                title="How many new houses you can build each turn."
-              >
-                <div className="text-xs text-slate-400">Fertility</div>
-                <div className="text-lg font-bold text-green-400">
+                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-orange-500 h-full"
+                    style={{
+                      width: `${(civ.stats.houses / Math.max(1, civ.stats.capacity)) * 100}%`,
+                    }}
+                  ></div>
+                </div>
+                <div className="text-xs text-slate-500 mt-1 text-right">
+                  Built this turn: {civ.stats.housesBuiltThisTurn}/
                   {civ.stats.fertility}
                 </div>
-              </div>
+                {/* ALWAYS-VISIBLE population bonus line so students see at a
+                    glance that growing their civ translates into Martial and
+                    Industry gains. Tap the block for the full breakdown. */}
+                <div className="mt-1.5 px-2 py-1 rounded bg-slate-800/60 border border-slate-700/60 text-[10px] text-slate-300 flex items-center justify-between">
+                  <span className="text-slate-400">Pop {civ.stats.population || 0} gives:</span>
+                  <span>
+                    <span className="text-red-300 font-bold">+{Math.floor((civ.stats.population || 0) / 4)} Martial</span>
+                    <span className="mx-1 text-slate-600">·</span>
+                    <span className="text-amber-300 font-bold">+{Math.floor((civ.stats.population || 0) / 5)} Industry</span>
+                  </span>
+                </div>
+              </button>
+              {expandedInfo === 'houses' && (() => {
+                const info = STAT_EXPLANATIONS.houses;
+                const pop = civ.stats.population || 0;
+                return (
+                  <div className="bg-slate-800/70 rounded-md p-2.5 mt-1 border border-slate-700 text-xs leading-relaxed space-y-2">
+                    <div className="text-slate-200">{info.body}</div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                        <div className="text-slate-500">Population</div>
+                        <div className="text-orange-300 font-bold">{pop}</div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                        <div className="text-slate-500">Capacity</div>
+                        <div className="text-orange-300 font-bold">{civ.stats.capacity}</div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                        <div className="text-slate-500">Martial from Pop</div>
+                        <div className="text-red-300 font-bold">+{Math.floor(pop / 4)}</div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                        <div className="text-slate-500">Industry from Pop</div>
+                        <div className="text-amber-300 font-bold">+{Math.floor(pop / 5)}</div>
+                      </div>
+                    </div>
+                    {info.raise && (
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">How to grow</div>
+                        <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                          {info.raise.map((r, i) => <li key={i} className="text-[11px]">{r}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {info.affects && (
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">What it does</div>
+                        <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                          {info.affects.map((a, i) => <li key={i} className="text-[11px]">{a}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
+            {/* INDUSTRY + FERTILITY — click-to-expand. Same pattern as the
+                stat rows below. */}
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { key: 'industry',   label: 'Industry',  color: 'text-amber-400', value: civ.stats.industryLeft },
+                { key: 'fertility',  label: 'Fertility', color: 'text-green-400', value: civ.stats.fertility },
+              ] as const).map((s) => {
+                const isOpen = expandedInfo === s.key;
+                const info = STAT_EXPLANATIONS[s.key];
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => setExpandedInfo(isOpen ? null : s.key)}
+                    title={info.body}
+                    className={`bg-slate-800 p-2 rounded border text-left transition-colors ${isOpen ? 'border-slate-500 bg-slate-700' : 'border-slate-700 hover:border-slate-600'}`}
+                  >
+                    <div className="text-xs text-slate-400 flex items-center justify-between">
+                      <span>{s.label}</span>
+                      <span className="text-[9px] text-slate-500">{isOpen ? '▼' : 'ⓘ'}</span>
+                    </div>
+                    <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {(expandedInfo === 'industry' || expandedInfo === 'fertility') && (() => {
+              const info = STAT_EXPLANATIONS[expandedInfo];
+              return (
+                <div className="bg-slate-800/70 rounded-md p-2.5 mt-1 border border-slate-700 text-xs leading-relaxed space-y-2">
+                  <div className="text-slate-200">{info.body}</div>
+                  {info.raise && (
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">How to raise</div>
+                      <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                        {info.raise.map((r, i) => <li key={i} className="text-[11px]">{r}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {info.affects && (
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Affects</div>
+                      <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                        {info.affects.map((a, i) => <li key={i} className="text-[11px]">{a}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {/* STAT ROWS — each row is click-to-expand. Click a stat to see a
+                detailed explanation of what it does, how to raise it, and what
+                it affects. Hovering also shows a short native tooltip as a
+                fallback for power users. Click again (or click a different
+                stat) to toggle. */}
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between border-b border-slate-800 pb-1">
-                <span
-                  className="text-red-400"
-                  title="Your offensive fighting power. Used to attack other civilizations."
-                >
-                  Martial
-                </span>
-                <b>{civ.stats.martial}</b>
-              </div>
-              <div className="flex justify-between border-b border-slate-800 pb-1">
-                <span
-                  className="text-blue-400"
-                  title="Your ability to protect your people. Includes terrain bonuses."
-                >
-                  Defense
-                </span>
-                <b>{civ.stats.defense}</b>
-              </div>
-              <div className="flex justify-between border-b border-slate-800 pb-1">
-                <span
-                  className="text-yellow-400"
-                  title="Spiritual power. Build temples and found religions."
-                >
-                  Faith
-                </span>
-                <b>{civ.stats.faith}</b>
-              </div>
-              <div className="flex justify-between border-b border-slate-800 pb-1">
-                <span
-                  className="text-pink-400"
-                  title="Arts and customs. Determines your cultural stage."
-                >
-                  Culture
-                </span>
-                <b>{civ.stats.culture}</b>
-              </div>
-              <div className="flex justify-between border-b border-slate-800 pb-1">
-                <span
-                  className="text-purple-400"
-                  title="Technological advancement. Unlocks new abilities at higher levels."
-                >
-                  Science
-                </span>
-                <b>{civ.stats.science}</b>
-              </div>
-              <div className="flex justify-between border-b border-slate-800 pb-1">
-                <span
-                  className="text-cyan-400"
-                  title="Ability to form alliances and conduct trade."
-                >
-                  Diplomacy
-                </span>
-                <b>{civ.stats.diplomacy}</b>
-              </div>
+              {([
+                { key: 'martial',    label: 'Martial',    color: 'text-red-400',    value: civ.stats.martial },
+                { key: 'faith',      label: 'Faith',      color: 'text-yellow-400', value: civ.stats.faith },
+                { key: 'culture',    label: 'Culture',    color: 'text-pink-400',   value: civ.stats.culture },
+                { key: 'science',    label: 'Science',    color: 'text-purple-400', value: civ.stats.science },
+                { key: 'diplomacy',  label: 'Diplomacy',  color: 'text-cyan-400',   value: civ.stats.diplomacy },
+              ] as const).map((s) => {
+                const isOpen = expandedInfo === s.key;
+                const info = STAT_EXPLANATIONS[s.key];
+                return (
+                  <div key={s.key}>
+                    <button
+                      onClick={() => setExpandedInfo(isOpen ? null : s.key)}
+                      title={info.body}
+                      className={`w-full flex justify-between items-center border-b border-slate-800 pb-1 hover:bg-slate-800/50 rounded px-1 transition-colors text-left ${isOpen ? 'bg-slate-800/70' : ''}`}
+                    >
+                      <span className={`${s.color} flex items-center gap-1.5`}>
+                        {s.label}
+                        <span className={`text-[9px] ${isOpen ? 'text-white' : 'text-slate-500'}`}>{isOpen ? '▼' : 'ⓘ'}</span>
+                      </span>
+                      <b>{s.value}</b>
+                    </button>
+                    {isOpen && (
+                      <div className="bg-slate-800/70 rounded-md p-2.5 mt-1 mb-1 border border-slate-700 text-xs leading-relaxed space-y-2">
+                        <div className="text-slate-200">{info.body}</div>
+                        {info.raise && (
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">How to raise</div>
+                            <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                              {info.raise.map((r, i) => <li key={i} className="text-[11px]">{r}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {info.affects && (
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Affects</div>
+                            <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                              {info.affects.map((a, i) => <li key={i} className="text-[11px]">{a}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
           {civ.religion.name && (
@@ -1719,32 +3505,95 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-          <div className="p-4 bg-indigo-900/20 m-2 rounded border border-indigo-700/30">
-            <div className="text-xs text-indigo-400 uppercase font-bold mb-2">
-              Cultural Stage
-            </div>
-            <div className="text-sm font-bold text-indigo-100">
-              {civ.culturalStage}
-            </div>
+          <div className="m-2">
+            <button
+              onClick={() => setExpandedInfo(expandedInfo === 'cultural_stage' ? null : 'cultural_stage')}
+              title={STAT_EXPLANATIONS.cultural_stage.body}
+              className={`w-full text-left p-4 rounded border transition-colors ${
+                expandedInfo === 'cultural_stage'
+                  ? 'bg-indigo-900/40 border-indigo-500/60'
+                  : 'bg-indigo-900/20 border-indigo-700/30 hover:bg-indigo-900/30'
+              }`}
+            >
+              <div className="text-xs text-indigo-400 uppercase font-bold mb-2 flex items-center justify-between">
+                <span>Cultural Stage</span>
+                <span className="text-[9px] text-slate-400">{expandedInfo === 'cultural_stage' ? '▼' : 'ⓘ'}</span>
+              </div>
+              <div className="text-sm font-bold text-indigo-100">
+                {civ.culturalStage}
+              </div>
+            </button>
+            {expandedInfo === 'cultural_stage' && (
+              <div className="bg-slate-800/70 rounded-md p-2.5 mt-1 border border-slate-700 text-xs leading-relaxed space-y-2">
+                <div className="text-slate-200">{STAT_EXPLANATIONS.cultural_stage.body}</div>
+                {STAT_EXPLANATIONS.cultural_stage.raise && (
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Stage ladder</div>
+                    <ul className="text-slate-300 space-y-0.5 list-disc list-inside ml-1">
+                      {STAT_EXPLANATIONS.cultural_stage.raise.map((r, i) => <li key={i} className="text-[11px]">{r}</li>)}
+                    </ul>
+                  </div>
+                )}
+                <div className="text-[11px] text-indigo-300 pt-1 border-t border-slate-700">Tip: Open the Culture tab on the right for a full stage breakdown with live progress.</div>
+              </div>
+            )}
           </div>
           {civ.technologies && civ.technologies.length > 0 && (
-            <div className="p-4 bg-purple-900/20 m-2 rounded border border-purple-700/30">
-              <div className="text-xs text-purple-400 uppercase font-bold mb-2">
-                Technologies ({civ.technologies.length})
+            <div className="m-2">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setExpandedInfo(expandedInfo === 'technologies' ? null : 'technologies')}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedInfo(expandedInfo === 'technologies' ? null : 'technologies'); } }}
+                title={STAT_EXPLANATIONS.technologies.body}
+                className={`w-full text-left p-4 rounded border transition-colors cursor-pointer ${
+                  expandedInfo === 'technologies'
+                    ? 'bg-purple-900/40 border-purple-500/60'
+                    : 'bg-purple-900/20 border-purple-700/30 hover:bg-purple-900/30'
+                }`}
+              >
+                <div className="text-xs text-purple-400 uppercase font-bold mb-2 flex items-center justify-between">
+                  <span>Technologies ({civ.technologies.length})</span>
+                  <span className="text-[9px] text-slate-400">{expandedInfo === 'technologies' ? '▼' : 'ⓘ'}</span>
+                </div>
+                <div className="space-y-1">
+                  {civ.technologies.map((techId) => {
+                    const tech = TECHNOLOGIES.find((t) => t.id === techId);
+                    return tech ? (
+                      <div
+                        key={techId}
+                        title={tech.description}
+                        className="text-xs text-purple-200 bg-purple-900/30 px-2 py-1 rounded cursor-help"
+                      >
+                        {tech.name}
+                      </div>
+                    ) : null;
+                  })}
+                </div>
               </div>
-              <div className="space-y-1">
-                {civ.technologies.map((techId) => {
-                  const tech = TECHNOLOGIES.find((t) => t.id === techId);
-                  return tech ? (
-                    <div
-                      key={techId}
-                      className="text-xs text-purple-200 bg-purple-900/30 px-2 py-1 rounded"
-                    >
-                      {tech.name}
-                    </div>
-                  ) : null;
-                })}
-              </div>
+              {expandedInfo === 'technologies' && (
+                <div className="bg-slate-800/70 rounded-md p-2.5 mt-1 border border-slate-700 text-xs leading-relaxed space-y-2">
+                  <div className="text-slate-200">{STAT_EXPLANATIONS.technologies.body}</div>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Your technologies</div>
+                    <ul className="space-y-1">
+                      {civ.technologies.map((techId) => {
+                        const tech = TECHNOLOGIES.find((t) => t.id === techId);
+                        return tech ? (
+                          <li key={techId} className="bg-slate-900/60 rounded px-2 py-1.5 border border-slate-700">
+                            <div className="text-[11px] font-bold text-purple-200">{tech.name}</div>
+                            <div className="text-[10px] text-slate-400 leading-relaxed">{tech.description}</div>
+                            {tech.effect && (
+                              <div className="text-[10px] text-emerald-300 mt-0.5">Effect: {tech.effect}</div>
+                            )}
+                          </li>
+                        ) : null;
+                      })}
+                    </ul>
+                  </div>
+                  <div className="text-[11px] text-purple-300 pt-1 border-t border-slate-700">Tip: Technologies unlock automatically as your civ reaches historical years, provided any prerequisites are met.</div>
+                </div>
+              )}
             </div>
           )}
           <div className="p-4 bg-cyan-900/20 m-2 rounded border border-cyan-700/30">
@@ -1821,17 +3670,21 @@ const App: React.FC = () => {
         {/* RIGHT TABBED PANEL - Hidden on mobile */}
         <aside className="hidden md:flex w-80 bg-slate-900 border-l border-slate-800 flex-col z-10 shadow-xl">
           <div className="flex border-b border-slate-800">
-            {["build", "world", "wonders", "religion", "war"].map((tab) => (
+            {["build", "science", "culture", "world", "wonders", "religion", "war", "victory"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`flex-1 min-h-[48px] py-4 flex justify-center items-center text-slate-400 hover:bg-slate-800 transition-colors ${activeTab === tab ? "border-b-2 border-orange-500 text-orange-500 bg-slate-800" : ""}`}
+                title={tab.charAt(0).toUpperCase() + tab.slice(1)}
               >
                 {tab === "build" && <Hammer size={18} />}
+                {tab === "science" && <FlaskConical size={18} />}
+                {tab === "culture" && <Palette size={18} />}
                 {tab === "world" && <Globe size={18} />}
                 {tab === "wonders" && <Crown size={18} />}
                 {tab === "religion" && <Star size={18} />}
                 {tab === "war" && <Sword size={18} />}
+                {tab === "victory" && <Trophy size={18} />}
               </button>
             ))}
           </div>
@@ -1865,81 +3718,357 @@ const App: React.FC = () => {
                   </div>
                 </button>
                 <button
-                  disabled={civ.stats.industryLeft < 10}
+                  disabled={civ.stats.industryLeft < 5}
                   onClick={() =>
                     setGameState((p) => ({
                       ...p,
-                      selectedAction: BuildingType.Temple,
+                      selectedAction: BuildingType.Farm,
                     }))
                   }
-                  className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Temple ? "bg-blue-900/30 border-blue-500" : "bg-slate-800 border-slate-700"} ${civ.stats.industryLeft < 10 ? "opacity-50" : ""}`}
+                  className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Farm ? "bg-green-900/30 border-green-500" : "bg-slate-800 border-slate-700"} ${civ.stats.industryLeft < 5 ? "opacity-50" : ""}`}
                 >
-                  <div className="p-2 bg-blue-600 rounded text-white">
-                    <Landmark size={18} />
+                  <div className="p-2 bg-green-600 rounded text-white">
+                    <Sprout size={18} />
                   </div>
                   <div>
-                    <div className="font-bold text-sm">Temple</div>
-                    <div className="text-xs text-slate-400">Cost: 10 Ind</div>
+                    <div className="font-bold text-sm">Farm</div>
+                    <div className="text-xs text-slate-400">Cost: 5 Ind | +1 Cap, +1 Prod Income</div>
                   </div>
                 </button>
-                <button
-                  disabled={civ.stats.industryLeft < 10}
-                  onClick={() =>
-                    setGameState((p) => ({
-                      ...p,
-                      selectedAction: BuildingType.Wall,
-                    }))
-                  }
-                  className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Wall ? "bg-slate-700 border-slate-400" : "bg-slate-800 border-slate-700"} ${civ.stats.industryLeft < 10 ? "opacity-50" : ""}`}
-                >
-                  <div className="p-2 bg-slate-500 rounded text-white">
-                    <BrickWall size={18} />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm">Wall</div>
-                    <div className="text-xs text-slate-400">Cost: 10 Ind</div>
-                  </div>
-                </button>
-                <button
-                  disabled={civ.stats.industryLeft < 10}
-                  onClick={() =>
-                    setGameState((p) => ({
-                      ...p,
-                      selectedAction: BuildingType.Amphitheatre,
-                    }))
-                  }
-                  className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Amphitheatre ? "bg-pink-900/30 border-pink-500" : "bg-slate-800 border-slate-700"} ${civ.stats.industryLeft < 10 ? "opacity-50" : ""}`}
-                >
-                  <div className="p-2 bg-pink-600 rounded text-white">
-                    <Users size={18} />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm">Amphitheatre</div>
-                    <div className="text-xs text-slate-400">Cost: 10 Ind</div>
-                  </div>
-                </button>
-                <button
-                  disabled={
-                    civ.stats.industryLeft < 20 || civ.stats.science < 30
-                  }
-                  onClick={() =>
-                    setGameState((p) => ({
-                      ...p,
-                      selectedAction: BuildingType.ArchimedesTower,
-                    }))
-                  }
-                  className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.ArchimedesTower ? "bg-purple-900/30 border-purple-500" : "bg-slate-800 border-slate-700"} ${civ.stats.industryLeft < 20 || civ.stats.science < 30 ? "opacity-50" : ""}`}
-                >
-                  <div className="p-2 bg-purple-600 rounded text-white">
-                    <TowerControl size={18} />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm">Archimedes Tower</div>
-                    <div className="text-xs text-slate-400">
-                      Cost: 20 Ind, 30 Sci
+                {/* PRODUCTION-COST BUILDINGS — clicking any of these is a shortcut
+                    for picking from the Build Phase modal. Works outside the
+                    Build Phase too (e.g. from the build sidebar at any time) as
+                    long as the Production Pool covers the cost. Cost is
+                    deducted via handleBuildPhaseSelect which also toggles
+                    idle-for-placement mode. */}
+                {(() => {
+                  const pool = civ.stats.productionPool || 0;
+                  const entries = [
+                    { type: BuildingType.Farm,        name: 'Farm',        cost: 5,  icon: Sprout,       color: 'green',   effect: '+1 Capacity, +1 Prod Income' },
+                    { type: BuildingType.Workshop,    name: 'Workshop',    cost: 8,  icon: Hammer,       color: 'yellow',  effect: '+2 Production Income' },
+                    { type: BuildingType.Library,     name: 'Library',     cost: 10, icon: FlaskConical, color: 'cyan',    effect: '+2 Sci Yield' },
+                    { type: BuildingType.Barracks,    name: 'Barracks',    cost: 10, icon: Sword,        color: 'red',     effect: '+3 Martial' },
+                    { type: BuildingType.Temple,      name: 'Temple',      cost: 10, icon: Landmark,     color: 'blue',    effect: '+2 Faith, +1 Faith Yield' },
+                    { type: BuildingType.Wall,        name: 'Wall',        cost: 10, icon: BrickWall,    color: 'slate',   effect: '+1 Martial (fortifications)' },
+                    { type: BuildingType.Amphitheatre, name: 'Amphitheatre', cost: 10, icon: Users,      color: 'pink',    effect: '+2 Culture Yield, +3 Culture' },
+                    { type: BuildingType.ArchimedesTower, name: 'Archimedes Tower', cost: 20, icon: TowerControl, color: 'purple', effect: '+20 Martial (needs 30 Sci)' },
+                  ];
+                  return entries.map((e) => {
+                    const sciGate = e.type === BuildingType.ArchimedesTower && civ.stats.science < 30;
+                    const canAfford = pool >= e.cost && !sciGate;
+                    const isSelected = gameState.selectedAction === e.type;
+                    const IconC = e.icon;
+                    const colorMap: Record<string, { iconBg: string; selBg: string; selBorder: string }> = {
+                      green:  { iconBg: 'bg-green-600',  selBg: 'bg-green-900/30',  selBorder: 'border-green-500' },
+                      yellow: { iconBg: 'bg-yellow-600', selBg: 'bg-yellow-900/30', selBorder: 'border-yellow-500' },
+                      cyan:   { iconBg: 'bg-cyan-600',   selBg: 'bg-cyan-900/30',   selBorder: 'border-cyan-500' },
+                      red:    { iconBg: 'bg-red-600',    selBg: 'bg-red-900/30',    selBorder: 'border-red-500' },
+                      blue:   { iconBg: 'bg-blue-600',   selBg: 'bg-blue-900/30',   selBorder: 'border-blue-500' },
+                      slate:  { iconBg: 'bg-slate-500',  selBg: 'bg-slate-700',     selBorder: 'border-slate-400' },
+                      pink:   { iconBg: 'bg-pink-600',   selBg: 'bg-pink-900/30',   selBorder: 'border-pink-500' },
+                      purple: { iconBg: 'bg-purple-600', selBg: 'bg-purple-900/30', selBorder: 'border-purple-500' },
+                    };
+                    const c = colorMap[e.color];
+                    return (
+                      <button
+                        key={e.type}
+                        disabled={!canAfford}
+                        onClick={() => handleBuildPhaseSelect(e.type)}
+                        className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${
+                          isSelected ? `${c.selBg} ${c.selBorder}` : 'bg-slate-800 border-slate-700'
+                        } ${!canAfford ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500'}`}
+                      >
+                        <div className={`p-2 ${c.iconBg} rounded text-white`}>
+                          <IconC size={18} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold text-sm">{e.name}</div>
+                          <div className="text-xs text-slate-400">
+                            Cost: {e.cost} Prod{sciGate ? ' · needs 30 Sci' : ''} · {e.effect}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  });
+                })()}
+
+                <div className="mt-2 text-[11px] text-slate-500 leading-relaxed italic border-t border-slate-800 pt-2">
+                  Clicking any building above selects it for placement. You can also use the <b className="text-yellow-400">Build Phase</b> modal during the main turn flow, or the <b className="text-purple-400">Wonders</b> tab for era-defining projects.
+                </div>
+              </div>
+            )}
+
+            {/* SCIENCE TAB */}
+            {activeTab === "science" && (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                  Science &amp; Technology
+                </h2>
+
+                {/* Current Stats */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-slate-500">Science Total</div>
+                      <div className="text-lg font-bold text-cyan-400">{civ.stats.science}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Science Yield</div>
+                      <div className="text-lg font-bold text-cyan-300">{civ.stats.scienceYield}/action</div>
                     </div>
                   </div>
-                </button>
+                  <div className="mt-2 pt-2 border-t border-slate-700">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Libraries Built</span>
+                      <span className="text-cyan-400 font-bold">{civ.buildings.libraries}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-1">
+                      <span className="text-slate-400">Library Bonus on Research</span>
+                      <span className="text-cyan-300">+{(civ.buildings.libraries || 0) * 2} Science</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Next Unlock Progress */}
+                {(() => {
+                  const nextUnlock = SCIENCE_UNLOCKS.find(u => u.level > civ.stats.science);
+                  const prevLevel = SCIENCE_UNLOCKS.filter(u => u.level <= civ.stats.science).pop();
+                  const prevThreshold = prevLevel ? prevLevel.level : 0;
+                  const nextThreshold = nextUnlock ? nextUnlock.level : (prevLevel ? prevLevel.level : 100);
+                  const range = nextThreshold - prevThreshold;
+                  const progress = nextUnlock && range > 0
+                    ? Math.min(100, ((civ.stats.science - prevThreshold) / range) * 100)
+                    : 100;
+                  return nextUnlock ? (
+                    <div className="bg-slate-800 rounded-lg p-3 border border-cyan-900/50">
+                      <div className="text-xs text-slate-400 mb-1">Next Unlock at Level {nextUnlock.level}</div>
+                      <div className="text-sm font-medium text-cyan-200 mb-2">{nextUnlock.effect}</div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-cyan-600 to-cyan-400 h-2 rounded-full transition-all"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1 text-right">
+                        {civ.stats.science} / {nextUnlock.level}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-cyan-900/20 rounded-lg p-3 border border-cyan-700/50 text-center">
+                      <div className="text-sm font-bold text-cyan-300">All Technologies Unlocked!</div>
+                      <div className="text-xs text-cyan-500 mt-1">Your civilization has reached peak scientific knowledge.</div>
+                    </div>
+                  );
+                })()}
+
+                {/* Unlock Tree */}
+                <div className="space-y-1.5">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-2">
+                    Technology Tree
+                  </h3>
+                  {SCIENCE_UNLOCKS.map((unlock, i) => {
+                    const isUnlocked = civ.stats.science >= unlock.level;
+                    const isNext = !isUnlocked && (i === 0 || civ.stats.science >= SCIENCE_UNLOCKS[i - 1].level);
+                    return (
+                      <div
+                        key={unlock.level}
+                        className={`p-2.5 rounded-lg border transition-all ${
+                          isUnlocked
+                            ? "bg-cyan-900/30 border-cyan-700/60"
+                            : isNext
+                              ? "bg-slate-800 border-cyan-500/40 ring-1 ring-cyan-500/20"
+                              : "bg-slate-800/50 border-slate-700/50 opacity-60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {isUnlocked ? (
+                              <div className="w-5 h-5 rounded-full bg-cyan-600 flex items-center justify-center">
+                                <Check size={12} className="text-white" />
+                              </div>
+                            ) : (
+                              <div className={`w-5 h-5 rounded-full border-2 ${isNext ? "border-cyan-500" : "border-slate-600"}`} />
+                            )}
+                            <span className={`text-xs font-medium ${isUnlocked ? "text-cyan-200" : isNext ? "text-slate-200" : "text-slate-500"}`}>
+                              {unlock.effect}
+                            </span>
+                          </div>
+                          <span className={`text-xs font-bold ${isUnlocked ? "text-cyan-400" : "text-slate-600"}`}>
+                            Lv.{unlock.level}
+                          </span>
+                        </div>
+                        {unlock.statBonus && isUnlocked && (
+                          <div className="mt-1 ml-7 text-xs text-cyan-400/80">
+                            {Object.entries(unlock.statBonus).map(([stat, val]) => `+${val} ${stat}`).join(", ")}
+                          </div>
+                        )}
+                        {unlock.unlocks && isUnlocked && (
+                          <div className="mt-1 ml-7 text-xs text-emerald-400/80">
+                            Unlocked: {unlock.unlocks.replace(/_/g, ' ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* CULTURE TAB — explains what Culture unlocks and how to earn it. */}
+            {activeTab === "culture" && (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                  Culture &amp; Legacy
+                </h2>
+
+                {/* Current Stats Summary */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-pink-900/40">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-slate-500">Culture Total</div>
+                      <div className="text-lg font-bold text-pink-400">{civ.stats.culture}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Culture Yield</div>
+                      <div className="text-lg font-bold text-pink-300">{civ.stats.cultureYield}/action</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-slate-700">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Amphitheatres Built</span>
+                      <span className="text-pink-400 font-bold">{civ.buildings.amphitheatres}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-1">
+                      <span className="text-slate-400">Bonus on Develop</span>
+                      <span className="text-pink-300">+{(civ.buildings.amphitheatres || 0) * 2} Culture</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current Stage + next threshold */}
+                {(() => {
+                  const sorted = [...CULTURAL_STAGE_THRESHOLDS].sort((a, b) => a.minCulture - b.minCulture);
+                  const current = sorted.filter(t => civ.stats.culture >= t.minCulture).pop();
+                  const next = sorted.find(t => t.minCulture > civ.stats.culture);
+                  const prevThreshold = current ? current.minCulture : 0;
+                  const nextThreshold = next ? next.minCulture : prevThreshold;
+                  const range = nextThreshold - prevThreshold;
+                  const progress = next && range > 0
+                    ? Math.min(100, ((civ.stats.culture - prevThreshold) / range) * 100)
+                    : 100;
+                  return (
+                    <div className="bg-slate-800 rounded-lg p-3 border border-pink-900/40">
+                      <div className="text-xs text-slate-400 mb-1">Current Stage</div>
+                      <div className="text-base font-bold text-pink-300">{civ.culturalStage}</div>
+                      {next ? (
+                        <>
+                          <div className="text-xs text-slate-500 mt-2 mb-1">Next: {next.stage} at {next.minCulture}</div>
+                          <div className="w-full bg-slate-700 rounded-full h-2">
+                            <div
+                              className="bg-gradient-to-r from-pink-600 to-pink-400 h-2 rounded-full transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1 text-right">
+                            {civ.stats.culture} / {next.minCulture}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-pink-400 mt-2">Peak cultural stage reached.</div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Active Cultural Prestige (soft-power) */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-pink-900/40">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Cultural Prestige</h3>
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
+                    A celebrated culture intimidates rivals and opens diplomatic doors.
+                    Every <b className="text-pink-300">10 Culture</b> grants <b className="text-red-300">+1 Martial</b>,
+                    and every <b className="text-pink-300">20 Culture</b> grants <b className="text-sky-300">+1 Diplomacy</b>.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                      <div className="text-slate-500">Martial from Culture</div>
+                      <div className="text-red-300 font-bold">+{Math.floor((civ.stats.culture || 0) / 10)}</div>
+                    </div>
+                    <div className="bg-slate-900/60 rounded px-2 py-1.5">
+                      <div className="text-slate-500">Diplomacy from Culture</div>
+                      <div className="text-sky-300 font-bold">+{Math.floor((civ.stats.culture || 0) / 20)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stage Ladder — all stages + their effects */}
+                <div className="space-y-1.5">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-2">
+                    Stage Ladder
+                  </h3>
+                  {(() => {
+                    const ladder: { stage: string; minCulture: number; flavor: string }[] = [
+                      { stage: 'Barbarism', minCulture: 0, flavor: 'The starting stage. +50% Martial, +30% Fertility — but science, faith, and industry are reduced.' },
+                      ...CULTURAL_STAGE_THRESHOLDS,
+                    ];
+                    return ladder.map((entry) => {
+                      const stageKey = entry.stage.toLowerCase() as keyof typeof CULTURAL_STAGE_MULTIPLIERS;
+                      const mults = CULTURAL_STAGE_MULTIPLIERS[stageKey];
+                      const isReached = (civ.stats.culture || 0) >= entry.minCulture;
+                      const isCurrent = civ.culturalStage === entry.stage;
+                      return (
+                        <div
+                          key={entry.stage}
+                          className={`p-2.5 rounded-lg border transition-all ${
+                            isCurrent
+                              ? 'bg-pink-900/30 border-pink-500/60 ring-1 ring-pink-500/20'
+                              : isReached
+                                ? 'bg-pink-900/10 border-pink-800/40'
+                                : 'bg-slate-800/50 border-slate-700/50 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-bold ${isCurrent ? 'text-pink-300' : isReached ? 'text-pink-200/80' : 'text-slate-400'}`}>
+                              {entry.stage}
+                            </span>
+                            <span className={`text-xs font-bold ${isReached ? 'text-pink-400' : 'text-slate-600'}`}>
+                              {entry.minCulture === 0 ? 'start' : `${entry.minCulture}+`}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-400 leading-relaxed">{entry.flavor}</div>
+                          {mults && (
+                            <div className="mt-1 text-[11px] text-pink-300/80">
+                              {Object.entries(mults)
+                                .filter(([, v]) => v !== 1.0)
+                                .map(([k, v]) => `${(v as number) >= 1 ? '+' : ''}${Math.round(((v as number) - 1) * 100)}% ${k}`)
+                                .join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* How to earn culture */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">How to Earn Culture</h3>
+                  <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
+                    <li><b className="text-pink-300">Develop</b> action — adds your Culture Yield + 2 per Amphitheatre.</li>
+                    <li><b className="text-pink-300">Amphitheatres</b> — each gives +3 base Culture and +2 yield on Develop.</li>
+                    <li><b className="text-pink-300">Wonders</b> — most grant flat Culture bonuses (Oracle +10, Pyramids +5, etc.).</li>
+                    <li><b className="text-pink-300">Religion tenets</b> — Philosophy, Universal Faith, Scriptures.</li>
+                    <li><b className="text-pink-300">Science unlocks</b> — Writing, Philosophy, Printing Press.</li>
+                    <li><b className="text-pink-300">Cultural treaties</b> — +2 Culture per active treaty.</li>
+                    <li><b className="text-pink-300">Creativity trait</b> — doubles Culture output.</li>
+                  </ul>
+                </div>
+
+                <div className="bg-amber-900/20 rounded-lg p-3 border border-amber-700/40">
+                  <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest mb-1">Victory Contribution</h3>
+                  <p className="text-[11px] text-amber-100/80 leading-relaxed">
+                    Culture feeds the <b>Legacy</b> victory score, which combines your Culture Total, +10 per Wonder, bonuses for advanced stages, and +3 per Amphitheatre.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -2015,35 +4144,39 @@ const App: React.FC = () => {
                         </div>
                       )}
                       {!isConquered && (
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex flex-col gap-2 mt-2">
+                          {/* Attack is ONLY available through the Action phase
+                              modal so combat flows through the V2 resolution
+                              system. The side panel shows a hint instead of a
+                              button to avoid the old V1 fire-and-forget flow
+                              that bypassed turn resolution. */}
                           {gameState.gameFlags.warUnlocked &&
                             relationship !== "Ally" &&
                             neighbor && (
+                              <div className="text-[11px] text-red-300/70 italic px-1">
+                                To attack {adjPreset.name}, pick <b>Attack</b> during the Action phase of your next turn.
+                              </div>
+                            )}
+                          <div className="flex gap-2">
+                            {relationship !== "Ally" && neighbor && (
                               <button
-                                onClick={() => attackNeighbor(neighbor.id)}
-                                className="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1"
+                                onClick={() => formAlliance(neighbor.id)}
+                                disabled={civ.stats.diplomacy < 1}
+                                className="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1 disabled:opacity-50"
                               >
-                                <Sword size={12} /> Attack
+                                <Handshake size={12} /> Ally
                               </button>
                             )}
-                          {relationship !== "Ally" && neighbor && (
-                            <button
-                              onClick={() => formAlliance(neighbor.id)}
-                              disabled={civ.stats.diplomacy < 1}
-                              className="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1 disabled:opacity-50"
-                            >
-                              <Handshake size={12} /> Ally
-                            </button>
-                          )}
-                          {civ.religion.name && neighbor && (
-                            <button
-                              onClick={() => spreadReligion(neighbor.id)}
-                              disabled={neighbor.religion === civ.religion.name}
-                              className="flex-1 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1 disabled:opacity-50"
-                            >
-                              <Star size={12} /> Convert
-                            </button>
-                          )}
+                            {civ.religion.name && neighbor && (
+                              <button
+                                onClick={() => spreadReligion(neighbor.id)}
+                                disabled={neighbor.religion === civ.religion.name}
+                                className="flex-1 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1 disabled:opacity-50"
+                              >
+                                <Star size={12} /> Convert
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2184,7 +4317,7 @@ const App: React.FC = () => {
                       <Star className="mx-auto text-amber-500 mb-2" />
                       <h3 className="font-bold text-lg">{civ.religion.name}</h3>
                       <div className="text-xs text-slate-400">
-                        Founded {Math.abs(gameState.year)} BCE
+                        Founded {Math.abs(gameState.year)} {gameState.year < 0 ? "BCE" : "CE"}
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -2241,71 +4374,216 @@ const App: React.FC = () => {
                 <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
                   War Room
                 </h2>
-                {!gameState.gameFlags.warUnlocked && gameState.year < -670 ? (
-                  <div className="p-4 bg-slate-800/50 text-center text-sm text-slate-500 italic border border-slate-700 rounded">
-                    Warfare unlocks in 670 BCE
-                  </div>
-                ) : (
-                  gameState.neighbors.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`p-3 rounded border ${n.isConquered ? "bg-slate-900 border-slate-800 opacity-50" : n.relationship === "Ally" ? "bg-slate-800 border-blue-500" : "bg-slate-800 border-red-900/50"}`}
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-sm text-slate-200">
-                          {n.name}
-                        </span>
-                        {n.isConquered && (
-                          <span className="text-xs bg-red-900 text-red-200 px-2 rounded">
-                            Conquered
-                          </span>
-                        )}
-                        {n.relationship === "Ally" && (
-                          <span className="text-xs bg-blue-900 text-blue-200 px-2 rounded">
-                            Ally
-                          </span>
-                        )}
+
+                {/* Conquest progress summary */}
+                <div className="bg-slate-800 rounded-lg p-3 border border-red-900/40">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase">Conquered</div>
+                      <div className="text-xl font-bold text-red-400">
+                        {gameState.conqueredTerritories || 0}<span className="text-sm text-slate-500"> / 5</span>
                       </div>
-                      <div className="flex justify-between text-xs text-slate-400 mb-3">
-                        <span>
-                          Strength:{" "}
-                          <b className="text-red-400">
-                            {n.martial + n.defense}
-                          </b>
-                        </span>
-                        {n.relationship !== "Ally" && !n.isConquered && (
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase">Battles Won</div>
+                      <div className="text-xl font-bold text-orange-300">
+                        {gameState.warsWon || 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase">Martial</div>
+                      <div className="text-xl font-bold text-red-300">
+                        {civ.stats.martial}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-700 rounded-full h-2 mt-2 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-red-600 to-red-400 h-2 transition-all"
+                      style={{ width: `${Math.min(100, ((gameState.conqueredTerritories || 0) / 5) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2 italic">
+                    Conquer <b className="text-red-300">5 civilizations</b> via Decisive Victory (margin ≥ 6) to win the Conquest victory.
+                  </p>
+                </div>
+
+                {/* Neighbors roster */}
+                <div>
+                  <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Adjacent Civs</h3>
+                  <div className="space-y-2">
+                    {gameState.neighbors.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`p-2.5 rounded border text-xs ${n.isConquered ? "bg-slate-900 border-slate-800 opacity-60" : n.relationship === "Ally" ? "bg-slate-800 border-blue-500" : "bg-slate-800 border-red-900/50"}`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-sm text-slate-200">{n.name}</span>
+                          <div className="flex gap-1">
+                            {n.isConquered && <span className="text-[10px] bg-red-900 text-red-200 px-1.5 py-0.5 rounded">CONQUERED</span>}
+                            {n.relationship === "Ally" && <span className="text-[10px] bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded">ALLY</span>}
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-slate-400">
+                          <span>
+                            Strength <b className="text-red-300">{n.martial + n.defense}</b>
+                            <span className="mx-1 text-slate-600">·</span>
+                            Faith <b className="text-amber-300">{n.faith}</b>
+                          </span>
+                          {!n.isConquered && n.relationship !== "Ally" && (
+                            <button
+                              onClick={() => formAlliance(n.id)}
+                              disabled={civ.stats.diplomacy < 1}
+                              className="text-blue-400 hover:text-blue-300 underline flex items-center gap-1 disabled:opacity-40 disabled:no-underline"
+                            >
+                              <Handshake size={10} /> Ally
+                            </button>
+                          )}
+                        </div>
+                        {!n.isConquered && n.relationship !== "Ally" && (
+                          <div className="mt-1.5 text-[10px] text-red-300/70 italic">
+                            To attack, use the Action phase · vs your Martial {civ.stats.martial} (need margin +6 for Decisive)
+                          </div>
+                        )}
+                        {!n.isConquered && n.relationship === "Ally" && (
                           <button
-                            onClick={() => formAlliance(n.id)}
-                            disabled={civ.stats.diplomacy < 1}
-                            className="text-blue-400 hover:text-blue-300 underline flex items-center gap-1"
+                            onClick={() => tradeWithNeighbor(n.id)}
+                            disabled={civ.stats.industry < 2 || gameState.tradedThisTurn.includes(n.id)}
+                            className="w-full mt-1.5 py-1.5 bg-green-700 hover:bg-green-600 text-white text-[11px] font-bold rounded disabled:opacity-50"
                           >
-                            <Handshake size={12} /> Ally
+                            {gameState.tradedThisTurn.includes(n.id) ? "TRADED THIS TURN" : "TRADE"}
                           </button>
                         )}
                       </div>
-                      {!n.isConquered && n.relationship === "Ally" && (
-                        <button
-                          onClick={() => tradeWithNeighbor(n.id)}
-                          disabled={civ.stats.industry < 2 || gameState.tradedThisTurn.includes(n.id)}
-                          className="w-full py-2 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded shadow-lg shadow-green-900/20 disabled:opacity-50"
-                        >
-                          {gameState.tradedThisTurn.includes(n.id) ? "TRADED" : "TRADE"}
-                        </button>
-                      )}
-                      {!n.isConquered && n.relationship !== "Ally" && (
-                        <button
-                          onClick={() => attackNeighbor(n.id)}
-                          disabled={civ.stats.martial < 1}
-                          className="w-full py-2 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded shadow-lg shadow-red-900/20"
-                        >
-                          ATTACK
-                        </button>
-                      )}
+                    ))}
+                  </div>
+                </div>
+
+                {/* Combat log */}
+                <div>
+                  <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Battle History</h3>
+                  {(gameState.combatLog && gameState.combatLog.length > 0) ? (
+                    <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                      {[...gameState.combatLog].reverse().map((entry, i) => {
+                        const colorMap: Record<CombatLogEntry['outcome'], { bg: string; text: string; label: string }> = {
+                          decisive_victory: { bg: 'bg-emerald-900/30 border-emerald-600/40', text: 'text-emerald-300', label: 'DECISIVE' },
+                          victory:          { bg: 'bg-green-900/20 border-green-700/40',     text: 'text-green-300',   label: 'VICTORY' },
+                          stalemate:        { bg: 'bg-slate-800 border-slate-700',           text: 'text-slate-300',   label: 'STALEMATE' },
+                          defeat:           { bg: 'bg-red-900/30 border-red-700/40',        text: 'text-red-300',     label: 'DEFEAT' },
+                        };
+                        const c = colorMap[entry.outcome];
+                        return (
+                          <div key={i} className={`rounded border px-2 py-1.5 ${c.bg}`}>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[11px] font-bold">Turn {entry.turn} vs {entry.target}</span>
+                              <span className={`text-[9px] font-bold ${c.text}`}>{c.label}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              Margin {entry.margin > 0 ? '+' : ''}{entry.margin}
+                              {entry.conquered && <span className="ml-2 text-emerald-300 font-bold">· conquered</span>}
+                              {entry.loot?.culture ? <span className="ml-2">· +{entry.loot.culture} Culture</span> : ''}
+                              {entry.loot?.production ? <span className="ml-2">· +{entry.loot.production} Prod</span> : ''}
+                              {(entry.popLost ?? 0) > 0 ? <span className="ml-2 text-red-300">· -{entry.popLost} Pop</span> : ''}
+                              {(entry.martialLost ?? 0) > 0 ? <span className="ml-2 text-red-300">· -{entry.martialLost} Martial</span> : ''}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))
-                )}
+                  ) : (
+                    <div className="text-[11px] text-slate-500 italic bg-slate-800/50 border border-slate-700 rounded p-3 text-center">
+                      No battles yet. Launch your first Attack via the Action phase.
+                    </div>
+                  )}
+                </div>
               </div>
             )}
+
+            {/* VICTORY TAB — shows progress toward all 4 victory paths so
+                students can see exactly what they're working toward and what
+                contributes to their score. */}
+            {activeTab === "victory" && (() => {
+              // Build a state shape that matches what the recipe callbacks expect.
+              const vState = {
+                tiles,
+                warsWon: gameState.warsWon,
+                religionSpread: gameState.religionSpread,
+                wondersBuilt: gameState.wondersBuilt,
+                civilization: gameState.civilization,
+              };
+              const conditionKeys = ['military', 'scientific', 'cultural', 'religious'] as const;
+              const scores = conditionKeys.map((key) => {
+                const cond = VICTORY_CONDITIONS[key];
+                const score = cond.calculate(vState);
+                return { key, cond, score };
+              });
+              const leader = scores.reduce((a, b) => (b.score / b.cond.target) > (a.score / a.cond.target) ? b : a);
+              return (
+                <div className="space-y-3">
+                  <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    Paths to Victory
+                  </h2>
+                  <p className="text-[11px] text-slate-400 leading-relaxed -mt-1">
+                    Four paths, each with a target score. Focus on one or blend strategies. Progress is tallied live. Your strongest path is highlighted in gold.
+                  </p>
+                  {scores.map(({ key, cond, score }) => {
+                    const pct = Math.min(100, Math.round((score / cond.target) * 100));
+                    const isLeader = leader.key === key;
+                    const isComplete = score >= cond.target;
+                    const recipe = cond.recipe(vState);
+                    const barColor = key === 'military'   ? 'from-red-600 to-red-400'
+                                  : key === 'scientific' ? 'from-cyan-600 to-cyan-400'
+                                  : key === 'cultural'   ? 'from-pink-600 to-pink-400'
+                                  : 'from-amber-600 to-amber-400';
+                    const borderColor = isComplete
+                      ? 'border-emerald-500/60 ring-1 ring-emerald-500/30'
+                      : isLeader
+                        ? 'border-yellow-500/50 ring-1 ring-yellow-500/20'
+                        : 'border-slate-700';
+                    return (
+                      <div key={key} className={`bg-slate-800 rounded-lg p-3 border ${borderColor}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            {key === 'military'   && <Sword size={16} className="text-red-400" />}
+                            {key === 'scientific' && <FlaskConical size={16} className="text-cyan-400" />}
+                            {key === 'cultural'   && <Landmark size={16} className="text-pink-400" />}
+                            {key === 'religious'  && <Scroll size={16} className="text-amber-400" />}
+                            <span className="text-sm font-bold text-slate-100">{cond.name}</span>
+                            {isLeader && !isComplete && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">LEADING</span>}
+                            {isComplete && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50">VICTORY!</span>}
+                          </div>
+                          <span className="text-xs font-bold text-slate-300">{score} / {cond.target}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed mb-2">{cond.description}</p>
+                        <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div className={`bg-gradient-to-r ${barColor} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-1 text-right">{pct}%</div>
+                        <div className="mt-2 pt-2 border-t border-slate-700 space-y-0.5">
+                          {recipe.map((r, i) => (
+                            <div key={i} className="flex justify-between items-baseline text-[11px]">
+                              <span className="text-slate-300">
+                                {r.label}
+                                <span className="text-slate-500 ml-1">× {r.value}</span>
+                              </span>
+                              <span className={`font-bold ${r.points > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
+                                +{r.points}
+                              </span>
+                            </div>
+                          ))}
+                          <div className="text-[9px] text-slate-500 italic pt-1">
+                            {recipe.map(r => r.formula).join(' · ')}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700 text-[11px] text-slate-400 leading-relaxed">
+                    <b className="text-slate-200">How victory works:</b> reaching a target declares that path won but the classroom sim keeps running — scores are a measure of trajectory, not a hard stop. The teacher (or single-player End Turn) ultimately decides when the game ends. Aim for the path that best fits your civ's traits and neighbors.
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* MESSAGE LOG (Fixed at bottom of panel) */}

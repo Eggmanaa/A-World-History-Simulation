@@ -44,7 +44,6 @@ interface WarAction {
 
 interface CivStats {
   martial: number;
-  defense: number;
   faith: number;
   industry: number;
   science: number;
@@ -380,8 +379,7 @@ const TeacherDashboard: React.FC = () => {
 
   const calculateCompositeScore = (civ: StudentCiv): number => {
     return (
-      civ.stats.martial * 2 +
-      civ.stats.defense * 2 +
+      civ.stats.martial * 3 +
       civ.stats.faith +
       civ.stats.industry +
       civ.stats.science +
@@ -877,8 +875,8 @@ const TeacherDashboard: React.FC = () => {
                               <p className="font-bold text-amber-300">{civ.stats.martial}</p>
                             </div>
                             <div className="bg-slate-700 rounded p-2">
-                              <p className="text-slate-400">Defense</p>
-                              <p className="font-bold text-blue-300">{civ.stats.defense}</p>
+                              <p className="text-slate-400">Science</p>
+                              <p className="font-bold text-cyan-300">{civ.stats.science}</p>
                             </div>
                             <div className="bg-slate-700 rounded p-2">
                               <p className="text-slate-400">Faith</p>
@@ -1125,8 +1123,8 @@ const TeacherDashboard: React.FC = () => {
                           <p className="text-3xl font-bold text-amber-400">{Math.round(score)}</p>
                           {scorboardView === 'composite' && (
                             <div className="text-xs text-slate-400 mt-2 space-y-1">
-                              <p>M:{civ.stats.martial} D:{civ.stats.defense}</p>
-                              <p>F:{civ.stats.faith} I:{civ.stats.industry}</p>
+                              <p>M:{civ.stats.martial} F:{civ.stats.faith}</p>
+                              <p>I:{civ.stats.industry} C:{civ.stats.culture} S:{civ.stats.science}</p>
                             </div>
                           )}
                         </div>

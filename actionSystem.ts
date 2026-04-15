@@ -1,0 +1,652 @@
+/**
+ * ACTION SYSTEM - Through History v2
+ * 10 actions a student can choose each turn.
+ * Each action has clear trade-offs: you can only pick ONE per turn.
+ * This creates the core strategic tension of the game.
+ */
+
+import type { GameState, PlayerActionType, BuildingType, TileData } from './types';
+
+export interface ActionDefinition {
+  id: PlayerActionType;
+  name: string;
+  shortDesc: string;
+  fullDesc: string;
+  icon: string; // lucide-react icon name
+  category: 'growth' | 'military' | 'economy' | 'knowledge' | 'diplomacy';
+  color: string; // tailwind color class
+  unlockedAtTurn: number; // which turn this action becomes available
+  unlockMessage: string; // flavor text when unlocked
+  unlockYear: string; // historical date of discovery
+  unlockHistoricalContext: string; // educational explanation of how/why this was discovered
+}
+
+export interface ActionAvailability {
+  available: boolean;
+  reason?: string; // why it's unavailable
+}
+
+export interface ActionPreview {
+  effects: string[];
+  warnings?: string[];
+}
+
+// ============================================================
+// ACTION DEFINITIONS
+// ============================================================
+
+/**
+ * ACTION UNLOCK PROGRESSION:
+ * Turn 1+  (Ancient):     Grow, Research (2 actions) + Build Phase every turn
+ * Turn 3+  (Age of Walls): Fortify (4) - defense becomes important
+ * Turn 5+  (Bronze Age):  Trade, Develop (6) - bronze age brings commerce and culture
+ * Turn 7+  (Age of Wonders): Wonder (7) - monumental construction
+ * Turn 9+  (Iron Age):    Worship, Diplomacy (9) - religion and politics emerge
+ * Turn 11+ (Age of Conquest): Attack (10) - warfare unlocked
+ */
+export const ACTION_DEFINITIONS: ActionDefinition[] = [
+  {
+    id: 'grow',
+    name: 'Grow',
+    shortDesc: '+2 Population → +Martial/+Industry',
+    fullDesc: 'Build 2 houses on your map, increasing Population up to your Capacity. Every 4 Population gives +1 Martial (citizen militia); every 5 Population gives +1 Industry (workers). If already at Capacity, gain +1 Production Pool instead.',
+    icon: 'Sprout',
+    category: 'growth',
+    color: 'text-green-400',
+    unlockedAtTurn: 1,
+    unlockMessage: 'Your people begin to settle and grow.',
+    unlockYear: 'c. 10,000 BC',
+    unlockHistoricalContext: 'The Neolithic Revolution marks humanity\'s shift from nomadic hunting to permanent settlements. In the Fertile Crescent, people first domesticated wheat and barley, allowing families to stay in one place and populations to grow rapidly.',
+  },
+  // NOTE: 'build' was removed from ACTION_DEFINITIONS because building is now
+  // its own dedicated turn phase (handleBuildPhaseSelect) that runs every turn
+  // before the Action phase. It's no longer one of the 9 strategic actions.
+  {
+    id: 'research',
+    name: 'Research',
+    shortDesc: 'Gain Science',
+    fullDesc: 'Advance your civilization\'s knowledge. Gain Science Yield + bonus from Libraries (+2 each). Unlocks technology thresholds for powerful bonuses.',
+    icon: 'FlaskConical',
+    category: 'knowledge',
+    color: 'text-cyan-400',
+    unlockedAtTurn: 1,
+    unlockMessage: 'Curiosity drives early discovery.',
+    unlockYear: 'c. 8000 BC',
+    unlockHistoricalContext: 'Early humans developed counting systems using tally marks on bone and clay tokens in Mesopotamia. These first steps toward mathematics and record-keeping laid the foundation for all scientific knowledge that would follow.',
+  },
+  // Fortify was removed: Martial now serves both offense AND defense, so a
+  // dedicated defensive action was redundant. Build Walls during the Build
+  // Phase for permanent Defense, or raise Martial via Barracks / science /
+  // religion tenets.
+  {
+    id: 'trade',
+    name: 'Trade',
+    shortDesc: '+2 to one stat',
+    fullDesc: 'Establish trade with an adjacent civilization. Mutual trade gives +2 to one agreed stat (Production Pool, Science, Culture, or Faith). One-sided trade gives +1 Production Pool.',
+    icon: 'Handshake',
+    category: 'diplomacy',
+    color: 'text-amber-400',
+    unlockedAtTurn: 5,
+    unlockMessage: 'Bronze Age trade networks connect distant peoples.',
+    unlockYear: 'c. 1850 BC',
+    unlockHistoricalContext: 'The Bronze Age created the world\'s first international trade networks. Bronze required tin and copper from different regions, forcing civilizations to cooperate. Merchants from Mesopotamia, Egypt, the Indus Valley, and Crete exchanged goods across thousands of miles by sea and caravan.',
+  },
+  {
+    id: 'develop',
+    name: 'Develop',
+    shortDesc: 'Gain Culture',
+    fullDesc: 'Grow your civilization\'s cultural influence. Gain Culture Yield + bonus from Amphitheaters (+2 each). Unlocks Cultural Stages for powerful bonuses.',
+    icon: 'Palette',
+    category: 'knowledge',
+    color: 'text-purple-400',
+    unlockedAtTurn: 5,
+    unlockMessage: 'Cultural traditions take root as civilizations mature.',
+    unlockYear: 'c. 1800 BC',
+    unlockHistoricalContext: 'The Bronze Age saw the birth of organized cultural expression. The Epic of Gilgamesh was written in Mesopotamia around 1800 BC, the earliest known work of literature. Egyptian art, Minoan frescoes, and Chinese oracle bone inscriptions all flourished as civilizations developed distinct cultural identities.',
+  },
+  {
+    id: 'wonder',
+    name: 'Wonder',
+    shortDesc: 'Invest in a Wonder',
+    fullDesc: 'Invest Production Pool toward building a World Wonder. First to complete the cost wins the Wonder. Others lose their investment.',
+    icon: 'Landmark',
+    category: 'economy',
+    color: 'text-orange-400',
+    unlockedAtTurn: 7,
+    unlockMessage: 'The Age of Wonders begins! Monumental construction is now possible.',
+    unlockYear: 'c. 1300 BC',
+    unlockHistoricalContext: 'By the Late Bronze Age, powerful civilizations began constructing monumental structures to demonstrate their wealth and devotion. The Great Pyramids of Giza (built c. 2560 BC) were already ancient, but temples like Abu Simbel (1264 BC) and the expanding ziggurats of Babylon showed that wonder-building was accelerating across the ancient world.',
+  },
+  {
+    id: 'worship',
+    name: 'Worship',
+    shortDesc: 'Gain Faith / Found Religion',
+    fullDesc: 'Strengthen your faith. Gain Faith Yield (counts your Temples). When you have a Temple AND Faith ≥ 10, you can found a religion and pick its tenet.',
+    icon: 'Scroll',
+    category: 'knowledge',
+    color: 'text-violet-400',
+    unlockedAtTurn: 4,
+    unlockMessage: 'The Iron Age brings spiritual awakening. Religion can now be founded.',
+    unlockYear: 'c. 1000 BC',
+    unlockHistoricalContext: 'The Iron Age sparked a spiritual revolution. Around 1000 BC, the Israelites codified their monotheistic faith under King David. Zoroastrianism emerged in Persia. Vedic Hinduism developed in India. This "Axial Age" (coined by philosopher Karl Jaspers) saw humanity grapple with questions of meaning, morality, and the divine for the first time.',
+  },
+  {
+    id: 'diplomacy',
+    name: 'Diplomacy',
+    shortDesc: 'Form alliance',
+    fullDesc: 'Form or maintain an alliance with an adjacent civilization. Both allies gain +1 Martial and +1 Defense while the alliance is active. Breaking an alliance costs 2 Culture.',
+    icon: 'Globe',
+    category: 'diplomacy',
+    color: 'text-teal-400',
+    unlockedAtTurn: 9,
+    unlockMessage: 'Formal diplomacy emerges as empires learn to negotiate.',
+    unlockYear: 'c. 1000 BC',
+    unlockHistoricalContext: 'The earliest known diplomatic treaty, the Egyptian-Hittite peace treaty (1259 BC), established the precedent for formal agreements between nations. By 1000 BC, empires regularly exchanged ambassadors, signed treaties, and formed alliances. The Assyrian Empire maintained a vast network of vassal states through diplomacy backed by military power.',
+  },
+  {
+    id: 'attack',
+    name: 'Attack',
+    shortDesc: 'Declare war',
+    fullDesc: 'Attack an adjacent civilization. Your Martial + d6 vs their Martial + Defense + d6. A Decisive Victory (margin ≥ 6) conquers the civ toward your Conquest victory. Limited to one attack per turn; uses your strategic action slot.',
+    icon: 'Sword',
+    category: 'military',
+    color: 'text-red-400',
+    unlockedAtTurn: 3,
+    unlockMessage: 'Warfare: your armies can now strike at adjacent civilizations.',
+    unlockYear: 'c. 7000 BC',
+    unlockHistoricalContext: 'Even the earliest settlements clashed over land, water, and trade routes. By turn 3, your civilization has enough organization and arms (spears, clubs, early bows) to mount a raid. Conquest starts small — a border skirmish — and grows as your Martial, Barracks, and technologies advance.',
+  },
+];
+
+// ============================================================
+// AVAILABILITY CHECKS
+// ============================================================
+
+export function checkActionAvailability(
+  actionId: PlayerActionType,
+  state: GameState,
+): ActionAvailability {
+  const stats = state.civilization.stats;
+  const currentTurn = state.turnNumber || 1;
+
+  // Check turn-based unlock first
+  const def = ACTION_DEFINITIONS.find(a => a.id === actionId);
+  if (def && currentTurn < def.unlockedAtTurn) {
+    return { available: false, reason: `Unlocks Turn ${def.unlockedAtTurn} (${def.unlockMessage})` };
+  }
+
+  switch (actionId) {
+    case 'grow':
+      if (stats.houses >= stats.capacity) {
+        return { available: true, reason: 'At capacity: will gain +1 Production Pool instead' };
+      }
+      return { available: true };
+
+    case 'research':
+      return { available: true };
+
+    case 'trade':
+      if (state.neighbors.length === 0) {
+        return { available: false, reason: 'No adjacent civilizations to trade with' };
+      }
+      return { available: true };
+
+    case 'attack':
+      if (state.neighbors.filter(n => !n.isConquered).length === 0) {
+        return { available: false, reason: 'No civilizations to attack' };
+      }
+      return { available: true };
+
+    case 'develop':
+      return { available: true };
+
+    case 'worship':
+      return { available: true };
+
+    case 'wonder':
+      if ((stats.productionPool || 0) < 1) {
+        return { available: false, reason: 'Need Production Pool to invest in a Wonder' };
+      }
+      return { available: true };
+
+    case 'diplomacy':
+      if (state.neighbors.length === 0) {
+        return { available: false, reason: 'No adjacent civilizations for diplomacy' };
+      }
+      return { available: true };
+
+    default:
+      return { available: false, reason: 'Unknown action' };
+  }
+}
+
+/**
+ * Get list of actions that are newly unlocked at a given turn
+ */
+export function getNewlyUnlockedActions(turn: number): ActionDefinition[] {
+  return ACTION_DEFINITIONS.filter(a => a.unlockedAtTurn === turn);
+}
+
+// ============================================================
+// ACTION PREVIEWS
+// ============================================================
+
+export function previewAction(
+  actionId: PlayerActionType,
+  state: GameState,
+): ActionPreview {
+  const stats = state.civilization.stats;
+  const buildings = state.civilization.buildings;
+
+  switch (actionId) {
+    case 'grow': {
+      if (stats.houses >= stats.capacity) {
+        return { effects: ['+1 Production Pool (already at Capacity — grow it with Farms / Hanging Gardens)'] };
+      }
+      const canGrow = Math.min(2, stats.capacity - stats.houses);
+      // Forecast the Martial/Industry jump the extra pop will unlock once the
+      // houses land, so students see the real reason to Grow.
+      const currentPop = stats.population || 0;
+      const nextPop = currentPop + canGrow;
+      const martialNow = Math.floor(currentPop / 4);
+      const martialNext = Math.floor(nextPop / 4);
+      const industryNow = Math.floor(currentPop / 5);
+      const industryNext = Math.floor(nextPop / 5);
+      const martialDelta = martialNext - martialNow;
+      const industryDelta = industryNext - industryNow;
+      const bonusHints: string[] = [];
+      if (martialDelta > 0) bonusHints.push(`+${martialDelta} Martial threshold`);
+      if (industryDelta > 0) bonusHints.push(`+${industryDelta} Industry threshold`);
+      return {
+        effects: [
+          `+${canGrow} Population (place ${canGrow} Houses on the map)`,
+          'Every 4 Population → +1 Martial (citizen militia)',
+          'Every 5 Population → +1 Industry (workers)',
+          ...(bonusHints.length > 0
+            ? [`This Grow unlocks: ${bonusHints.join(', ')}`]
+            : ['No new threshold crossed — but every Pop still counts toward the next one']),
+        ],
+      };
+    }
+
+    case 'research': {
+      const libCount = buildings.libraries || 0;
+      const totalGain = stats.scienceYield + (libCount * 2);
+      return { effects: [`+${stats.scienceYield} Science Yield (base)`, ...(libCount > 0 ? [`+${libCount * 2} from ${libCount} ${libCount === 1 ? 'Library' : 'Libraries'}`] : [`+2 per Library you own`]), `Total gain: +${totalGain} Science`, `Current Science Total: ${stats.science}`] };
+    }
+
+    case 'trade':
+      return { effects: ['+2 to one stat (mutual trade)', '+1 Production Pool (one-sided)'] };
+
+    case 'attack':
+      return {
+        effects: [`Your Martial: ${stats.martial} + d6`, 'Decisive Victory (6+): +3 Culture, loot 3, +1 territory', 'Victory (1-5): +2 Culture, loot 2', 'Defeat: -2 Population, -1 Martial'],
+      };
+
+    case 'develop': {
+      return { effects: [`+${stats.cultureYield} Culture Yield (base)`, `+2 per Amphitheater you own`, `Current Culture Total: ${stats.culture}`] };
+    }
+
+    case 'worship': {
+      const canFound = stats.faith >= 10 && buildings.temples > 0 && state.gameFlags.religionUnlocked && !state.civilization.religion.name;
+      return {
+        effects: [
+          `+${stats.faithYield} Faith Yield (base)`,
+          `+2 per Temple you own`,
+          `Current Faith Total: ${stats.faith}`,
+          ...(canFound ? ['OR: Found a Religion (requires Faith >= 10 + Temple)'] : []),
+        ],
+      };
+    }
+
+    case 'wonder':
+      return { effects: [`Invest Production Pool toward an available Wonder`, `You have ${stats.productionPool} Production Pool to invest`] };
+
+    case 'diplomacy':
+      return { effects: ['Form alliance: +2 Martial for both parties', 'Breaking alliance costs 2 Culture Total'] };
+
+    default:
+      return { effects: [] };
+  }
+}
+
+// ============================================================
+// ACTION EXECUTION
+// ============================================================
+
+export interface ActionExecutionResult {
+  messages: string[];
+  statChanges: Partial<GameState['civilization']['stats']>;
+  buildingChanges?: Partial<GameState['civilization']['buildings']>;
+  enableMapPlacement?: 'house' | 'building' | 'wall';
+  maxPlacements?: number;
+  newTreaty?: { neighborId: string; type: 'peace' | 'trade' | 'military' | 'cultural'; turnsRemaining: number };
+  combatResult?: {
+    target: string;
+    won: boolean;
+    margin: number;
+    effects: string[];
+  };
+  wonderInvestment?: { wonderId: string; amount: number };
+  foundReligion?: boolean;
+}
+
+export function executeAction(
+  actionId: PlayerActionType,
+  state: GameState,
+  params?: any,
+): ActionExecutionResult {
+  const stats = state.civilization.stats;
+  const buildings = state.civilization.buildings;
+
+  switch (actionId) {
+    case 'grow': {
+      if (stats.houses >= stats.capacity) {
+        return {
+          messages: ['At capacity! Gained +1 Production Pool instead.'],
+          statChanges: { productionPool: stats.productionPool + 1 },
+        };
+      }
+      const canGrow = Math.min(2, stats.capacity - stats.houses);
+      return {
+        messages: [`Place ${canGrow} houses on your map.`],
+        statChanges: {},
+        enableMapPlacement: 'house',
+        maxPlacements: canGrow,
+      };
+    }
+
+    case 'research': {
+      // scienceYield already includes Library tile bonuses (calculateStats
+      // bumps yield by +2 per Library). Just add yield once — no second
+      // libraryCount * 2 multiplier or it double-counts.
+      const sciGain = stats.scienceYield;
+      const newScience = stats.science + sciGain;
+      const libraryCount = buildings.libraries || 0;
+      return {
+        messages: [
+          `Researched! +${sciGain} Science Total (now ${newScience}).`,
+          ...(libraryCount > 0
+            ? [`(${libraryCount} ${libraryCount === 1 ? 'Library' : 'Libraries'} contributed +${libraryCount * 2} of that)`]
+            : []),
+        ],
+        statChanges: { science: newScience },
+      };
+    }
+
+    case 'trade': {
+      // DESIGN NOTE: Trade has no resource cost on purpose. In the V2 turn
+      // flow, picking Trade consumes the player's single strategic action for
+      // the turn — that IS the cost. Taxing Industry on top would double-
+      // charge and discourage diplomatic play, which this classroom sim wants
+      // to encourage. The gain is modest (+2 to one chosen stat, or +1
+      // production for a one-sided trade) which keeps Trade balanced against
+      // Research (+science), Develop (+culture), etc.
+      // For NPC trade: +2 to chosen stat or +1 production if one-sided
+      const tradeTarget = params?.targetId;
+      const tradeStat = params?.stat || 'productionPool';
+      const isMutual = params?.mutual ?? false;
+
+      if (isMutual) {
+        const bonus = 2;
+        const changes: any = {};
+        changes[tradeStat] = (stats as any)[tradeStat] + bonus;
+        return {
+          messages: [`Mutual trade! +${bonus} ${tradeStat}.`],
+          statChanges: changes,
+          newTreaty: tradeTarget ? { neighborId: tradeTarget, type: 'trade', turnsRemaining: 3 } : undefined,
+        };
+      } else {
+        return {
+          messages: ['+1 Production Pool from one-sided trade.'],
+          statChanges: { productionPool: stats.productionPool + 1 },
+        };
+      }
+    }
+
+    case 'attack': {
+      const targetId = params?.targetId;
+      const target = state.neighbors.find(n => n.id === targetId);
+      if (!target) {
+        return { messages: ['No valid target selected.'], statChanges: {} };
+      }
+      if (target.isConquered) {
+        return { messages: [`${target.name} is already conquered — pick another target.`], statChanges: {} };
+      }
+      if ((stats.martial || 0) < 1) {
+        return { messages: ['You have no martial strength. Build Barracks first.'], statChanges: {} };
+      }
+
+      // Combat: Attacker Martial + d6 vs Defender (Martial + Defense + d6)
+      const attackRoll = Math.floor(Math.random() * 6) + 1;
+      const defendRoll = Math.floor(Math.random() * 6) + 1;
+      const attackTotal = stats.martial + attackRoll;
+      const defendTotal = target.martial + target.defense + defendRoll;
+      const margin = attackTotal - defendTotal;
+
+      let result: ActionExecutionResult;
+
+      if (margin >= 6) {
+        // Decisive Victory
+        result = {
+          messages: [
+            `DECISIVE VICTORY vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
+            '+3 Culture Total, looted 3 Production Pool, +1 territory!',
+          ],
+          statChanges: {
+            culture: stats.culture + 3,
+            productionPool: stats.productionPool + 3,
+          },
+          combatResult: { target: target.name, won: true, margin, effects: ['Decisive Victory'] },
+        };
+      } else if (margin > 0) {
+        // Victory
+        result = {
+          messages: [
+            `Victory vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
+            '+2 Culture Total, looted 2 Production Pool.',
+          ],
+          statChanges: {
+            culture: stats.culture + 2,
+            productionPool: stats.productionPool + 2,
+          },
+          combatResult: { target: target.name, won: true, margin, effects: ['Victory'] },
+        };
+      } else if (margin === 0) {
+        // Stalemate
+        result = {
+          messages: [
+            `Stalemate vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
+            'Both sides hold their ground.',
+          ],
+          statChanges: {},
+          combatResult: { target: target.name, won: false, margin: 0, effects: ['Stalemate'] },
+        };
+      } else {
+        // Defeat — simple loss. Defense is exercised by the random raid
+        // system at the start of each turn rather than retaliation here,
+        // which keeps attack outcomes clean and predictable.
+        const popLoss = Math.min(2, stats.population);
+        result = {
+          messages: [
+            `DEFEAT vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
+            `-${popLoss} Population, -1 Martial.`,
+          ],
+          statChanges: {
+            population: stats.population - popLoss,
+            houses: Math.max(0, stats.houses - popLoss),
+            martial: Math.max(0, stats.martial - 1),
+          },
+          combatResult: { target: target.name, won: false, margin, effects: ['Defeat'] },
+        };
+      }
+
+      return result;
+    }
+
+    case 'develop': {
+      // cultureYield already includes Amphitheatre tile bonuses (calculateStats
+      // bumps yield by +2 per Amphitheatre). Just add yield once.
+      const culGain = stats.cultureYield;
+      const newCulture = stats.culture + culGain;
+      const ampCount = buildings.amphitheatres || 0;
+      return {
+        messages: [
+          `Developed! +${culGain} Culture Total (now ${newCulture}).`,
+          ...(ampCount > 0
+            ? [`(${ampCount} ${ampCount === 1 ? 'Amphitheatre' : 'Amphitheatres'} contributed +${ampCount * 2} of that)`]
+            : []),
+        ],
+        statChanges: { culture: newCulture },
+      };
+    }
+
+    case 'worship': {
+      if (params?.foundReligion) {
+        return {
+          messages: ['You have founded a religion! Choose your tenets.'],
+          statChanges: {},
+          foundReligion: true,
+        };
+      }
+
+      // faithYield already includes Temple tile bonuses (calculateStats
+      // bumps yield by +1 per Temple). Just add yield once.
+      const templeCount = buildings.temples || 0;
+      const faithGain = stats.faithYield;
+      const newFaith = stats.faith + faithGain;
+      return {
+        messages: [
+          `Worshipped! +${faithGain} Faith Total (now ${newFaith}).`,
+          ...(templeCount > 0
+            ? [`(${templeCount} ${templeCount === 1 ? 'Temple' : 'Temples'} contributed +${templeCount} of that)`]
+            : []),
+        ],
+        statChanges: { faith: newFaith },
+      };
+    }
+
+    case 'wonder': {
+      const wonderId = params?.wonderId;
+      const investment = params?.amount || 0;
+
+      if (!wonderId || investment <= 0) {
+        return { messages: ['Select a Wonder and investment amount.'], statChanges: {} };
+      }
+
+      if (investment > stats.productionPool) {
+        return { messages: ['Not enough Production Pool!'], statChanges: {} };
+      }
+
+      return {
+        messages: [`Invested ${investment} Production Pool toward Wonder.`],
+        statChanges: { productionPool: stats.productionPool - investment },
+        wonderInvestment: { wonderId, amount: investment },
+      };
+    }
+
+    case 'diplomacy': {
+      // DESIGN NOTE: Diplomacy has no resource cost on purpose. Like Trade,
+      // it consumes the player's strategic action for the turn — that IS the
+      // cost. The reward is a 5-turn peace treaty which calculateStats turns
+      // into +1 Martial per active peace treaty. We do NOT also bump
+      // stats.martial here — that would double-count once the treaty bonus
+      // gets re-applied in calc each render.
+      const allyId = params?.targetId;
+      const target = state.neighbors.find(n => n.id === allyId);
+      if (!target) {
+        return { messages: ['No valid alliance target.'], statChanges: {} };
+      }
+
+      return {
+        messages: [`Alliance formed with ${target.name}! +1 Martial while peace treaty is active (5 turns).`],
+        statChanges: {},
+        newTreaty: { neighborId: allyId, type: 'peace', turnsRemaining: 5 },
+      };
+    }
+
+    default:
+      return { messages: ['Unknown action.'], statChanges: {} };
+  }
+}
+
+// ============================================================
+// INCOME PHASE
+// ============================================================
+
+export function calculateIncome(state: GameState): {
+  messages: string[];
+  statChanges: Partial<GameState['civilization']['stats']>;
+} {
+  const stats = state.civilization.stats;
+  const messages: string[] = [];
+  const changes: Partial<GameState['civilization']['stats']> = {};
+
+  // 1. Production Pool += Production Income
+  const income = stats.productionIncome || stats.industry;
+  changes.productionPool = (stats.productionPool || 0) + income;
+  messages.push(`+${income} Production Pool from income (total: ${changes.productionPool}).`);
+
+  // 2. Population adjustment — also call out when a new Martial/Industry
+  // threshold is crossed so students see the concrete reward from growing.
+  if (stats.population < stats.capacity) {
+    const newPop = stats.population + 1;
+    changes.population = newPop;
+    changes.houses = stats.houses + 1;
+    const crossedMartial = Math.floor(newPop / 4) > Math.floor(stats.population / 4);
+    const crossedIndustry = Math.floor(newPop / 5) > Math.floor(stats.population / 5);
+    const bonusNote = crossedMartial && crossedIndustry
+      ? ' — +1 Martial and +1 Industry unlocked!'
+      : crossedMartial
+        ? ' — +1 Martial unlocked (every 4 Pop).'
+        : crossedIndustry
+          ? ' — +1 Industry unlocked (every 5 Pop).'
+          : '';
+    messages.push(`+1 Population (natural growth, now ${newPop}).${bonusNote}`);
+  } else if (stats.population > stats.capacity) {
+    changes.population = stats.population - 1;
+    changes.houses = Math.max(0, stats.houses - 1);
+    messages.push('-1 Population (over capacity — build more Farms or grab Hanging Gardens).');
+  }
+
+  // 3. Legacy: clear any lingering tempDefenseBonus so older saves migrate.
+  if (stats.tempDefenseBonus && stats.tempDefenseBonus > 0) {
+    changes.tempDefenseBonus = 0;
+  }
+
+  // 4. Reset houses built this turn
+  changes.housesBuiltThisTurn = 0;
+
+  // 5. RAID ROLL — 1-in-6 chance each turn that barbarians/raiders strike.
+  // Raid power is scaled to the turn number (stronger as the game advances)
+  // so early-game civs aren't obliterated but late-game civs still feel
+  // threatened. Defense mitigates losses; a high-Defense civ can shrug off
+  // the raid entirely. This is what makes Defense a live stat: walls,
+  // Fortify, Cultural Prestige, Masonry tech all matter here.
+  if (Math.floor(Math.random() * 6) === 0) {
+    const turnScale = Math.max(1, Math.min(10, state.turnNumber || 1));
+    const raidRoll = Math.floor(Math.random() * 6) + 1;
+    const raidPower = Math.floor(turnScale * 0.8) + raidRoll; // ~2-14 by late game
+    // Defense was collapsed into Martial, so Martial now mitigates raids too.
+    const effectiveDef = (stats.martial || 0);
+    const damage = Math.max(0, raidPower - effectiveDef);
+    if (damage > 0) {
+      const currentPop = changes.population ?? stats.population;
+      const currentHouses = changes.houses ?? stats.houses;
+      const popLoss = Math.min(damage, Math.max(0, currentPop - 1));
+      const prodLoss = Math.min(Math.floor(damage / 2), changes.productionPool ?? stats.productionPool ?? 0);
+      if (popLoss > 0) {
+        changes.population = Math.max(1, currentPop - popLoss);
+        changes.houses = Math.max(0, currentHouses - popLoss);
+      }
+      if (prodLoss > 0) {
+        changes.productionPool = Math.max(0, (changes.productionPool ?? stats.productionPool ?? 0) - prodLoss);
+      }
+      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs Martial ${effectiveDef}). Lost ${popLoss} Population${prodLoss > 0 ? ` and ${prodLoss} Production` : ''}.`);
+    } else {
+      messages.push(`⚔️ A raid was beaten back by your Martial ${effectiveDef}. No losses.`);
+    }
+  }
+
+  return { messages, statChanges: changes };
+}
