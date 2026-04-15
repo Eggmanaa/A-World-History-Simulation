@@ -411,6 +411,10 @@ export interface GameState {
     // in civ.stats would be wiped when the stat is re-derived from
     // baseStats + buildings + traits).
     culturalBonuses: string[];
+    // Tech Tree branch picks. Players choose ONE branch per tier at the
+    // Bronze/Classical/Renaissance science thresholds. Same pattern as
+    // culturalBonuses — stored here, re-applied every render.
+    techChoices: string[];
     buildings: {
       farms: number;
       workshops: number;

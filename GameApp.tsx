@@ -78,6 +78,7 @@ import {
   CultureTreeModal,
   CULTURE_CHOICES,
   RELIGION_TENET_THRESHOLDS,
+  TECH_CHOICES,
 } from "./components/DecisionModals";
 import { getAdjacentCivs, areAdjacent, CIV_ADJACENCY } from "./adjacency";
 import { WORLD_EVENTS } from "./worldEvents";
@@ -543,6 +544,26 @@ const calculateStats = (
     cultureYield += 1;     // fashion/art radiate soft power per turn
   }
 
+  // Apply Tech Tree Branch Picks — STRUCTURAL stats only.
+  // Same pattern as cultural bonuses: structural fields are re-derived
+  // every render so we re-apply them here; accumulating fields (science
+  // total) are applied ONCE at pick-time in handleTechPick.
+  if (civData.techChoices && civData.techChoices.length > 0) {
+    civData.techChoices.forEach((choiceId: string) => {
+      const choice = TECH_CHOICES.find((c) => c.id === choiceId);
+      if (!choice || !choice.statBonus) return;
+      const b = choice.statBonus;
+      if (b.martial) martial += b.martial;
+      if (b.defense) martial += b.defense;
+      if (b.capacity) populationCapacity += b.capacity;
+      if (b.productionIncome) productionIncome += b.productionIncome;
+      if (b.scienceYield) scienceYield += b.scienceYield;
+      if (b.cultureYield) cultureYield += b.cultureYield;
+      if (b.faithYield) faithYield += b.faithYield;
+      if (b.diplomacy) diplomacy += b.diplomacy;
+    });
+  }
+
   // Apply Cultural Tree Bonuses — STRUCTURAL stats only.
   // Structural stats (martial, defense, capacity, productionIncome,
   // scienceYield, cultureYield, faithYield, diplomacy) re-derive each
@@ -813,6 +834,78 @@ const App: React.FC = () => {
   const [showReligionTree, setShowReligionTree] = useState(false);
   const [showCultureTree, setShowCultureTree] = useState(false);
   const [chosenCultureIds, setChosenCultureIds] = useState<string[]>([]);
+
+  // Shared threshold-check helper. Compares a set of current stats
+  // against the full threshold table and queues any popups that aren't
+  // already in thresholdsAwarded. Used by both turn-resolution recompute
+  // and mid-turn stat jumps (tree picks, wonder builds).
+  const checkThresholds = useCallback(
+    (science: number, culture: number, faith: number, religionFounded: boolean) => {
+      const newThresholds: ThresholdPopup[] = [];
+      SCIENCE_UNLOCKS.forEach((u) => {
+        const id = `sci-${u.level}`;
+        if (science >= u.level && !thresholdsAwarded.includes(id)) {
+          const bonuses: string[] = [];
+          if (u.statBonus) Object.entries(u.statBonus).forEach(([k, v]) => bonuses.push(`+${v} ${k}`));
+          if (u.unlocks) bonuses.push(`Ability: ${u.unlocks.replace(/_/g, ' ')}`);
+          newThresholds.push({
+            id, kind: 'science',
+            title: u.effect.split(':')[0],
+            subtitle: `Science ${u.level} reached`,
+            description: u.effect,
+            bonuses,
+            cta: 'Press on with research',
+          });
+        }
+      });
+      [{ tier: 'Bronze', t: 10 }, { tier: 'Classical', t: 25 }, { tier: 'Renaissance', t: 50 }].forEach(({ tier, t }) => {
+        const id = `tech-tier-${tier}`;
+        if (science >= t && !thresholdsAwarded.includes(id)) {
+          newThresholds.push({
+            id, kind: 'science',
+            title: `${tier} Tech Tier Unlocked`,
+            subtitle: `Science ${t} reached — pick a branch`,
+            description: 'The Tech Tree now offers a branching choice. Pick a path (War, Economy, or Knowledge) to specialize your civilization.',
+            bonuses: [`Open the Tech Tree and claim your ${tier}-tier path.`],
+            cta: 'Open Tech Tree',
+          });
+        }
+      });
+      CULTURAL_STAGE_THRESHOLDS.forEach((s) => {
+        const id = `cul-${s.stage}`;
+        if (culture >= s.minCulture && !thresholdsAwarded.includes(id)) {
+          newThresholds.push({
+            id, kind: 'culture',
+            title: `Stage: ${s.stage}`,
+            subtitle: `Culture ${s.minCulture} reached`,
+            description: s.flavor,
+            bonuses: ['Open the Culture Tree to claim your stage bonus.'],
+            cta: 'Claim cultural bonus',
+          });
+        }
+      });
+      RELIGION_TENET_THRESHOLDS.forEach((t, i) => {
+        const id = `faith-${t}`;
+        if (faith >= t && !thresholdsAwarded.includes(id)) {
+          newThresholds.push({
+            id, kind: 'faith',
+            title: i === 0 && !religionFounded ? 'Religion can be founded' : `Tenet slot ${i + 1} unlocked`,
+            subtitle: `Faith ${t} reached`,
+            description: i === 0 && !religionFounded
+              ? 'Your people yearn for meaning. Use the Worship action to found a religion.'
+              : 'Your faith has matured. Open the Religion Tree to adopt another tenet.',
+            bonuses: [i === 0 && !religionFounded ? 'Worship → Found Religion option unlocked' : `Pick tenet #${i + 1}`],
+            cta: i === 0 && !religionFounded ? 'Found a religion' : 'Open Religion Tree',
+          });
+        }
+      });
+      if (newThresholds.length > 0) {
+        setThresholdQueue((q) => [...q, ...newThresholds]);
+        setThresholdsAwarded((a) => [...a, ...newThresholds.map((t) => t.id)]);
+      }
+    },
+    [thresholdsAwarded],
+  );
   // Tracks whether the player has ever had a non-zero population. Without
   // this guard, the respawn effect would fire at game start (everyone begins
   // with houses:0 / population:0) — and again every time the player resets
@@ -1046,6 +1139,7 @@ const App: React.FC = () => {
         traits: preset.traits,
         technologies: [],
         culturalBonuses: [],
+        techChoices: [],
         baseStats: preset.baseStats,
         flags: {
           conquered: false,
@@ -2006,6 +2100,23 @@ const App: React.FC = () => {
             description: u.effect,
             bonuses,
             cta: 'Press on with research',
+          });
+        }
+      });
+
+      // Tech Tree tier unlocks — pops a "branch path available" notice
+      // the first time the student crosses each tier threshold.
+      [{ tier: 'Bronze', threshold: 10 }, { tier: 'Classical', threshold: 25 }, { tier: 'Renaissance', threshold: 50 }].forEach((t) => {
+        const id = `tech-tier-${t.tier}`;
+        if (newScience >= t.threshold && !ackBucket.includes(id)) {
+          newThresholds.push({
+            id,
+            kind: 'science',
+            title: `${t.tier} Tech Tier Unlocked`,
+            subtitle: `Science ${t.threshold} reached — pick a branch`,
+            description: 'The Tech Tree now offers a branching choice. Pick a path (War, Economy, or Knowledge) to specialize your civilization.',
+            bonuses: [`Open the Tech Tree from the Science tab and claim your ${t.tier}-tier path.`],
+            cta: 'Open Tech Tree',
           });
         }
       });
@@ -3162,6 +3273,41 @@ const App: React.FC = () => {
       {showTechTree && (
         <TechTreeModal
           gameState={gameState}
+          onPickTech={(choiceId) => {
+            const choice = TECH_CHOICES.find((c) => c.id === choiceId);
+            if (!choice) return;
+            const current = gameState.civilization.techChoices || [];
+            const tierPicks = current
+              .map((id) => TECH_CHOICES.find((c) => c.id === id))
+              .filter((c) => c && c.tier === choice.tier);
+            if (tierPicks.length > 0) return; // one pick per tier
+            if (current.includes(choiceId)) return;
+            setGameState((prev) => {
+              const techChoices = [...(prev.civilization.techChoices || []), choiceId];
+              const stats = { ...prev.civilization.stats };
+              if (choice.statBonus?.science) {
+                stats.science = (stats.science || 0) + choice.statBonus.science;
+              }
+              const nextCiv = { ...prev.civilization, stats, techChoices };
+              const recomputed = calculateStats(tiles, nextCiv, {}, prev.neighbors, prev.treaties);
+              const finalStats = { ...nextCiv.stats, ...recomputed };
+              setTimeout(
+                () =>
+                  checkThresholds(
+                    finalStats.science || 0,
+                    finalStats.culture || 0,
+                    finalStats.faith || 0,
+                    !!nextCiv.religion?.name,
+                  ),
+                0,
+              );
+              return {
+                ...prev,
+                civilization: { ...nextCiv, stats: finalStats },
+                messages: [`Tech path chosen: ${choice.label} — ${choice.grants}.`, ...prev.messages],
+              };
+            });
+          }}
           onClose={() => setShowTechTree(false)}
         />
       )}
@@ -3175,17 +3321,34 @@ const App: React.FC = () => {
             const slotsUnlocked = RELIGION_TENET_THRESHOLDS.filter((t) => faith >= t).length;
             if (slotsUnlocked <= chosen.length) return;
             if (chosen.includes(tenetId)) return;
-            setGameState((prev) => ({
-              ...prev,
-              civilization: {
+            setGameState((prev) => {
+              const nextCiv = {
                 ...prev.civilization,
                 religion: {
                   name: prev.civilization.religion?.name ?? 'Faith of the People',
                   tenets: [...(prev.civilization.religion?.tenets || []), tenetId],
                 },
-              },
-              messages: [`Adopted tenet: ${tenetId.replace(/_/g, ' ')}.`, ...prev.messages],
-            }));
+              };
+              const recomputed = calculateStats(tiles, nextCiv, {}, prev.neighbors, prev.treaties);
+              const finalStats = { ...nextCiv.stats, ...recomputed };
+              // Mid-turn threshold check — if this tenet pushed a stat
+              // across a milestone, the popup fires right away.
+              setTimeout(
+                () =>
+                  checkThresholds(
+                    finalStats.science || 0,
+                    finalStats.culture || 0,
+                    finalStats.faith || 0,
+                    !!nextCiv.religion.name,
+                  ),
+                0,
+              );
+              return {
+                ...prev,
+                civilization: { ...nextCiv, stats: finalStats },
+                messages: [`Adopted tenet: ${tenetId.replace(/_/g, ' ')}.`, ...prev.messages],
+              };
+            });
           }}
           onClose={() => setShowReligionTree(false)}
         />
@@ -3206,25 +3369,27 @@ const App: React.FC = () => {
             if (currentBonuses.includes(choiceId)) return;
 
             setGameState((prev) => {
-              // 1. Add to civ.culturalBonuses — the source of truth that
-              //    calculateStats reads to re-apply STRUCTURAL bonuses
-              //    every render.
               const culturalBonuses = [...(prev.civilization.culturalBonuses || []), choiceId];
-              // 2. Apply ACCUMULATING bonuses (science, culture) ONCE.
-              //    Structural bonuses are not written here — they come
-              //    back through calculateStats next time it runs.
               const stats = { ...prev.civilization.stats };
-              if (choice.statBonus) {
-                if (choice.statBonus.science) {
-                  stats.science = (stats.science || 0) + choice.statBonus.science;
-                }
-                // (Note: CULTURE_CHOICES don't currently grant a "culture
-                // total" bonus — all culture boosts are via cultureYield
-                // which is structural and handled in calculateStats.)
+              if (choice.statBonus?.science) {
+                stats.science = (stats.science || 0) + choice.statBonus.science;
               }
+              const nextCiv = { ...prev.civilization, stats, culturalBonuses };
+              const recomputed = calculateStats(tiles, nextCiv, {}, prev.neighbors, prev.treaties);
+              const finalStats = { ...nextCiv.stats, ...recomputed };
+              setTimeout(
+                () =>
+                  checkThresholds(
+                    finalStats.science || 0,
+                    finalStats.culture || 0,
+                    finalStats.faith || 0,
+                    !!nextCiv.religion?.name,
+                  ),
+                0,
+              );
               return {
                 ...prev,
-                civilization: { ...prev.civilization, stats, culturalBonuses },
+                civilization: { ...nextCiv, stats: finalStats },
                 messages: [`Cultural bonus claimed: ${choice.label} — ${choice.grants}.`, ...prev.messages],
               };
             });
@@ -5143,6 +5308,23 @@ const App: React.FC = () => {
                       Diplomacy
                     </span>
                     <b>{civ.stats.diplomacy}</b>
+                  </div>
+                  {/* DEFENSE DICE — always visible so students know their
+                      current posture at a glance. Format: "1d8 walls +
+                      2d8 fortify" rolled on each defense check. */}
+                  <div className="flex justify-between border-b border-slate-800 pb-1">
+                    <span
+                      className="text-sky-300"
+                      title="Extra d8 dice rolled on every defense (raids + incoming attacks). Walls grant up to 3d8 passively; Fortify action stacks up to 3d8 and decays 1/turn."
+                    >
+                      Defense Dice
+                    </span>
+                    <b className="text-sky-200">
+                      {Math.min(3, civ.buildings.walls || 0) + (civ.stats.fortifyDice || 0)}d8
+                      <span className="text-[10px] text-slate-500 ml-1">
+                        ({Math.min(3, civ.buildings.walls || 0)}W+{civ.stats.fortifyDice || 0}F)
+                      </span>
+                    </b>
                   </div>
                 </div>
                 {civ.religion.name && (

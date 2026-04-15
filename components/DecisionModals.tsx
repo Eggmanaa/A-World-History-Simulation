@@ -241,29 +241,83 @@ export const ThresholdModal: React.FC<{
 };
 
 // ============================================================
-// TECH TREE MODAL
+// TECH TREE — BRANCHING DECISIONS
 // ============================================================
+// Three tiers (Bronze / Classical / Renaissance) unlock at increasing
+// science totals. At each tier, the player picks ONE branch out of
+// three (War, Economy, Knowledge). Picks stack across tiers.
+// This is the "real tech tree" — actual choices, not a display.
+export interface TechChoice {
+  id: string;
+  tier: 'Bronze' | 'Classical' | 'Renaissance';
+  minScience: number;
+  branch: 'War' | 'Economy' | 'Knowledge';
+  label: string;
+  description: string;
+  grants: string;
+  statBonus: Partial<{
+    martial: number;
+    defense: number;
+    science: number;         // accumulating — applied once
+    scienceYield: number;
+    cultureYield: number;
+    faithYield: number;
+    productionIncome: number;
+    capacity: number;
+    diplomacy: number;
+  }>;
+}
+
+export const TECH_CHOICES: TechChoice[] = [
+  // BRONZE TIER — unlocks at Science 10 (Bronze Working auto-unlock)
+  { id: 'br_war',      tier: 'Bronze', minScience: 10, branch: 'War',       label: 'Warrior Culture',    description: 'Blade over plow.',     grants: '+3 Martial', statBonus: { martial: 3 } },
+  { id: 'br_economy',  tier: 'Bronze', minScience: 10, branch: 'Economy',   label: 'Bronze Crafts',      description: 'Smiths & traders.',   grants: '+2 Production Income, +1 Capacity', statBonus: { productionIncome: 2, capacity: 1 } },
+  { id: 'br_knowledge', tier: 'Bronze', minScience: 10, branch: 'Knowledge', label: 'Writing Systems',    description: 'Scribes & records.',  grants: '+2 Science Yield, +2 Science Total', statBonus: { scienceYield: 2, science: 2 } },
+
+  // CLASSICAL TIER — unlocks at Science 25 (Masonry threshold)
+  { id: 'cl_war',      tier: 'Classical', minScience: 25, branch: 'War',       label: 'Disciplined Legions', description: 'Drill & formation.',      grants: '+4 Martial, +1 Defense',          statBonus: { martial: 4, defense: 1 } },
+  { id: 'cl_economy',  tier: 'Classical', minScience: 25, branch: 'Economy',   label: 'Guild System',       description: 'Specialized trades.',     grants: '+3 Production Income, +2 Capacity', statBonus: { productionIncome: 3, capacity: 2 } },
+  { id: 'cl_knowledge', tier: 'Classical', minScience: 25, branch: 'Knowledge', label: 'Academies',          description: 'Philosophical schools.',  grants: '+3 Science Yield, +1 Culture Yield', statBonus: { scienceYield: 3, cultureYield: 1 } },
+
+  // RENAISSANCE TIER — unlocks at Science 50 (Currency threshold)
+  { id: 'ren_war',     tier: 'Renaissance', minScience: 50, branch: 'War',       label: 'Standing Army',      description: 'Professional soldiers.',  grants: '+5 Martial, +2 Capacity, +1 Defense', statBonus: { martial: 5, capacity: 2, defense: 1 } },
+  { id: 'ren_economy', tier: 'Renaissance', minScience: 50, branch: 'Economy',   label: 'Mercantile Network', description: 'Global trade routes.',    grants: '+3 Production Income, +2 Diplomacy, +1 Culture Yield', statBonus: { productionIncome: 3, diplomacy: 2, cultureYield: 1 } },
+  { id: 'ren_knowledge', tier: 'Renaissance', minScience: 50, branch: 'Knowledge', label: 'University System',  description: 'Institutional research.', grants: '+4 Science Yield, +2 Culture Yield', statBonus: { scienceYield: 4, cultureYield: 2 } },
+];
+
 export const TechTreeModal: React.FC<{
   gameState: GameState;
+  onPickTech: (choiceId: string) => void;
   onClose: () => void;
-}> = ({ gameState, onClose }) => {
+}> = ({ gameState, onPickTech, onClose }) => {
   const science = gameState.civilization?.stats?.science || 0;
+  const picks = (gameState.civilization as any)?.techChoices || [];
   const nextUnlock = useMemo(
     () => SCIENCE_UNLOCKS.find((u) => u.level > science),
     [science],
   );
 
+  const tiers: TechChoice['tier'][] = ['Bronze', 'Classical', 'Renaissance'];
+  const branchColor: Record<TechChoice['branch'], string> = {
+    War: 'border-red-500/50 text-red-300',
+    Economy: 'border-amber-500/50 text-amber-300',
+    Knowledge: 'border-cyan-500/50 text-cyan-300',
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[55] p-4 overflow-y-auto">
-      <div className="bg-slate-800 rounded-xl border border-cyan-500/50 max-w-3xl w-full p-6 shadow-2xl my-4">
+      <div className="bg-slate-800 rounded-xl border border-cyan-500/50 max-w-4xl w-full p-6 shadow-2xl my-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-xs uppercase tracking-wider text-slate-400">Technology Tree</p>
             <h2 className="text-2xl font-black text-cyan-300">Science {science}</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Choices made: {picks.length} / 3 · Automatic unlocks continue in the ladder below.
+            </p>
           </div>
           {nextUnlock && (
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400">Next unlock</p>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400">Next auto unlock</p>
               <p className="text-sm font-bold text-cyan-200">Level {nextUnlock.level}</p>
               <div className="w-40 h-2 bg-slate-700 rounded-full overflow-hidden mt-1">
                 <div
@@ -275,44 +329,77 @@ export const TechTreeModal: React.FC<{
           )}
         </div>
 
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+        {/* Branching decisions per tier */}
+        <div className="space-y-4 mb-5">
+          {tiers.map((tier) => {
+            const tierChoices = TECH_CHOICES.filter((c) => c.tier === tier);
+            const tierThreshold = tierChoices[0]?.minScience || 0;
+            const reached = science >= tierThreshold;
+            const picked = tierChoices.find((c) => picks.includes(c.id));
+            return (
+              <div
+                key={tier}
+                className={`rounded-lg border bg-slate-900/40 p-3 ${reached ? 'border-cyan-500/50' : 'border-slate-700 opacity-60'}`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-bold uppercase text-cyan-200">{tier} Tier · Science {tierThreshold}</p>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300">
+                    {reached ? (picked ? 'PATH CHOSEN' : 'CHOOSE ONE') : 'LOCKED'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {tierChoices.map((c) => {
+                    const isPicked = picks.includes(c.id);
+                    const canPick = reached && !picked;
+                    return (
+                      <button
+                        key={c.id}
+                        disabled={!canPick || isPicked}
+                        onClick={() => onPickTech(c.id)}
+                        className={`text-left rounded-md border p-2 transition-colors ${branchColor[c.branch]} ${
+                          isPicked
+                            ? 'bg-amber-500/10 text-amber-200 border-amber-500/70'
+                            : canPick
+                              ? 'bg-slate-800 hover:bg-cyan-500/10'
+                              : 'bg-slate-900/40 opacity-60 cursor-not-allowed'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sm">{c.label}</span>
+                          <span className="text-[10px] uppercase opacity-80">{c.branch}</span>
+                        </div>
+                        <p className="text-[11px] opacity-80 mt-0.5">{c.description}</p>
+                        <p className="text-[11px] font-semibold mt-1">{c.grants}</p>
+                        {isPicked && <p className="text-[10px] uppercase mt-1">CLAIMED</p>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Automatic unlock ladder */}
+        <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Automatic Unlocks (by science total)</p>
+        <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-2">
           {SCIENCE_UNLOCKS.map((u: ScienceUnlock) => {
             const unlocked = science >= u.level;
             return (
               <div
                 key={u.level}
-                className={`rounded-lg border p-3 ${
-                  unlocked
-                    ? 'border-cyan-500/40 bg-cyan-500/5'
-                    : 'border-slate-700 bg-slate-900/40 opacity-70'
+                className={`rounded-lg border p-2 ${
+                  unlocked ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-slate-700 bg-slate-900/40 opacity-70'
                 }`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <p className={`text-sm font-bold ${unlocked ? 'text-cyan-200' : 'text-slate-400'}`}>
+                <div className="flex items-center justify-between">
+                  <p className={`text-xs font-bold ${unlocked ? 'text-cyan-200' : 'text-slate-400'}`}>
                     Level {u.level} · {u.effect.split(':')[0]}
                   </p>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded ${
-                      unlocked ? 'bg-cyan-500 text-slate-900' : 'bg-slate-700 text-slate-400'
-                    }`}
-                  >
+                  <span className={`text-[10px] px-2 py-0.5 rounded ${unlocked ? 'bg-cyan-500 text-slate-900' : 'bg-slate-700 text-slate-400'}`}>
                     {unlocked ? 'UNLOCKED' : 'LOCKED'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-300">{u.effect.split(':').slice(1).join(':').trim() || u.effect}</p>
-                {u.statBonus && (
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Grants:{' '}
-                    {Object.entries(u.statBonus)
-                      .map(([k, v]) => `+${v} ${k}`)
-                      .join(', ')}
-                  </p>
-                )}
-                {u.unlocks && (
-                  <p className="text-[11px] text-amber-300 mt-1">
-                    Unlocks ability: <span className="italic">{u.unlocks}</span>
-                  </p>
-                )}
               </div>
             );
           })}

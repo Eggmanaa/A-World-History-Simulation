@@ -744,7 +744,12 @@ export function calculateIncome(state: GameState): {
     // survive" — no need to build Martial, just dig in. d8 (not d6) because
     // Martial scales multiplicatively, and a linear defense mechanic needs
     // a bigger die to keep up with late-game Martial stacks.
-    const wallCount = Math.min(3, state.civilization.buildings.walls || 0);
+    // Wall count — Troy's flag doubles the dice count (up to cap 3),
+    // reflecting their legendary fortifications.
+    const baseWallCount = Math.min(3, state.civilization.buildings.walls || 0);
+    const wallCount = state.civilization.flags.troyWallDouble
+      ? Math.min(3, baseWallCount * 2)
+      : baseWallCount;
     const wallDiceRolls = Array.from({ length: wallCount }, () => Math.floor(Math.random() * 8) + 1);
     const fortifyStacks = currentFortify; // use the pre-decay value for THIS raid
     const fortifyDiceRolls = Array.from({ length: fortifyStacks }, () => Math.floor(Math.random() * 8) + 1);
