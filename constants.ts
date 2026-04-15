@@ -529,7 +529,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Hellenistic Hybrid', traitDescription: 'Blend of Greek and Egyptian culture. +2 Science Total and +2 Culture Total on Research or Develop actions.',
         waterResource: 'River', colors: { base: '#d4a017', accent: '#1e40af' },
         centerBiomes: [TerrainType.River, TerrainType.River, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Ocean]
+        edgeBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Ocean],
+        climate: 'arid'
     },
     {
         id: 'seleucid', name: 'Seleucid Empire', availableTurn: 15, region: 'Persia/Mesopotamia',
@@ -537,7 +538,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Successor State', traitDescription: 'Inheritor of Alexander\'s eastern empire. Start with +5 Martial on first attack. +1 to all yields for 3 turns.',
         waterResource: 'River', colors: { base: '#4338ca', accent: '#fbbf24' },
         centerBiomes: [TerrainType.Plains, TerrainType.River, TerrainType.Desert],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.Desert, TerrainType.HighMountain]
+        edgeBiomes: [TerrainType.Mountain, TerrainType.Desert, TerrainType.HighMountain],
+        climate: 'arid'
     },
     {
         id: 'parthia', name: 'Parthian Empire', availableTurn: 16, region: 'Persia',
@@ -545,7 +547,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Parthian Shot', traitDescription: 'Master horse archers. +3 Martial when defending. After losing a battle, gain +2 Martial temporarily.',
         waterResource: 'River', colors: { base: '#7f1d1d', accent: '#d4a017' },
         centerBiomes: [TerrainType.Plains, TerrainType.Desert, TerrainType.Mountain],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Plains]
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Plains],
+        climate: 'arid'
     },
     {
         id: 'numidia', name: 'Numidia', availableTurn: 16, region: 'North Africa',
@@ -553,7 +556,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Desert Cavalry', traitDescription: 'Elite Numidian cavalry. +3 Martial when attacking. Can raid: gain +1 Prod Pool per attack regardless of outcome.',
         waterResource: 'Lake', colors: { base: '#a16207', accent: '#fef3c7' },
         centerBiomes: [TerrainType.Desert, TerrainType.Plains, TerrainType.Grassland],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Ocean]
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Ocean],
+        climate: 'savanna'
     },
     {
         id: 'nabataea', name: 'Nabataea', availableTurn: 17, region: 'Arabia',
@@ -561,7 +565,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Caravan Masters', traitDescription: 'Masters of desert trade. Trade routes give +3 instead of +2. +1 Production Pool per active trade route.',
         waterResource: 'Well', colors: { base: '#b45309', accent: '#fef08a' },
         centerBiomes: [TerrainType.Desert, TerrainType.Desert, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.HighMountain]
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.HighMountain],
+        climate: 'arid'
     },
     {
         id: 'maurya', name: 'Maurya Empire', availableTurn: 17, region: 'India',
@@ -569,7 +574,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'War Elephants', traitDescription: 'Devastating elephant corps. +4 Martial on first attack each game. +2 Martial permanently from organized empire.',
         waterResource: 'River', colors: { base: '#c2410c', accent: '#fcd34d' },
         centerBiomes: [TerrainType.River, TerrainType.Grassland, TerrainType.Forest],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Forest]
+        edgeBiomes: [TerrainType.Mountain, TerrainType.HighMountain, TerrainType.Forest],
+        climate: 'tropical'
     },
     {
         id: 'dacia', name: 'Dacia', availableTurn: 19, region: 'Eastern Europe',
@@ -577,7 +583,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Mountain Fortress', traitDescription: 'Impregnable mountain strongholds. Walls grant +8 Martial instead of +5. +2 Martial while defending.',
         waterResource: 'River', colors: { base: '#4a5568', accent: '#a3bffa' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Plains],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Forest]
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Forest],
+        climate: 'alpine'
     },
     {
         id: 'iberia', name: 'Iberia', availableTurn: 19, region: 'Iberian Peninsula',
@@ -585,7 +592,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Hill Forts', traitDescription: 'Guerrilla resistance. +2 Martial permanently. When attacked by a stronger civ, gain +3 Martial for that battle.',
         waterResource: 'River', colors: { base: '#9f1239', accent: '#fda4af' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Plains, TerrainType.Forest],
-        edgeBiomes: [TerrainType.Ocean, TerrainType.Mountain, TerrainType.Desert]
+        edgeBiomes: [TerrainType.Ocean, TerrainType.Mountain, TerrainType.Desert],
+        climate: 'mediterranean'
     },
     {
         id: 'aksumite', name: 'Aksumite Empire', availableTurn: 22, region: 'East Africa',
@@ -593,7 +601,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Trade Crossroads', traitDescription: 'Gateway between Africa and Arabia. +2 to all trade bonuses. Temples grant +3 Faith on Worship instead of +2.',
         waterResource: 'Lake', colors: { base: '#065f46', accent: '#fcd34d' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Grassland, TerrainType.Plains],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Forest]
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Forest],
+        climate: 'highland'
     },
     {
         id: 'sassanid', name: 'Sassanid Persia', availableTurn: 22, region: 'Persia',
@@ -601,7 +610,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Immortals Reborn', traitDescription: 'Resurrected Persian military elite. +3 Martial permanently. Cannot lose more than 2 Martial from any single event.',
         waterResource: 'River', colors: { base: '#701a75', accent: '#fbbf24' },
         centerBiomes: [TerrainType.Plains, TerrainType.Desert, TerrainType.Mountain],
-        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Mountain]
+        edgeBiomes: [TerrainType.HighMountain, TerrainType.Desert, TerrainType.Mountain],
+        climate: 'arid'
     },
     {
         id: 'gothic', name: 'Gothic Kingdoms', availableTurn: 23, region: 'Northern Europe',
@@ -609,7 +619,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Migration', traitDescription: 'Mobile warrior culture. Can relocate territory once. +2 Martial when attacking civs with higher Culture Total.',
         waterResource: 'River', colors: { base: '#1c1917', accent: '#dc2626' },
         centerBiomes: [TerrainType.Forest, TerrainType.Forest, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Mountain, TerrainType.River, TerrainType.Grassland]
+        edgeBiomes: [TerrainType.Mountain, TerrainType.River, TerrainType.Grassland],
+        climate: 'boreal'
     },
     {
         id: 'hunnic', name: 'Hunnic Empire', availableTurn: 24, region: 'Central Asia/Europe',
@@ -617,7 +628,8 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
         trait: 'Terror of Nations', traitDescription: 'Pure military devastation. +5 Martial on first attack. Adjacent civs suffer -1 Martial while you exist. Cannot build Wonders.',
         waterResource: 'Lake', colors: { base: '#292524', accent: '#b91c1c' },
         centerBiomes: [TerrainType.Plains, TerrainType.Grassland, TerrainType.Plains],
-        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Forest]
+        edgeBiomes: [TerrainType.Desert, TerrainType.Mountain, TerrainType.Forest],
+        climate: 'boreal'
     },
 ];
 

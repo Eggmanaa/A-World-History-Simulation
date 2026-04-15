@@ -117,6 +117,7 @@ export interface RespawnCiv {
   colors: { base: string; accent: string };
   centerBiomes: TerrainType[];
   edgeBiomes: TerrainType[];
+  climate?: ClimateZone;
 }
 
 export type RespawnBonus = {
@@ -404,6 +405,12 @@ export interface GameState {
     culturalStage: 'Barbarism' | 'Classical' | 'Imperial' | 'Enlightenment' | 'Modern' | 'Decline';
     traits: string[];
     technologies: string[];
+    // Cultural Tree bonuses the player has claimed. Source of truth —
+    // calculateStats() re-applies the STRUCTURAL portions of each bonus
+    // every render, so they survive recomputes (bonuses stored directly
+    // in civ.stats would be wiped when the stat is re-derived from
+    // baseStats + buildings + traits).
+    culturalBonuses: string[];
     buildings: {
       farms: number;
       workshops: number;

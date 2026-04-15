@@ -543,6 +543,30 @@ const calculateStats = (
     cultureYield += 1;     // fashion/art radiate soft power per turn
   }
 
+  // Apply Cultural Tree Bonuses — STRUCTURAL stats only.
+  // Structural stats (martial, defense, capacity, productionIncome,
+  // scienceYield, cultureYield, faithYield, diplomacy) re-derive each
+  // render from baseStats + buildings + traits, so any bonus must be
+  // re-applied here every time or it evaporates.
+  // ACCUMULATING totals (science, culture) are applied ONCE at pick-time
+  // in handleCulturePick and stored in civData.stats.science/culture —
+  // those are safe because calculateStats reads the stored value.
+  if (civData.culturalBonuses && civData.culturalBonuses.length > 0) {
+    civData.culturalBonuses.forEach((choiceId: string) => {
+      const choice = CULTURE_CHOICES.find((c) => c.id === choiceId);
+      if (!choice || !choice.statBonus) return;
+      const b = choice.statBonus;
+      if (b.martial) martial += b.martial;
+      if (b.defense) martial += b.defense; // defense folded into martial
+      if (b.capacity) populationCapacity += b.capacity;
+      if (b.productionIncome) productionIncome += b.productionIncome;
+      if (b.scienceYield) scienceYield += b.scienceYield;
+      if (b.cultureYield) cultureYield += b.cultureYield;
+      if (b.faithYield) faithYield += b.faithYield;
+      if (b.diplomacy) diplomacy += b.diplomacy;
+    });
+  }
+
   // Apply Science Level Unlocks
   // ACCUMULATING bonuses (faith/culture/science) are routed to the per-turn
   // YIELDS so they don't compound each render. STRUCTURAL bonuses
@@ -834,8 +858,12 @@ const App: React.FC = () => {
             if (parsed.v2TurnResolution) setV2TurnResolution(parsed.v2TurnResolution);
             if (parsed.v2StatsBefore) setV2StatsBefore(parsed.v2StatsBefore);
             if (parsed.v2UnlockedActions) setV2UnlockedActions(parsed.v2UnlockedActions);
-            if (parsed.chosenCultureIds) setChosenCultureIds(parsed.chosenCultureIds);
             if (parsed.thresholdsAwarded) setThresholdsAwarded(parsed.thresholdsAwarded);
+            // Seed local mirror from civ.culturalBonuses (source of truth).
+            // Fall back to legacy chosenCultureIds in older saves.
+            const restored = parsed.gameState?.civilization?.culturalBonuses
+              ?? parsed.chosenCultureIds ?? [];
+            setChosenCultureIds(restored);
           }
         }
       } catch (e) {
@@ -1017,6 +1045,7 @@ const App: React.FC = () => {
         culturalStage: "Barbarism",
         traits: preset.traits,
         technologies: [],
+        culturalBonuses: [],
         baseStats: preset.baseStats,
         flags: {
           conquered: false,
@@ -2002,19 +2031,27 @@ const App: React.FC = () => {
       RELIGION_TENET_THRESHOLDS.forEach((t, i) => {
         const id = `faith-${t}`;
         if (newFaith >= t && !ackBucket.includes(id)) {
+          const alreadyFounded = !!gameState.civilization.religion?.name;
           newThresholds.push({
             id,
             kind: 'faith',
-            title: i === 0 ? 'Religion can be founded' : `Tenet slot ${i + 1} unlocked`,
+            title:
+              i === 0
+                ? alreadyFounded
+                  ? 'Faith milestone: 10'
+                  : 'Religion can be founded'
+                : `Tenet slot ${i + 1} unlocked`,
             subtitle: `Faith ${t} reached`,
             description:
-              i === 0
+              i === 0 && !alreadyFounded
                 ? 'Your people yearn for meaning. Use the Worship action (needs one Temple) to found a religion.'
                 : 'Your faith has matured. Open the Religion Tree to adopt another tenet.',
             bonuses: [
-              i === 0 ? 'Worship → Found Religion option unlocked' : `Pick tenet #${i + 1} in the Religion Tree`,
+              i === 0 && !alreadyFounded
+                ? 'Worship → Found Religion option unlocked'
+                : `Pick tenet #${i + 1} in the Religion Tree`,
             ],
-            cta: i === 0 ? 'Found a religion' : 'Open Religion Tree',
+            cta: i === 0 && !alreadyFounded ? 'Found a religion' : 'Open Religion Tree',
           });
         }
       });
@@ -3160,27 +3197,39 @@ const App: React.FC = () => {
           onPickCulture={(choiceId) => {
             const choice = CULTURE_CHOICES.find((c) => c.id === choiceId);
             if (!choice) return;
-            // Enforce one-per-stage.
-            const stagePicks = chosenCultureIds
+            // Enforce one-per-stage (reads from source of truth now).
+            const currentBonuses = gameState.civilization.culturalBonuses || [];
+            const stagePicks = currentBonuses
               .map((id) => CULTURE_CHOICES.find((c) => c.id === id))
               .filter((c) => c && c.stage === choice.stage);
             if (stagePicks.length > 0) return;
-            setChosenCultureIds((p) => [...p, choiceId]);
-            // Apply bonuses — fold into civ.stats.
+            if (currentBonuses.includes(choiceId)) return;
+
             setGameState((prev) => {
+              // 1. Add to civ.culturalBonuses — the source of truth that
+              //    calculateStats reads to re-apply STRUCTURAL bonuses
+              //    every render.
+              const culturalBonuses = [...(prev.civilization.culturalBonuses || []), choiceId];
+              // 2. Apply ACCUMULATING bonuses (science, culture) ONCE.
+              //    Structural bonuses are not written here — they come
+              //    back through calculateStats next time it runs.
               const stats = { ...prev.civilization.stats };
               if (choice.statBonus) {
-                Object.entries(choice.statBonus).forEach(([k, v]) => {
-                  const key = k as keyof typeof stats;
-                  (stats as any)[key] = ((stats as any)[key] || 0) + (v || 0);
-                });
+                if (choice.statBonus.science) {
+                  stats.science = (stats.science || 0) + choice.statBonus.science;
+                }
+                // (Note: CULTURE_CHOICES don't currently grant a "culture
+                // total" bonus — all culture boosts are via cultureYield
+                // which is structural and handled in calculateStats.)
               }
               return {
                 ...prev,
-                civilization: { ...prev.civilization, stats },
+                civilization: { ...prev.civilization, stats, culturalBonuses },
                 messages: [`Cultural bonus claimed: ${choice.label} — ${choice.grants}.`, ...prev.messages],
               };
             });
+            // Keep the local mirror in sync so the UI updates immediately.
+            setChosenCultureIds((p) => (p.includes(choiceId) ? p : [...p, choiceId]));
           }}
           onClose={() => setShowCultureTree(false)}
         />
@@ -3873,8 +3922,11 @@ const App: React.FC = () => {
             tiles={tiles}
             onTileClick={handleTileClick}
             climate={(() => {
-              const p = CIV_PRESETS.find(c => c.id === gameState.civilization?.presetId);
-              return p?.climate || 'temperate';
+              const id = gameState.civilization?.presetId;
+              const preset = CIV_PRESETS.find(c => c.id === id);
+              if (preset?.climate) return preset.climate;
+              const respawn = RESPAWN_CIVS.find(c => c.id === id);
+              return respawn?.climate || 'temperate';
             })()}
           />
           {gameState.fogOfWar && (
