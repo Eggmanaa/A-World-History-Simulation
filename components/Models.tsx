@@ -608,8 +608,10 @@ const SurfaceDetail: React.FC<{
   climate: ClimateZone;
   seed: number;
 }> = ({ terrain, climate, seed }) => {
-  // All details live just above the tile surface.
-  const yBase = 0.001;
+  // All details live just above the tile surface. We use a larger
+  // offset + depthWrite:false on detail materials to avoid Z-fighting
+  // with the hex face underneath.
+  const yBase = 0.003;
 
   if (terrain === TerrainType.Plains) {
     // Soil furrows — thin dark lines suggesting rows of farming ready
@@ -847,6 +849,9 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
           metalness={matMetalness}
           emissive={matEmissive}
           emissiveIntensity={matEmissiveIntensity}
+          polygonOffset
+          polygonOffsetFactor={1}
+          polygonOffsetUnits={1}
         />
       </mesh>
 
@@ -862,7 +867,7 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
           hex geometry is 0.5 tall scaled by `height`, so the top face
           is at local y = 0.25 * height. We offset by a hair so details
           read as part of the ground rather than clipping through. */}
-      <group position={[0, 0.25 * height + 0.005, 0]}>
+      <group position={[0, 0.25 * height + 0.01, 0]}>
         <SurfaceDetail
           terrain={terrain}
           climate={climate}

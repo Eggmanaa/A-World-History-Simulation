@@ -95,7 +95,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
     () =>
       tiles.map((_t) => ({
         rotY: 0,
-        scale: 1.04,
+        scale: 1.015,
       })),
     [tiles],
   );
@@ -177,6 +177,9 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
                         : '#8c7a4d'
               }
               roughness={1}
+              polygonOffset
+              polygonOffsetFactor={2}
+              polygonOffsetUnits={2}
             />
           </mesh>
 
