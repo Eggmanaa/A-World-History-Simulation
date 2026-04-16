@@ -88,15 +88,14 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
   // Calculate device pixel ratio cap (2 max for Retina iPads)
   const dpr = Math.min(window.devicePixelRatio, 2);
 
-  // Tile tessellation is now seamless because the hex geometry is
-  // pre-rotated 30° in Models.tsx to match the pointy-top coordinate
-  // math. A tiny 1.005 scale handles sub-pixel floating-point dust;
-  // no rotation jitter (hex grids only tile at 0°/60°/120°/…).
+  // Slight over-scale so hex edges overlap and kill triangular seam
+  // gaps between neighbors. 1.04 covers the worst-case float dust
+  // while staying invisible from the default camera angle.
   const tileJitter = useMemo(
     () =>
       tiles.map((_t) => ({
         rotY: 0,
-        scale: 1.005,
+        scale: 1.04,
       })),
     [tiles],
   );
@@ -152,11 +151,35 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
 
         {/* No rotation needed on the outer group — the hex geometry is
             already pre-rotated 30° in Models.tsx so individual tiles
-            match the pointy-top coordinate math. Applying rotation
-            here too used to double it up to 60°, which is a full hex
-            symmetry rotation but created visible seams at tile
-            boundaries from floating-point imprecision. */}
+            match the pointy-top coordinate math. */}
         <group position={[0, -2, 0]}>
+          {/* GROUND PLANE — a large flat disc sitting just below the
+              tile grid. When tiny triangular seam-gaps exist between
+              tiles (especially at height transitions like water→land),
+              this plane shows an earthy color instead of the navy void.
+              Sized to cover the entire map radius with margin. */}
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, -0.3, 0]}
+            receiveShadow
+          >
+            <circleGeometry args={[22, 48]} />
+            <meshStandardMaterial
+              color={
+                climate === 'arid' || climate === 'savanna'
+                  ? '#b89446'
+                  : climate === 'tropical'
+                    ? '#5c8a47'
+                    : climate === 'boreal' || climate === 'alpine'
+                      ? '#4a5040'
+                      : climate === 'mediterranean'
+                        ? '#c4b877'
+                        : '#8c7a4d'
+              }
+              roughness={1}
+            />
+          </mesh>
+
           {tiles.map((tile, idx) => {
             const j = tileJitter[idx] || { rotY: 0, scale: 1 };
             return (
