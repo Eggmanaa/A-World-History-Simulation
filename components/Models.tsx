@@ -3,8 +3,16 @@ import React from 'react';
 import { TerrainType, TERRAIN_COLORS, ClimateZone } from '../types';
 import * as THREE from 'three';
 
-// Reusable Hexagon Geometry
+// Reusable Hexagon Geometry.
+// IMPORTANT: We rotate the geometry 30° around Y so the hex is
+// "pointy-top" (vertices at north and south, flat edges east and
+// west). This matches the axial-coord math in generateMap() which
+// uses `x = sqrt(3) * (q + r/2)`, `z = 1.5 * r` — those are the
+// pointy-top offsets. Previously the default CylinderGeometry(6) was
+// flat-top while the coords were pointy-top, so tiles didn't tile
+// perfectly and the overall board had visible irregular edges.
 const hexGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 6);
+hexGeometry.rotateY(Math.PI / 6);
 
 // ============================================================
 // ECOSYSTEM & TREE SPECIES SYSTEM
@@ -760,9 +768,17 @@ interface HexTileProps {
   onClick: () => void;
   isHovered?: boolean;
   climate?: ClimateZone;
+  // When a building is placed on a tile, suppress forest trees and
+  // large ground dressing so the building model is clearly visible.
+  building?: string;
 }
 
-export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate' }) => {
+export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate', building }) => {
+  // When a building occupies this tile, suppress forest trees and large
+  // ground props so the building model is clearly visible. Surface
+  // detail (furrows, dune ripples, etc.) stays because it's flat and
+  // doesn't block the view.
+  const hasBuilding = !!building && building !== 'None';
   const color = resolveTerrainColor(terrain, climate);
 
   // Height variation based on terrain
@@ -859,7 +875,7 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
           forest tile shows a mix of pines and birches while a Khmer
           forest shows jungle palms, banyans, and the occasional
           broadleaf. Density scales with climate's biodiversity. */}
-      {terrain === TerrainType.Forest && (() => {
+      {terrain === TerrainType.Forest && !hasBuilding && (() => {
         const tileSeed = Math.floor(x * 31 + z * 17);
         // Dense climates (tropical, temperate, boreal) get 4 trees,
         // sparse climates (arid, savanna) get 2-3.
@@ -901,8 +917,9 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
       })()}
 
       {/* Non-forest ground dressing — plains, grassland, desert, marsh
-          all get climate-appropriate props so each biome feels alive. */}
-      {(terrain === TerrainType.Plains ||
+          all get climate-appropriate props so each biome feels alive.
+          Suppressed when a building is present to keep the model visible. */}
+      {!hasBuilding && (terrain === TerrainType.Plains ||
         terrain === TerrainType.Grassland ||
         terrain === TerrainType.Desert ||
         terrain === TerrainType.Marsh) && (

@@ -88,19 +88,15 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
   // Calculate device pixel ratio cap (2 max for Retina iPads)
   const dpr = Math.min(window.devicePixelRatio, 2);
 
-  // Tile tessellation must be seamless — hex grids only tile perfectly
-  // at 0°/60°/120°/… rotations, so any arbitrary angle opens sub-pixel
-  // seams between neighbors. Set rotation jitter to 0 and slightly
-  // oversize each tile (scale=1.03) so neighbors overlap by ~1.5%,
-  // which hides both rotation-induced gaps AND floating-point
-  // imprecision in the hex coordinate math. The overlap is invisible
-  // from the default camera angle — tiles read as one continuous
-  // surface, no navy leaking through.
+  // Tile tessellation is now seamless because the hex geometry is
+  // pre-rotated 30° in Models.tsx to match the pointy-top coordinate
+  // math. A tiny 1.005 scale handles sub-pixel floating-point dust;
+  // no rotation jitter (hex grids only tile at 0°/60°/120°/…).
   const tileJitter = useMemo(
     () =>
       tiles.map((_t) => ({
-        rotY: 0, // was ±5° — hex tiling only works at 60° steps
-        scale: 1.03, // slight over-coverage to kill any pinhole seams
+        rotY: 0,
+        scale: 1.005,
       })),
     [tiles],
   );
@@ -154,7 +150,13 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
         <pointLight position={[-15, 15, -15]} intensity={0.4} color="#bfdbfe" />
         <pointLight position={[15, 10, -15]} intensity={0.25} color="#fef3c7" />
 
-        <group position={[0, -2, 0]} rotation={[0, Math.PI / 6, 0]}>
+        {/* No rotation needed on the outer group — the hex geometry is
+            already pre-rotated 30° in Models.tsx so individual tiles
+            match the pointy-top coordinate math. Applying rotation
+            here too used to double it up to 60°, which is a full hex
+            symmetry rotation but created visible seams at tile
+            boundaries from floating-point imprecision. */}
+        <group position={[0, -2, 0]}>
           {tiles.map((tile, idx) => {
             const j = tileJitter[idx] || { rotY: 0, scale: 1 };
             return (
@@ -172,6 +174,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
                 isHovered={hoveredId === tile.id}
                 onClick={() => onTileClick(tile.id)}
                 climate={tile.climate || climate}
+                building={tile.building}
               />
               {tile.building === BuildingType.House && <House3D position={[tile.x, 0, tile.z]} />}
               {tile.building === BuildingType.Farm && <Farm3D position={[tile.x, 0, tile.z]} />}

@@ -165,7 +165,32 @@ export function generateConquestTiles(
     }
   }
 
-  // Shuffle and take the requested count
-  const shuffled = candidateTiles.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  // GEOMETRIC SELECTION — pick candidates that fill the next hex ring
+  // outward, not random adjacent tiles. This keeps the map roughly
+  // hex-shaped even as it grows through conquests. We compute the
+  // current map's "radius" (max cube distance of any existing tile)
+  // and prefer candidates at the smallest distance from center, then
+  // break ties by how many existing tiles they're adjacent to (more
+  // adjacency = better fit into the existing shape).
+  const existingRadius = Math.max(
+    0,
+    ...existingTiles.map((t) => Math.max(Math.abs(t.q), Math.abs(t.r), Math.abs(t.s))),
+  );
+  const neighborCount = (q: number, r: number, s: number) => {
+    const neighbors = [
+      `${q + 1},${r}`, `${q - 1},${r}`, `${q},${r + 1}`,
+      `${q},${r - 1}`, `${q + 1},${r - 1}`, `${q - 1},${r + 1}`,
+    ];
+    return neighbors.filter((k) => existingTiles.some((t) => `${t.q},${t.r}` === k)).length;
+  };
+  const sorted = [...candidateTiles].sort((a, b) => {
+    const da = Math.max(Math.abs(a.q), Math.abs(a.r), Math.abs(a.s));
+    const db = Math.max(Math.abs(b.q), Math.abs(b.r), Math.abs(b.s));
+    if (da !== db) return da - db;           // closer to center first
+    const na = neighborCount(a.q, a.r, a.s);
+    const nb = neighborCount(b.q, b.r, b.s);
+    if (na !== nb) return nb - na;            // then most-adjacent first
+    return 0;
+  });
+  return sorted.slice(0, count);
 }

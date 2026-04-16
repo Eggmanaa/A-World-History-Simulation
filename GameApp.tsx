@@ -2635,8 +2635,8 @@ const App: React.FC = () => {
       addMessage("You can only build one Wonder.");
       return;
     }
-    if (civilization.stats.industryLeft < cost) {
-      addMessage("Not enough Industry.");
+    if ((civilization.stats.productionPool || 0) < cost) {
+      addMessage("Not enough Production Pool.");
       return;
     }
     if (gameState.year < wonder.minYear) {
@@ -2652,7 +2652,7 @@ const App: React.FC = () => {
         builtWonderId: wonder.id,
         stats: {
           ...prev.civilization.stats,
-          industryLeft: prev.civilization.stats.industryLeft - cost,
+          productionPool: Math.max(0, (prev.civilization.stats.productionPool || 0) - cost),
         },
       },
       messages: [
@@ -4183,7 +4183,7 @@ const App: React.FC = () => {
                   </div>
                   <div>
                     <div className="font-bold text-sm">Farm</div>
-                    <div className="text-xs text-slate-400">Cost: 5 Ind | +1 Cap, +1 Prod Income</div>
+                    <div className="text-xs text-slate-400">Cost: 5 Prod | +1 Cap, +1 Prod Income</div>
                   </div>
                 </button>
                 {/* PRODUCTION-COST BUILDINGS — clicking any of these is a shortcut
@@ -4717,7 +4717,7 @@ const App: React.FC = () => {
                 {WONDERS_LIST.map((w) => {
                   const locked = gameState.year < w.minYear;
                   const built = civ.builtWonderId === w.id;
-                  const affordable = civ.stats.industryLeft >= w.cost;
+                  const affordable = (civ.stats.productionPool || 0) >= w.cost;
                   return (
                     <div
                       key={w.id}
@@ -4726,7 +4726,7 @@ const App: React.FC = () => {
                       <div className="flex justify-between items-start mb-1">
                         <span className="font-bold text-sm">{w.name}</span>
                         <span className="text-xs font-mono text-amber-400">
-                          {w.cost} Ind
+                          {w.cost} Prod
                         </span>
                       </div>
                       <div className="text-xs text-slate-400 mb-2">
@@ -4747,7 +4747,7 @@ const App: React.FC = () => {
                           {locked
                             ? `Unlocks ${Math.abs(w.minYear)} BCE`
                             : !affordable
-                              ? "Need Industry"
+                              ? "Need Production"
                               : civ.builtWonderId
                                 ? "Max 1 Wonder"
                                 : "Build"}
@@ -5382,7 +5382,7 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <div className="font-bold text-sm">Temple</div>
-                      <div className="text-xs text-slate-400">Cost: 10 Ind</div>
+                      <div className="text-xs text-slate-400">Cost: 10 Prod</div>
                     </div>
                   </button>
                   <button
@@ -5400,7 +5400,7 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <div className="font-bold text-sm">Wall</div>
-                      <div className="text-xs text-slate-400">Cost: 10 Ind</div>
+                      <div className="text-xs text-slate-400">Cost: 10 Prod</div>
                     </div>
                   </button>
                   <button
@@ -5418,7 +5418,7 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <div className="font-bold text-sm">Amphitheatre</div>
-                      <div className="text-xs text-slate-400">Cost: 10 Ind</div>
+                      <div className="text-xs text-slate-400">Cost: 10 Prod</div>
                     </div>
                   </button>
                   <button
@@ -5439,7 +5439,7 @@ const App: React.FC = () => {
                     <div>
                       <div className="font-bold text-sm">Archimedes Tower</div>
                       <div className="text-xs text-slate-400">
-                        Cost: 20 Ind, 30 Sci
+                        Cost: 20 Prod, 30 Sci
                       </div>
                     </div>
                   </button>

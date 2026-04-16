@@ -333,6 +333,39 @@ export const generateMap = (preset: CivPreset): TileData[] => {
         });
     }
   }
+
+  // POST-GENERATION FIX: ensure at least 60% of tiles are buildable
+  // (not Ocean, River, HighMountain). Some civ presets — especially
+  // island civs and ocean-heavy coastals — could randomize into maps
+  // where the student has almost nowhere to place buildings.
+  const buildable = (t: TerrainType) =>
+    t !== TerrainType.Ocean && t !== TerrainType.River && t !== TerrainType.HighMountain;
+  const totalTiles = tiles.length;
+  const MIN_BUILDABLE_RATIO = 0.60;
+  const minBuildable = Math.floor(totalTiles * MIN_BUILDABLE_RATIO);
+  let buildableCount = tiles.filter(t => buildable(t.terrain)).length;
+
+  if (buildableCount < minBuildable) {
+    // Convert excess non-buildable tiles (starting from the edge, working
+    // inward) to the civ's most common center biome.
+    const fallback = preset.centerBiomes.find(b => buildable(b)) || TerrainType.Plains;
+    const sorted = [...tiles]
+      .filter(t => !buildable(t.terrain))
+      .sort((a, b) => {
+        const dA = Math.max(Math.abs(a.q), Math.abs(a.r), Math.abs(a.s));
+        const dB = Math.max(Math.abs(b.q), Math.abs(b.r), Math.abs(b.s));
+        return dB - dA; // outermost first
+      });
+    for (const candidate of sorted) {
+      if (buildableCount >= minBuildable) break;
+      const tile = tiles.find(t => t.id === candidate.id);
+      if (tile) {
+        tile.terrain = fallback;
+        buildableCount++;
+      }
+    }
+  }
+
   return tiles;
 };
 
