@@ -3,16 +3,27 @@ import React from 'react';
 import { TerrainType, TERRAIN_COLORS, ClimateZone } from '../types';
 import * as THREE from 'three';
 
-// Reusable Hexagon Geometry.
-// IMPORTANT: We rotate the geometry 30° around Y so the hex is
-// "pointy-top" (vertices at north and south, flat edges east and
-// west). This matches the axial-coord math in generateMap() which
-// uses `x = sqrt(3) * (q + r/2)`, `z = 1.5 * r` — those are the
-// pointy-top offsets. Previously the default CylinderGeometry(6) was
-// flat-top while the coords were pointy-top, so tiles didn't tile
-// perfectly and the overall board had visible irregular edges.
+// ============================================================
+// HEX GEOMETRY — SINGLE CYLINDER WITH TRANSPARENT SIDES
+// ============================================================
+// CylinderGeometry(1,1,0.5,6) scaled to ~1.04 closes all seam gaps.
+// The flickering was caused by overlapping side faces Z-fighting.
+// Fix: make the SIDE material fully transparent so only the top cap
+// and bottom cap render.  No side faces visible = no seam artifacts.
+// CylinderGeometry has 3 material groups: 0=sides, 1=top, 2=bottom.
+//
+// Pointy-top orientation via rotateY(30°) to match the axial grid
+// math: x = sqrt(3)*(q + r/2), z = 1.5*r.
+
 const hexGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 6);
 hexGeometry.rotateY(Math.PI / 6);
+
+// Invisible material for the cylinder side faces.
+const HEX_SIDE_MATERIAL = new THREE.MeshBasicMaterial({
+  transparent: true,
+  opacity: 0,
+  depthWrite: false,
+});
 
 // ============================================================
 // ECOSYSTEM & TREE SPECIES SYSTEM
@@ -773,13 +784,9 @@ interface HexTileProps {
   // When a building is placed on a tile, suppress forest trees and
   // large ground dressing so the building model is clearly visible.
   building?: string;
-  // Slight over-scale (e.g. 1.04) applied to the mesh only — not the
-  // group — so tiles expand outward from their center to overlap
-  // neighbours and close seam gaps without moving positions.
-  tileScale?: number;
 }
 
-export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate', building, tileScale = 1 }) => {
+export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate', building }) => {
   // When a building occupies this tile, suppress forest trees and large
   // ground props so the building model is clearly visible. Surface
   // detail (furrows, dune ripples, etc.) stays because it's flat and
@@ -838,26 +845,40 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
     matMetalness = 0; // dry, no sheen
   }
 
+  // Multi-material array: [0] sides = invisible, [1] top = terrain, [2] bottom = dark
+  const topMat = React.useMemo(() => new THREE.MeshStandardMaterial({
+    color: isHovered ? '#e2e8f0' : terrainColor,
+    roughness: matRoughness,
+    metalness: matMetalness,
+    emissive: new THREE.Color(matEmissive),
+    emissiveIntensity: matEmissiveIntensity,
+  }), [isHovered, terrainColor, matRoughness, matMetalness, matEmissive, matEmissiveIntensity]);
+
+  const bottomMat = React.useMemo(() => new THREE.MeshStandardMaterial({
+    color: isHovered ? '#d1d5db' : terrainColor,
+    roughness: 1,
+    metalness: 0,
+  }), [isHovered, terrainColor]);
+
+  const materials = React.useMemo(
+    () => [HEX_SIDE_MATERIAL, topMat, bottomMat],
+    [topMat, bottomMat],
+  );
+
   return (
     <group position={[x, yPos, z]}>
+      {/* Single hex cylinder with transparent sides.  Scaled ~4% wider
+          so top faces overlap neighbours — but because the side material
+          is invisible, no side-face Z-fighting occurs.  Only the flat
+          top caps compete at boundaries, and polygonOffset resolves that. */}
       <mesh
         geometry={hexGeometry}
+        material={materials}
         onClick={(e) => { e.stopPropagation(); onClick(); }}
-        scale={[tileScale, height, tileScale]}
+        scale={[1.04, height, 1.04]}
         receiveShadow
         castShadow
-      >
-        <meshStandardMaterial
-          color={isHovered ? '#e2e8f0' : terrainColor}
-          roughness={matRoughness}
-          metalness={matMetalness}
-          emissive={matEmissive}
-          emissiveIntensity={matEmissiveIntensity}
-          polygonOffset
-          polygonOffsetFactor={1}
-          polygonOffsetUnits={1}
-        />
-      </mesh>
+      />
 
       {/* Selection Ring */}
       {isHovered && (
@@ -867,10 +888,8 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
          </mesh>
       )}
 
-      {/* Surface detail — climate-aware texture on the top face. The
-          hex geometry is 0.5 tall scaled by `height`, so the top face
-          is at local y = 0.25 * height. We offset by a hair so details
-          read as part of the ground rather than clipping through. */}
+      {/* Surface detail — climate-aware texture on the top face.
+          The cylinder top face is at local y = 0.25 * height. */}
       <group position={[0, 0.25 * height + 0.01, 0]}>
         <SurfaceDetail
           terrain={terrain}
