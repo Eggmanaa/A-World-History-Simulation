@@ -93,9 +93,14 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
   // while staying invisible from the default camera angle.
   const tileJitter = useMemo(
     () =>
-      tiles.map((_t) => ({
+      tiles.map((_t, idx) => ({
         rotY: 0,
-        scale: 1.015,
+        scale: 1.07,
+        // Micro Y-offset so overlapping tile edges are never coplanar.
+        // Each tile gets a unique height bump (0–0.005) based on a hash
+        // of its index.  This eliminates Z-fighting between adjacent
+        // tiles of different colors without visible height difference.
+        yBump: ((idx * 7 + 3) % 17) * 0.0003,
       })),
     [tiles],
   );
@@ -184,12 +189,12 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
           </mesh>
 
           {tiles.map((tile, idx) => {
-            const j = tileJitter[idx] || { rotY: 0, scale: 1 };
+            const j = tileJitter[idx] || { rotY: 0, scale: 1, yBump: 0 };
             return (
             <group
               key={tile.id}
+              position={[0, j.yBump || 0, 0]}
               rotation={[0, j.rotY, 0]}
-              scale={[j.scale, 1, j.scale]}
               onPointerOver={(e) => { e.stopPropagation(); setHoveredId(tile.id); }}
               onPointerOut={(e) => { e.stopPropagation(); setHoveredId(null); }}
             >
@@ -201,6 +206,7 @@ const MapScene: React.FC<MapSceneProps> = ({ tiles, onTileClick, climate = 'temp
                 onClick={() => onTileClick(tile.id)}
                 climate={tile.climate || climate}
                 building={tile.building}
+                tileScale={j.scale}
               />
               {tile.building === BuildingType.House && <House3D position={[tile.x, 0, tile.z]} />}
               {tile.building === BuildingType.Farm && <Farm3D position={[tile.x, 0, tile.z]} />}

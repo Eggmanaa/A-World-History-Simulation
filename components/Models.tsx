@@ -773,9 +773,13 @@ interface HexTileProps {
   // When a building is placed on a tile, suppress forest trees and
   // large ground dressing so the building model is clearly visible.
   building?: string;
+  // Slight over-scale (e.g. 1.04) applied to the mesh only — not the
+  // group — so tiles expand outward from their center to overlap
+  // neighbours and close seam gaps without moving positions.
+  tileScale?: number;
 }
 
-export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate', building }) => {
+export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate', building, tileScale = 1 }) => {
   // When a building occupies this tile, suppress forest trees and large
   // ground props so the building model is clearly visible. Surface
   // detail (furrows, dune ripples, etc.) stays because it's flat and
@@ -839,7 +843,7 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
       <mesh
         geometry={hexGeometry}
         onClick={(e) => { e.stopPropagation(); onClick(); }}
-        scale={[1, height, 1]}
+        scale={[tileScale, height, tileScale]}
         receiveShadow
         castShadow
       >
