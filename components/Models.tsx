@@ -526,6 +526,233 @@ const GroundDressing: React.FC<{ climate: ClimateZone; terrain: TerrainType; see
   return <group position={[0, 0.25, 0]}>{elements}</group>;
 };
 
+// ---------- Climate-tinted terrain colors ----------
+// Same terrain types look different in different parts of the world.
+// "Plains" in Egypt should read sandier than "Plains" in Germania.
+// This table lets each climate override the default TERRAIN_COLORS
+// for certain terrain types. If a climate isn't in the table, the
+// default color is used.
+const TERRAIN_COLOR_BY_CLIMATE: Partial<
+  Record<ClimateZone, Partial<Record<TerrainType, string>>>
+> = {
+  arid: {
+    [TerrainType.Plains]: '#f3e1a0',     // sandy-beige
+    [TerrainType.Grassland]: '#d4b670',  // dry golden grass
+    [TerrainType.Desert]: '#f3d488',     // warmer sand
+    [TerrainType.Mountain]: '#a98557',   // sandstone
+  },
+  savanna: {
+    [TerrainType.Plains]: '#e3c879',     // dry grass plain
+    [TerrainType.Grassland]: '#caa55c',  // golden savanna
+    [TerrainType.Desert]: '#d89e55',     // red-gold earth
+    [TerrainType.Mountain]: '#8f6a40',
+  },
+  tropical: {
+    [TerrainType.Plains]: '#bde575',     // lush light green
+    [TerrainType.Grassland]: '#86efac',  // deep fresh green
+    [TerrainType.Forest]: '#14532d',     // dense jungle canopy
+    [TerrainType.Marsh]: '#065f46',      // deep mangrove
+  },
+  mediterranean: {
+    [TerrainType.Plains]: '#d4c77a',     // sun-bleached straw
+    [TerrainType.Grassland]: '#b8cd6c',  // dry olive-green
+    [TerrainType.Forest]: '#4d7c0f',     // silvery olive
+    [TerrainType.Mountain]: '#9b7d53',   // sunlit limestone
+  },
+  boreal: {
+    [TerrainType.Plains]: '#92a060',     // cool damp green-brown
+    [TerrainType.Grassland]: '#5c8a47',  // moss-rich
+    [TerrainType.Forest]: '#14532d',     // dark conifer
+    [TerrainType.Mountain]: '#6b5c48',   // dark granite
+  },
+  temperate: {
+    [TerrainType.Plains]: '#d8cf86',     // softer wheat
+    [TerrainType.Grassland]: '#84cc16',  // classic meadow
+    [TerrainType.Forest]: '#166534',     // deciduous mid-green
+  },
+  alpine: {
+    [TerrainType.Plains]: '#a8a875',     // hardy stony ground
+    [TerrainType.Grassland]: '#7fa55c',  // crisp mountain meadow
+    [TerrainType.Forest]: '#064e3b',     // dense fir
+    [TerrainType.Mountain]: '#7d7368',   // cold granite
+  },
+  highland: {
+    [TerrainType.Plains]: '#c4b877',     // dry upland plain
+    [TerrainType.Grassland]: '#8baa4a',  // highland meadow
+    [TerrainType.Forest]: '#3f6b2a',     // mixed highland green
+    [TerrainType.Mountain]: '#947a50',   // red-earth rock
+  },
+};
+
+// Resolves the right color for a terrain + climate pair, falling back
+// to the default TERRAIN_COLORS table if there's no override.
+const resolveTerrainColor = (terrain: TerrainType, climate: ClimateZone): string => {
+  const override = TERRAIN_COLOR_BY_CLIMATE[climate]?.[terrain];
+  return override || TERRAIN_COLORS[terrain];
+};
+
+// ---------- Surface Detail ----------
+// Subtle meshes added to the TOP of a hex to make the surface look
+// textured instead of flat. Each terrain has its own pattern. These
+// sit at y≈0.01 above the tile's top face and are hash-stable per tile.
+const SurfaceDetail: React.FC<{
+  terrain: TerrainType;
+  climate: ClimateZone;
+  seed: number;
+}> = ({ terrain, climate, seed }) => {
+  // All details live just above the tile surface.
+  const yBase = 0.001;
+
+  if (terrain === TerrainType.Plains) {
+    // Soil furrows — thin dark lines suggesting rows of farming ready
+    // ground. Two parallel, very thin strips.
+    const tint = climate === 'arid' || climate === 'savanna' ? '#b89446' : '#8c7a4d';
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, rng(seed) * 0.6]}>
+          <planeGeometry args={[1.0, 0.06]} />
+          <meshStandardMaterial color={tint} roughness={0.95} transparent opacity={0.5} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, rng(seed) * 0.6]} position={[0.1, 0, 0.1]}>
+          <planeGeometry args={[0.9, 0.05]} />
+          <meshStandardMaterial color={tint} roughness={0.95} transparent opacity={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.Grassland) {
+    // Two or three darker/lighter patches to break the uniform green.
+    const dark = climate === 'tropical' ? '#15803d' : climate === 'savanna' ? '#a16207' : '#65a30d';
+    const light = climate === 'tropical' ? '#a3e635' : climate === 'savanna' ? '#eab308' : '#a3e635';
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.2, 0, 0.1]}>
+          <circleGeometry args={[0.25, 6]} />
+          <meshStandardMaterial color={dark} roughness={0.95} transparent opacity={0.35} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-0.25, 0, -0.15]}>
+          <circleGeometry args={[0.2, 6]} />
+          <meshStandardMaterial color={light} roughness={0.95} transparent opacity={0.3} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.Desert) {
+    // Dune ripple lines — two wavy strips suggesting wind patterns.
+    const rot = rng(seed) * Math.PI;
+    return (
+      <group position={[0, yBase, 0]} rotation={[0, rot, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0.15]}>
+          <torusGeometry args={[0.5, 0.015, 4, 16, Math.PI * 0.8]} />
+          <meshStandardMaterial color="#d69e55" roughness={0.95} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -0.15]}>
+          <torusGeometry args={[0.4, 0.012, 4, 16, Math.PI * 0.75]} />
+          <meshStandardMaterial color="#d69e55" roughness={0.95} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.Forest) {
+    // Leaf-litter patches — small dark circles under the canopy to
+    // suggest shadowed forest floor.
+    const litter = climate === 'tropical' ? '#064e3b' : climate === 'boreal' || climate === 'alpine' ? '#1c1917' : '#3f2e20';
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.15, 0, -0.15]}>
+          <circleGeometry args={[0.22, 6]} />
+          <meshStandardMaterial color={litter} roughness={0.95} transparent opacity={0.45} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-0.2, 0, 0.18]}>
+          <circleGeometry args={[0.18, 6]} />
+          <meshStandardMaterial color={litter} roughness={0.95} transparent opacity={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.Mountain || terrain === TerrainType.HighMountain) {
+    // Rocky patches on the lower slopes — scattered small polygons.
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, rng(seed) * 6]} position={[0.3, 0, 0.1]}>
+          <circleGeometry args={[0.12, 5]} />
+          <meshStandardMaterial color="#6b5c48" roughness={0.95} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, rng(seed + 1) * 6]} position={[-0.2, 0, -0.25]}>
+          <circleGeometry args={[0.09, 5]} />
+          <meshStandardMaterial color="#78716c" roughness={0.95} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, rng(seed + 2) * 6]} position={[-0.3, 0, 0.2]}>
+          <circleGeometry args={[0.1, 5]} />
+          <meshStandardMaterial color="#57534e" roughness={0.95} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.Ocean) {
+    // Wave foam — small white semicircles near the tile edges.
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.3, 0, 0.15]}>
+          <torusGeometry args={[0.12, 0.008, 4, 12, Math.PI]} />
+          <meshStandardMaterial color="#e0f2fe" emissive="#bae6fd" emissiveIntensity={0.4} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, Math.PI]} position={[-0.25, 0, -0.2]}>
+          <torusGeometry args={[0.1, 0.007, 4, 12, Math.PI]} />
+          <meshStandardMaterial color="#e0f2fe" emissive="#bae6fd" emissiveIntensity={0.35} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[-0.2, 0, 0.3]}>
+          <torusGeometry args={[0.09, 0.006, 4, 12, Math.PI]} />
+          <meshStandardMaterial color="#e0f2fe" emissive="#bae6fd" emissiveIntensity={0.35} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.River) {
+    // Flow ripples — chevron-like arc patterns.
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+          <torusGeometry args={[0.35, 0.01, 4, 12, Math.PI]} />
+          <meshStandardMaterial color="#93c5fd" emissive="#60a5fa" emissiveIntensity={0.3} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0.25]}>
+          <torusGeometry args={[0.22, 0.008, 4, 12, Math.PI]} />
+          <meshStandardMaterial color="#93c5fd" emissive="#60a5fa" emissiveIntensity={0.25} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (terrain === TerrainType.Marsh) {
+    // Scattered puddles — small darker water patches.
+    return (
+      <group position={[0, yBase, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.2, 0, 0.1]}>
+          <circleGeometry args={[0.14, 8]} />
+          <meshStandardMaterial color="#0f172a" emissive="#1e3a8a" emissiveIntensity={0.2} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-0.25, 0, -0.15]}>
+          <circleGeometry args={[0.1, 8]} />
+          <meshStandardMaterial color="#0f172a" emissive="#1e3a8a" emissiveIntensity={0.2} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.05, 0, -0.3]}>
+          <circleGeometry args={[0.08, 8]} />
+          <meshStandardMaterial color="#0f172a" emissive="#1e3a8a" emissiveIntensity={0.2} />
+        </mesh>
+      </group>
+    );
+  }
+
+  return null;
+};
+
 interface HexTileProps {
   x: number;
   z: number;
@@ -536,7 +763,7 @@ interface HexTileProps {
 }
 
 export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHovered, climate = 'temperate' }) => {
-  const color = TERRAIN_COLORS[terrain];
+  const color = resolveTerrainColor(terrain, climate);
 
   // Height variation based on terrain
   let height = 0.5;
@@ -614,6 +841,18 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
             <meshBasicMaterial color="white" toneMapped={false} />
          </mesh>
       )}
+
+      {/* Surface detail — climate-aware texture on the top face. The
+          hex geometry is 0.5 tall scaled by `height`, so the top face
+          is at local y = 0.25 * height. We offset by a hair so details
+          read as part of the ground rather than clipping through. */}
+      <group position={[0, 0.25 * height + 0.005, 0]}>
+        <SurfaceDetail
+          terrain={terrain}
+          climate={climate}
+          seed={Math.floor(x * 97 + z * 43)}
+        />
+      </group>
 
       {/* Forest Details — mixed species forest. Each tree independently
           picks a species from the climate's weighted pool, so a Germanic
