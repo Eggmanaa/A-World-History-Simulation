@@ -7,87 +7,523 @@ import * as THREE from 'three';
 const hexGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 6);
 
 // ============================================================
-// CLIMATE-AWARE TREE VARIANTS
+// ECOSYSTEM & TREE SPECIES SYSTEM
 // ============================================================
-// The forest biome used to render the same cone-tree everywhere — which made
-// Egypt's forest look exactly like Germania's. This palette lets each
-// climate paint its trees with the right silhouette and color. Trees are
-// still inexpensive (cone + cylinder primitives) so a whole forest tile
-// stays cheap to render.
-type TreeStyle = {
-  foliageColor: string;
-  trunkColor: string;
-  foliageShape: 'cone' | 'sphere' | 'fan' | 'flat';
-  trunkHeight: number;       // 0.1–0.35
-  foliageScale: number;      // overall size factor
-  foliageY: number;          // vertical offset of the foliage
-  variety: number;            // extra jitter multiplier
+// Each climate has MULTIPLE tree species (like a real forest) and
+// per-terrain ground dressing that matches what you'd actually see in
+// that part of the world. Random-but-stable hash jitter per tile keeps
+// the composition lively without re-randomizing each frame.
+//
+// Performance: all geometry is primitive (cone / sphere / cylinder /
+// torus) and trees top out at ~5 sub-meshes each. A fully dressed
+// forest tile renders ~20 meshes, which is well within budget.
+
+// Stable pseudo-random 0..1 from an integer seed.
+const rng = (seed: number) => {
+  const s = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return ((s % 1) + 1) % 1;
 };
 
-const TREE_STYLES: Record<ClimateZone, TreeStyle> = {
-  temperate:     { foliageColor: '#166534', trunkColor: '#3f2e20', foliageShape: 'cone',   trunkHeight: 0.22, foliageScale: 1.0,  foliageY: 0.45, variety: 0.3 },
-  mediterranean: { foliageColor: '#4d7c0f', trunkColor: '#5b4020', foliageShape: 'sphere', trunkHeight: 0.16, foliageScale: 0.9,  foliageY: 0.4,  variety: 0.25 },
-  arid:          { foliageColor: '#65a30d', trunkColor: '#78350f', foliageShape: 'fan',    trunkHeight: 0.32, foliageScale: 0.7,  foliageY: 0.55, variety: 0.15 },
-  tropical:      { foliageColor: '#15803d', trunkColor: '#713f12', foliageShape: 'fan',    trunkHeight: 0.28, foliageScale: 1.1,  foliageY: 0.5,  variety: 0.35 },
-  boreal:        { foliageColor: '#064e3b', trunkColor: '#44352a', foliageShape: 'cone',   trunkHeight: 0.18, foliageScale: 1.15, foliageY: 0.55, variety: 0.4 },
-  savanna:       { foliageColor: '#a16207', trunkColor: '#78350f', foliageShape: 'flat',   trunkHeight: 0.28, foliageScale: 1.1,  foliageY: 0.45, variety: 0.2 },
-  alpine:        { foliageColor: '#14532d', trunkColor: '#3f2e20', foliageShape: 'cone',   trunkHeight: 0.2,  foliageScale: 1.0,  foliageY: 0.5,  variety: 0.35 },
-  highland:      { foliageColor: '#4d7c0f', trunkColor: '#5b4020', foliageShape: 'sphere', trunkHeight: 0.22, foliageScale: 0.85, foliageY: 0.45, variety: 0.25 },
-};
+// ---------- Species primitives ----------
+// Each species is a small component keyed to a climate. They share a
+// signature so the forest renderer can pick one and drop it in.
 
-// A single tree rendered at the local origin. Color, shape and proportions
-// come from the civ's climate style; jitter comes from the tile index so
-// every forest tile looks slightly different without re-randomizing each
-// frame.
-const Tree: React.FC<{ climate: ClimateZone; seed: number }> = ({ climate, seed }) => {
-  const style = TREE_STYLES[climate] || TREE_STYLES.temperate;
-  const jitter = ((Math.sin(seed * 12.9898) * 43758.5453) % 1 + 1) % 1; // 0..1 stable
-  const extra = style.variety * jitter;
+type SpeciesProps = { seed: number; scale?: number };
 
+// OAK — broad sphere on thick trunk. Temperate deciduous classic.
+const Oak: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const hue = rng(seed);
+  const color = hue < 0.33 ? '#166534' : hue < 0.66 ? '#15803d' : '#4d7c0f';
   return (
-    <group>
-      {/* trunk */}
-      <mesh position={[0, style.trunkHeight / 2, 0]} castShadow>
-        <cylinderGeometry args={[0.08, 0.1, style.trunkHeight, 6]} />
-        <meshStandardMaterial color={style.trunkColor} roughness={0.95} />
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.15, 0]} castShadow>
+        <cylinderGeometry args={[0.1, 0.12, 0.3, 7]} />
+        <meshStandardMaterial color="#3f2e20" roughness={0.95} />
       </mesh>
-      {/* foliage */}
-      {style.foliageShape === 'cone' && (
-        <mesh position={[0, style.foliageY + extra * 0.1, 0]} castShadow>
-          <coneGeometry args={[0.28 * style.foliageScale, 0.85 * style.foliageScale, 8]} />
-          <meshStandardMaterial color={style.foliageColor} roughness={0.85} />
-        </mesh>
-      )}
-      {style.foliageShape === 'sphere' && (
-        <mesh position={[0, style.foliageY + extra * 0.08, 0]} castShadow>
-          <sphereGeometry args={[0.3 * style.foliageScale, 10, 8]} />
-          <meshStandardMaterial color={style.foliageColor} roughness={0.8} />
-        </mesh>
-      )}
-      {style.foliageShape === 'fan' && (
-        <group position={[0, style.foliageY + extra * 0.1, 0]}>
-          {/* palm-style: a couple of flat fronds arranged radially */}
-          {[0, 1, 2, 3, 4].map((i) => (
-            <mesh
-              key={i}
-              rotation={[Math.PI / 3, (i * Math.PI * 2) / 5, 0]}
-              castShadow
-            >
-              <coneGeometry args={[0.12 * style.foliageScale, 0.55 * style.foliageScale, 4]} />
-              <meshStandardMaterial color={style.foliageColor} roughness={0.75} />
-            </mesh>
-          ))}
-        </group>
-      )}
-      {style.foliageShape === 'flat' && (
-        <mesh position={[0, style.foliageY + extra * 0.05, 0]} castShadow>
-          {/* baobab-style flat disc */}
-          <cylinderGeometry args={[0.35 * style.foliageScale, 0.32 * style.foliageScale, 0.15, 10]} />
-          <meshStandardMaterial color={style.foliageColor} roughness={0.9} />
-        </mesh>
-      )}
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <sphereGeometry args={[0.35, 10, 8]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
+      </mesh>
+      <mesh position={[0.1, 0.7, 0.1]} castShadow>
+        <sphereGeometry args={[0.22, 8, 7]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
+      </mesh>
     </group>
   );
+};
+
+// PINE — classic conifer cone stacked in two tiers. Boreal/alpine/temperate.
+const Pine: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const tall = 0.9 + rng(seed) * 0.3;
+  const hue = rng(seed + 1);
+  const color = hue < 0.5 ? '#064e3b' : '#14532d';
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.1, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.09, 0.2, 6]} />
+        <meshStandardMaterial color="#44352a" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.5 * tall, 0]} castShadow>
+        <coneGeometry args={[0.3, 0.55 * tall, 8]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 0.85 * tall, 0]} castShadow>
+        <coneGeometry args={[0.22, 0.4 * tall, 8]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
+      </mesh>
+    </group>
+  );
+};
+
+// BIRCH — white trunk, round crown. Adds high contrast to boreal/temperate.
+const Birch: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const hue = rng(seed);
+  const leafColor = hue < 0.5 ? '#86efac' : '#a3e635';
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.3, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.07, 0.6, 6]} />
+        <meshStandardMaterial color="#e2e8f0" roughness={0.6} />
+      </mesh>
+      {/* dark bark stripes */}
+      <mesh position={[0, 0.38, 0.065]}>
+        <boxGeometry args={[0.07, 0.03, 0.01]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <sphereGeometry args={[0.25, 10, 8]} />
+        <meshStandardMaterial color={leafColor} roughness={0.85} />
+      </mesh>
+    </group>
+  );
+};
+
+// CYPRESS — tall narrow spire. Mediterranean signature.
+const Cypress: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const tall = 1.1 + rng(seed) * 0.35;
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.08, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.06, 0.14, 6]} />
+        <meshStandardMaterial color="#5b4020" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.55 * tall, 0]} castShadow>
+        <coneGeometry args={[0.12, 1.0 * tall, 8]} />
+        <meshStandardMaterial color="#14532d" roughness={0.85} />
+      </mesh>
+    </group>
+  );
+};
+
+// OLIVE — squat, silver-green puffball. Mediterranean workhorse.
+const Olive: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const hue = rng(seed);
+  const color = hue < 0.5 ? '#84cc16' : '#a3a05c';
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.11, 0]} castShadow>
+        <cylinderGeometry args={[0.08, 0.1, 0.22, 6]} />
+        <meshStandardMaterial color="#5b4020" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.35, 0]} castShadow>
+        <sphereGeometry args={[0.28, 10, 6]} />
+        <meshStandardMaterial color={color} roughness={0.8} />
+      </mesh>
+      <mesh position={[0.15, 0.42, 0.05]} castShadow>
+        <sphereGeometry args={[0.15, 8, 6]} />
+        <meshStandardMaterial color={color} roughness={0.8} />
+      </mesh>
+    </group>
+  );
+};
+
+// UMBRELLA PINE — low wide canopy. Italian/Mediterranean hills.
+const UmbrellaPine: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.3, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 0.6, 6]} />
+        <meshStandardMaterial color="#5b4020" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <cylinderGeometry args={[0.35, 0.1, 0.2, 10]} />
+        <meshStandardMaterial color="#15803d" roughness={0.85} />
+      </mesh>
+    </group>
+  );
+};
+
+// DATE PALM — tall trunk, radial fronds. Egyptian/Mesopotamian signature.
+const DatePalm: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const tall = 1.0 + rng(seed) * 0.4;
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.35 * tall, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.07, 0.7 * tall, 6]} />
+        <meshStandardMaterial color="#78350f" roughness={0.95} />
+      </mesh>
+      <group position={[0, 0.7 * tall, 0]}>
+        {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+          <mesh key={i} rotation={[Math.PI / 2.6, (i * Math.PI * 2) / 7, 0]} castShadow>
+            <coneGeometry args={[0.07, 0.5, 4]} />
+            <meshStandardMaterial color="#65a30d" roughness={0.75} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+};
+
+// ACACIA — umbrella shape, golden. Arid / savanna. East Africa icon.
+const Acacia: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const hue = rng(seed);
+  const color = hue < 0.5 ? '#a16207' : '#ca8a04';
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.2, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 0.4, 6]} />
+        <meshStandardMaterial color="#78350f" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <cylinderGeometry args={[0.35, 0.15, 0.12, 10]} />
+        <meshStandardMaterial color={color} roughness={0.9} />
+      </mesh>
+      <mesh position={[0.08, 0.62, 0.02]} castShadow>
+        <cylinderGeometry args={[0.18, 0.1, 0.08, 8]} />
+        <meshStandardMaterial color={color} roughness={0.9} />
+      </mesh>
+    </group>
+  );
+};
+
+// BAOBAB — fat trunk, sparse crown. Savanna centerpiece.
+const Baobab: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <cylinderGeometry args={[0.18, 0.22, 0.5, 8]} />
+        <meshStandardMaterial color="#78350f" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <cylinderGeometry args={[0.28, 0.18, 0.1, 10]} />
+        <meshStandardMaterial color="#a3e635" roughness={0.9} />
+      </mesh>
+    </group>
+  );
+};
+
+// JUNGLE PALM — tall, broad canopy with many fronds. Tropical.
+const JunglePalm: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const tall = 1.0 + rng(seed) * 0.5;
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.4 * tall, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 0.8 * tall, 6]} />
+        <meshStandardMaterial color="#713f12" roughness={0.95} />
+      </mesh>
+      <group position={[0, 0.85 * tall, 0]}>
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <mesh key={i} rotation={[Math.PI / 2.8, (i * Math.PI * 2) / 9, 0]} castShadow>
+            <coneGeometry args={[0.09, 0.55, 4]} />
+            <meshStandardMaterial color="#15803d" roughness={0.75} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+};
+
+// BANYAN — wide spreading canopy with hanging roots. Indian subcontinent.
+const Banyan: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.15, 0]} castShadow>
+        <cylinderGeometry args={[0.14, 0.18, 0.3, 8]} />
+        <meshStandardMaterial color="#44352a" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]} castShadow>
+        <sphereGeometry args={[0.4, 10, 8]} />
+        <meshStandardMaterial color="#166534" roughness={0.85} />
+      </mesh>
+      {/* aerial roots */}
+      <mesh position={[0.22, 0.28, 0]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.3, 4]} />
+        <meshStandardMaterial color="#3f2e20" />
+      </mesh>
+      <mesh position={[-0.18, 0.3, 0.1]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.3, 4]} />
+        <meshStandardMaterial color="#3f2e20" />
+      </mesh>
+    </group>
+  );
+};
+
+// FIR — tighter, taller cone than pine. Alpine.
+const Fir: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
+  const tall = 1.2 + rng(seed) * 0.25;
+  return (
+    <group scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.08, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 0.16, 6]} />
+        <meshStandardMaterial color="#44352a" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.55 * tall, 0]} castShadow>
+        <coneGeometry args={[0.22, 0.9 * tall, 8]} />
+        <meshStandardMaterial color="#064e3b" roughness={0.85} />
+      </mesh>
+    </group>
+  );
+};
+
+// Maps each climate to a weighted list of species. The weights are
+// reflected by how many times an entry appears in the array.
+type SpeciesName =
+  | 'oak' | 'pine' | 'birch' | 'cypress' | 'olive' | 'umbrellaPine'
+  | 'datePalm' | 'acacia' | 'baobab' | 'junglePalm' | 'banyan' | 'fir';
+
+const SPECIES_BY_CLIMATE: Record<ClimateZone, SpeciesName[]> = {
+  // Mixed European / Chinese deciduous: oak-heavy, pine, occasional birch.
+  temperate: ['oak', 'oak', 'oak', 'pine', 'pine', 'birch'],
+  // Olives dominate, cypress signatures, umbrella pines on hills.
+  mediterranean: ['olive', 'olive', 'cypress', 'cypress', 'umbrellaPine'],
+  // Sparse palms + acacia, occasional baobab.
+  arid: ['datePalm', 'datePalm', 'acacia', 'acacia'],
+  // Dense jungle — palms, banyans, tall canopy.
+  tropical: ['junglePalm', 'junglePalm', 'banyan', 'banyan', 'oak'],
+  // Pines dominate, birches for contrast, occasional fir.
+  boreal: ['pine', 'pine', 'pine', 'birch', 'birch', 'fir'],
+  // Scattered baobabs + acacia umbrellas.
+  savanna: ['acacia', 'acacia', 'baobab', 'acacia', 'baobab'],
+  // Firs and pines, a rare birch.
+  alpine: ['fir', 'fir', 'pine', 'pine', 'birch'],
+  // Mixed broadleaf + conifer + acacia: Ethiopian/Andean diversity.
+  highland: ['oak', 'pine', 'acacia', 'fir', 'olive'],
+};
+
+const SPECIES_COMPONENTS: Record<SpeciesName, React.FC<SpeciesProps>> = {
+  oak: Oak, pine: Pine, birch: Birch, cypress: Cypress, olive: Olive,
+  umbrellaPine: UmbrellaPine, datePalm: DatePalm, acacia: Acacia,
+  baobab: Baobab, junglePalm: JunglePalm, banyan: Banyan, fir: Fir,
+};
+
+// Picks a species from the climate's weighted list based on a seed.
+const pickSpecies = (climate: ClimateZone, seed: number): SpeciesName => {
+  const list = SPECIES_BY_CLIMATE[climate] || SPECIES_BY_CLIMATE.temperate;
+  const idx = Math.floor(rng(seed) * list.length);
+  return list[idx];
+};
+
+// Renders a single climate-appropriate tree, random species picked by seed.
+const Tree: React.FC<{ climate: ClimateZone; seed: number; scale?: number }> = ({ climate, seed, scale = 1 }) => {
+  const species = pickSpecies(climate, seed);
+  const Component = SPECIES_COMPONENTS[species];
+  return <Component seed={seed} scale={scale} />;
+};
+
+// ---------- Ground dressing ----------
+// Climate-specific decor that appears on plains/grassland to give each
+// biome a distinct "vibe" even when there's no forest tile.
+
+// A small rock — gray pyramid. Used across many climates.
+const Rock: React.FC<{ pos: [number, number]; tone?: 'gray' | 'red' | 'sand' }> = ({ pos, tone = 'gray' }) => {
+  const color = tone === 'red' ? '#b45309' : tone === 'sand' ? '#d6a86c' : '#9ca3af';
+  return (
+    <mesh position={[pos[0], 0, pos[1]]} castShadow rotation={[0.2, rng(pos[0] + pos[1]) * 6, 0.1]}>
+      <coneGeometry args={[0.11, 0.14, 5]} />
+      <meshStandardMaterial color={color} roughness={0.95} flatShading />
+    </mesh>
+  );
+};
+
+// A grass tuft — small green cone cluster.
+const GrassTuft: React.FC<{ pos: [number, number]; color?: string }> = ({ pos, color = '#65a30d' }) => (
+  <group position={[pos[0], 0, pos[1]]}>
+    <mesh position={[0, 0.06, 0]}>
+      <coneGeometry args={[0.05, 0.12, 4]} />
+      <meshStandardMaterial color={color} roughness={0.9} />
+    </mesh>
+    <mesh position={[0.04, 0.05, 0.03]}>
+      <coneGeometry args={[0.04, 0.1, 4]} />
+      <meshStandardMaterial color={color} roughness={0.9} />
+    </mesh>
+    <mesh position={[-0.03, 0.055, 0.02]}>
+      <coneGeometry args={[0.04, 0.11, 4]} />
+      <meshStandardMaterial color={color} roughness={0.9} />
+    </mesh>
+  </group>
+);
+
+// A cactus — three segment saguaro.
+const Cactus: React.FC<{ pos: [number, number] }> = ({ pos }) => (
+  <group position={[pos[0], 0, pos[1]]}>
+    <mesh position={[0, 0.15, 0]} castShadow>
+      <cylinderGeometry args={[0.06, 0.08, 0.3, 6]} />
+      <meshStandardMaterial color="#15803d" roughness={0.85} />
+    </mesh>
+    <mesh position={[0.1, 0.18, 0]} rotation={[0, 0, -0.4]} castShadow>
+      <cylinderGeometry args={[0.04, 0.05, 0.15, 5]} />
+      <meshStandardMaterial color="#15803d" roughness={0.85} />
+    </mesh>
+    <mesh position={[-0.08, 0.2, 0]} rotation={[0, 0, 0.3]} castShadow>
+      <cylinderGeometry args={[0.04, 0.05, 0.14, 5]} />
+      <meshStandardMaterial color="#15803d" roughness={0.85} />
+    </mesh>
+  </group>
+);
+
+// A flower patch — tiny colored sphere on a stem. Cheerful highland/
+// temperate meadow detail.
+const Flower: React.FC<{ pos: [number, number]; color?: string }> = ({ pos, color = '#f472b6' }) => (
+  <group position={[pos[0], 0, pos[1]]}>
+    <mesh position={[0, 0.05, 0]}>
+      <cylinderGeometry args={[0.01, 0.01, 0.1, 4]} />
+      <meshStandardMaterial color="#65a30d" />
+    </mesh>
+    <mesh position={[0, 0.11, 0]}>
+      <sphereGeometry args={[0.035, 6, 5]} />
+      <meshStandardMaterial color={color} roughness={0.6} />
+    </mesh>
+  </group>
+);
+
+// Reeds for marsh/river edges.
+const Reeds: React.FC<{ pos: [number, number] }> = ({ pos }) => (
+  <group position={[pos[0], 0, pos[1]]}>
+    {[0, 1, 2, 3].map((i) => (
+      <mesh key={i} position={[(i - 1.5) * 0.04, 0.1, 0]}>
+        <cylinderGeometry args={[0.008, 0.008, 0.2, 4]} />
+        <meshStandardMaterial color="#365314" roughness={0.9} />
+      </mesh>
+    ))}
+  </group>
+);
+
+// A low scrub bush — for arid/mediterranean hills.
+const Scrub: React.FC<{ pos: [number, number]; tone?: string }> = ({ pos, tone = '#84cc16' }) => (
+  <group position={[pos[0], 0, pos[1]]}>
+    <mesh position={[0, 0.08, 0]}>
+      <sphereGeometry args={[0.1, 7, 5]} />
+      <meshStandardMaterial color={tone} roughness={0.9} />
+    </mesh>
+    <mesh position={[0.06, 0.06, 0.04]}>
+      <sphereGeometry args={[0.07, 6, 5]} />
+      <meshStandardMaterial color={tone} roughness={0.9} />
+    </mesh>
+  </group>
+);
+
+// A pile of rocks — 2-3 stones stacked. Alpine/boreal.
+const RockPile: React.FC<{ pos: [number, number] }> = ({ pos }) => (
+  <group position={[pos[0], 0, pos[1]]}>
+    <mesh position={[0, 0.05, 0]} castShadow>
+      <coneGeometry args={[0.13, 0.1, 5]} />
+      <meshStandardMaterial color="#78716c" roughness={0.95} flatShading />
+    </mesh>
+    <mesh position={[0.08, 0.14, 0.03]} rotation={[0.3, 0.4, 0]} castShadow>
+      <coneGeometry args={[0.07, 0.1, 5]} />
+      <meshStandardMaterial color="#9ca3af" roughness={0.95} flatShading />
+    </mesh>
+  </group>
+);
+
+// Climate + terrain → ground dressing renderer. Returns up to ~4 elements
+// so we never drown the tile in clutter.
+const GroundDressing: React.FC<{ climate: ClimateZone; terrain: TerrainType; seed: number }> = ({
+  climate, terrain, seed,
+}) => {
+  // Determine density: more on Grassland than Plains, none on water.
+  if (
+    terrain === TerrainType.Ocean ||
+    terrain === TerrainType.River ||
+    terrain === TerrainType.HighMountain
+  ) {
+    return null;
+  }
+
+  const elements: React.ReactNode[] = [];
+
+  // Marsh gets reeds regardless of climate.
+  if (terrain === TerrainType.Marsh) {
+    elements.push(<Reeds key="r1" pos={[0.2, 0.2]} />);
+    elements.push(<Reeds key="r2" pos={[-0.2, -0.1]} />);
+    if (climate === 'tropical') elements.push(<JunglePalm key="jp" seed={seed + 7} scale={0.5} />);
+    return <group position={[0, 0.25, 0]}>{elements}</group>;
+  }
+
+  // Desert tiles — always sparse.
+  if (terrain === TerrainType.Desert) {
+    if (climate === 'arid') {
+      // Sand + rocks + occasional palm + cactus.
+      elements.push(<Rock key="r1" pos={[0.2, -0.1]} tone="sand" />);
+      elements.push(<Rock key="r2" pos={[-0.25, 0.15]} tone="sand" />);
+      if (rng(seed + 3) > 0.6) {
+        elements.push(<DatePalm key="dp" seed={seed + 1} scale={0.5} />);
+      } else if (rng(seed + 4) > 0.6) {
+        elements.push(<Cactus key="c" pos={[0, 0]} />);
+      }
+    } else if (climate === 'savanna') {
+      elements.push(<GrassTuft key="g1" pos={[0.2, 0.1]} color="#a16207" />);
+      elements.push(<GrassTuft key="g2" pos={[-0.15, -0.15]} color="#a16207" />);
+      elements.push(<Rock key="r" pos={[0.1, 0.2]} tone="red" />);
+    } else {
+      elements.push(<Rock key="r1" pos={[0.15, 0.1]} tone="sand" />);
+    }
+    return <group position={[0, 0.25, 0]}>{elements}</group>;
+  }
+
+  // Plains & Grassland — the main canvas for climate flavor.
+  if (terrain === TerrainType.Plains || terrain === TerrainType.Grassland) {
+    switch (climate) {
+      case 'temperate':
+        elements.push(<GrassTuft key="g1" pos={[0.2, 0.15]} />);
+        if (rng(seed) > 0.5) elements.push(<Flower key="f" pos={[-0.15, 0.1]} color="#facc15" />);
+        if (rng(seed + 1) > 0.7) elements.push(<Oak key="t" seed={seed} scale={0.5} />);
+        break;
+      case 'mediterranean':
+        elements.push(<Scrub key="s1" pos={[0.2, -0.15]} tone="#84cc16" />);
+        elements.push(<Rock key="r" pos={[-0.2, 0.2]} />);
+        if (rng(seed + 2) > 0.5) elements.push(<Olive key="o" seed={seed} scale={0.55} />);
+        if (rng(seed + 3) > 0.7) elements.push(<Flower key="f" pos={[0, 0.1]} color="#a855f7" />);
+        break;
+      case 'arid':
+        elements.push(<Rock key="r1" pos={[0.18, -0.1]} tone="sand" />);
+        elements.push(<Scrub key="s" pos={[-0.12, 0.15]} tone="#a3a05c" />);
+        if (rng(seed + 3) > 0.65) elements.push(<DatePalm key="dp" seed={seed} scale={0.55} />);
+        if (rng(seed + 4) > 0.75) elements.push(<Cactus key="c" pos={[0.05, 0.2]} />);
+        break;
+      case 'tropical':
+        elements.push(<GrassTuft key="g1" pos={[0.2, 0.15]} color="#15803d" />);
+        elements.push(<GrassTuft key="g2" pos={[-0.2, -0.1]} color="#15803d" />);
+        if (rng(seed + 2) > 0.4) elements.push(<JunglePalm key="jp" seed={seed} scale={0.55} />);
+        if (rng(seed + 5) > 0.6) elements.push(<Flower key="f" pos={[0.1, -0.2]} color="#f97316" />);
+        break;
+      case 'boreal':
+        elements.push(<RockPile key="rp" pos={[0.22, -0.1]} />);
+        elements.push(<GrassTuft key="g" pos={[-0.2, 0.15]} color="#4d7c0f" />);
+        if (rng(seed + 2) > 0.5) elements.push(<Pine key="p" seed={seed} scale={0.55} />);
+        break;
+      case 'savanna':
+        elements.push(<GrassTuft key="g1" pos={[0.22, 0.1]} color="#a16207" />);
+        elements.push(<GrassTuft key="g2" pos={[-0.18, -0.15]} color="#a16207" />);
+        elements.push(<GrassTuft key="g3" pos={[0.0, 0.2]} color="#ca8a04" />);
+        if (rng(seed + 2) > 0.55) elements.push(<Acacia key="a" seed={seed} scale={0.55} />);
+        if (rng(seed + 4) > 0.85) elements.push(<Baobab key="b" seed={seed} scale={0.55} />);
+        break;
+      case 'alpine':
+        elements.push(<RockPile key="rp" pos={[0.2, 0.1]} />);
+        elements.push(<Flower key="f" pos={[-0.15, -0.1]} color="#60a5fa" />);
+        if (rng(seed + 2) > 0.5) elements.push(<Fir key="fir" seed={seed} scale={0.55} />);
+        break;
+      case 'highland':
+        elements.push(<GrassTuft key="g" pos={[0.2, 0.15]} color="#4d7c0f" />);
+        elements.push(<Flower key="f1" pos={[-0.2, 0.1]} color="#facc15" />);
+        elements.push(<Flower key="f2" pos={[0.1, -0.2]} color="#f472b6" />);
+        if (rng(seed + 2) > 0.5) elements.push(<Acacia key="a" seed={seed} scale={0.5} />);
+        break;
+    }
+  }
+
+  return <group position={[0, 0.25, 0]}>{elements}</group>;
 };
 
 interface HexTileProps {
@@ -179,42 +615,63 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
          </mesh>
       )}
 
-      {/* Forest Details — now climate-aware. Arid civs get date palms,
-          Germania gets boreal pines, Khmer gets jungle palms, etc. */}
-      {terrain === TerrainType.Forest && (
-        <group position={[0, 0.5, 0]}>
-            {[
-                { x: -0.3, z: -0.2, s: 0.8, seed: 1 },
-                { x: 0.3, z: 0.1, s: 1, seed: 2 },
-                { x: -0.1, z: 0.4, s: 0.7, seed: 3 }
-            ].map((tree, i) => (
-                <group key={i} position={[tree.x, 0, tree.z]} scale={[tree.s, tree.s, tree.s]}>
-                    <Tree climate={climate} seed={tree.seed + x * 7 + z * 3} />
-                </group>
+      {/* Forest Details — mixed species forest. Each tree independently
+          picks a species from the climate's weighted pool, so a Germanic
+          forest tile shows a mix of pines and birches while a Khmer
+          forest shows jungle palms, banyans, and the occasional
+          broadleaf. Density scales with climate's biodiversity. */}
+      {terrain === TerrainType.Forest && (() => {
+        const tileSeed = Math.floor(x * 31 + z * 17);
+        // Dense climates (tropical, temperate, boreal) get 4 trees,
+        // sparse climates (arid, savanna) get 2-3.
+        const dense = climate === 'tropical' || climate === 'temperate' || climate === 'boreal' || climate === 'alpine';
+        const sparse = climate === 'arid' || climate === 'savanna';
+        const slots = dense
+          ? [
+              { x: -0.3, z: -0.25, s: 0.85, seed: 11 },
+              { x: 0.3, z: 0.1, s: 1.0, seed: 22 },
+              { x: -0.1, z: 0.35, s: 0.75, seed: 33 },
+              { x: 0.25, z: -0.35, s: 0.7, seed: 44 },
+            ]
+          : sparse
+            ? [
+                { x: -0.2, z: -0.1, s: 0.85, seed: 11 },
+                { x: 0.25, z: 0.2, s: 0.75, seed: 22 },
+              ]
+            : [
+                { x: -0.3, z: -0.2, s: 0.85, seed: 11 },
+                { x: 0.3, z: 0.1, s: 1.0, seed: 22 },
+                { x: -0.05, z: 0.35, s: 0.75, seed: 33 },
+              ];
+        return (
+          <group position={[0, 0.25, 0]}>
+            {slots.map((tree, i) => (
+              <group key={i} position={[tree.x, 0, tree.z]}>
+                <Tree climate={climate} seed={tree.seed + tileSeed} scale={tree.s} />
+              </group>
             ))}
-        </group>
-      )}
+            {/* Forest floor detail — a grass tuft or rock to fill space. */}
+            {rng(tileSeed) > 0.4 && (
+              <GrassTuft
+                pos={[0.15, -0.3]}
+                color={climate === 'tropical' ? '#15803d' : climate === 'boreal' ? '#4d7c0f' : climate === 'arid' || climate === 'savanna' ? '#a16207' : '#65a30d'}
+              />
+            )}
+          </group>
+        );
+      })()}
 
-      {/* Arid & Savanna climates get sparse ground dressing even on non-forest
-          tiles — a little cluster of scrub/grass suggests the environment. */}
-      {(climate === 'arid' || climate === 'savanna') && terrain === TerrainType.Plains && (
-        <group position={[0, 0.3, 0]}>
-          <mesh position={[0.15, 0, 0.2]}>
-            <coneGeometry args={[0.08, 0.15, 5]} />
-            <meshStandardMaterial color={climate === 'arid' ? '#ca8a04' : '#a16207'} roughness={0.95} />
-          </mesh>
-          <mesh position={[-0.2, 0, -0.1]}>
-            <coneGeometry args={[0.07, 0.12, 5]} />
-            <meshStandardMaterial color={climate === 'arid' ? '#a3a05c' : '#84611f'} roughness={0.95} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Tropical tiles get a hint of undergrowth on grassland/plains. */}
-      {climate === 'tropical' && (terrain === TerrainType.Grassland || terrain === TerrainType.Plains) && (
-        <group position={[0.2, 0.3, 0.2]} scale={[0.6, 0.6, 0.6]}>
-          <Tree climate="tropical" seed={x * 13 + z * 5} />
-        </group>
+      {/* Non-forest ground dressing — plains, grassland, desert, marsh
+          all get climate-appropriate props so each biome feels alive. */}
+      {(terrain === TerrainType.Plains ||
+        terrain === TerrainType.Grassland ||
+        terrain === TerrainType.Desert ||
+        terrain === TerrainType.Marsh) && (
+        <GroundDressing
+          climate={climate}
+          terrain={terrain}
+          seed={Math.floor(x * 31 + z * 17)}
+        />
       )}
 
       {/* Mountain Peaks */}
