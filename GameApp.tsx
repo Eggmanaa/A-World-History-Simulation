@@ -3169,6 +3169,18 @@ const App: React.FC = () => {
     }));
   };
 
+  // Memoized climate for the 3D map. Recomputes only when the civ preset
+  // changes, not on every GameApp re-render. This lets MapScene and its
+  // memoized children skip work when only unrelated state updates.
+  // MUST be declared before any early return — React hooks rule.
+  const mapClimate = useMemo(() => {
+    const id = gameState.civilization?.presetId;
+    const preset = CIV_PRESETS.find((c) => c.id === id);
+    if (preset?.climate) return preset.climate;
+    const respawn = RESPAWN_CIVS.find((c) => c.id === id);
+    return respawn?.climate || 'temperate';
+  }, [gameState.civilization?.presetId]);
+
   // --- RENDER HELPERS ---
 
   if (!gameState.hasStarted) {
@@ -3241,17 +3253,6 @@ const App: React.FC = () => {
   }
 
   const { civilization: civ } = gameState;
-
-  // Memoized climate for the 3D map. Recomputes only when the civ preset
-  // changes, not on every GameApp re-render. This lets MapScene and its
-  // memoized children skip work when only unrelated state updates.
-  const mapClimate = useMemo(() => {
-    const id = gameState.civilization?.presetId;
-    const preset = CIV_PRESETS.find((c) => c.id === id);
-    if (preset?.climate) return preset.climate;
-    const respawn = RESPAWN_CIVS.find((c) => c.id === id);
-    return respawn?.climate || 'temperate';
-  }, [gameState.civilization?.presetId]);
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative">
