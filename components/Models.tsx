@@ -36,6 +36,13 @@ const HEX_SIDE_MATERIAL = new THREE.MeshBasicMaterial({
 // Performance: all geometry is primitive (cone / sphere / cylinder /
 // torus) and trees top out at ~5 sub-meshes each. A fully dressed
 // forest tile renders ~20 meshes, which is well within budget.
+//
+// SHADOW BUDGET: these decorative meshes (tree crowns, grass, flowers,
+// small rocks) intentionally DO NOT cast shadows — at a 45° board-game
+// camera their self-shadows are invisible, but each castShadow mesh
+// doubles the directional light's shadow-pass draw count. Only trunks
+// and load-bearing structures (buildings, mountain peaks, hex tiles)
+// cast shadows. That's what keeps the civilization map smooth on iPad.
 
 // Stable pseudo-random 0..1 from an integer seed.
 const rng = (seed: number) => {
@@ -59,11 +66,11 @@ const Oak: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.1, 0.12, 0.3, 7]} />
         <meshStandardMaterial color="#3f2e20" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.55, 0]} castShadow>
+      <mesh position={[0, 0.55, 0]}>
         <sphereGeometry args={[0.35, 10, 8]} />
         <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
-      <mesh position={[0.1, 0.7, 0.1]} castShadow>
+      <mesh position={[0.1, 0.7, 0.1]}>
         <sphereGeometry args={[0.22, 8, 7]} />
         <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
@@ -82,11 +89,11 @@ const Pine: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.07, 0.09, 0.2, 6]} />
         <meshStandardMaterial color="#44352a" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.5 * tall, 0]} castShadow>
+      <mesh position={[0, 0.5 * tall, 0]}>
         <coneGeometry args={[0.3, 0.55 * tall, 8]} />
         <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
-      <mesh position={[0, 0.85 * tall, 0]} castShadow>
+      <mesh position={[0, 0.85 * tall, 0]}>
         <coneGeometry args={[0.22, 0.4 * tall, 8]} />
         <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
@@ -109,7 +116,7 @@ const Birch: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <boxGeometry args={[0.07, 0.03, 0.01]} />
         <meshStandardMaterial color="#1f2937" />
       </mesh>
-      <mesh position={[0, 0.7, 0]} castShadow>
+      <mesh position={[0, 0.7, 0]}>
         <sphereGeometry args={[0.25, 10, 8]} />
         <meshStandardMaterial color={leafColor} roughness={0.85} />
       </mesh>
@@ -126,7 +133,7 @@ const Cypress: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.05, 0.06, 0.14, 6]} />
         <meshStandardMaterial color="#5b4020" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.55 * tall, 0]} castShadow>
+      <mesh position={[0, 0.55 * tall, 0]}>
         <coneGeometry args={[0.12, 1.0 * tall, 8]} />
         <meshStandardMaterial color="#14532d" roughness={0.85} />
       </mesh>
@@ -144,11 +151,11 @@ const Olive: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.08, 0.1, 0.22, 6]} />
         <meshStandardMaterial color="#5b4020" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.35, 0]} castShadow>
+      <mesh position={[0, 0.35, 0]}>
         <sphereGeometry args={[0.28, 10, 6]} />
         <meshStandardMaterial color={color} roughness={0.8} />
       </mesh>
-      <mesh position={[0.15, 0.42, 0.05]} castShadow>
+      <mesh position={[0.15, 0.42, 0.05]}>
         <sphereGeometry args={[0.15, 8, 6]} />
         <meshStandardMaterial color={color} roughness={0.8} />
       </mesh>
@@ -164,7 +171,7 @@ const UmbrellaPine: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.06, 0.08, 0.6, 6]} />
         <meshStandardMaterial color="#5b4020" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.7, 0]} castShadow>
+      <mesh position={[0, 0.7, 0]}>
         <cylinderGeometry args={[0.35, 0.1, 0.2, 10]} />
         <meshStandardMaterial color="#15803d" roughness={0.85} />
       </mesh>
@@ -183,7 +190,7 @@ const DatePalm: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
       </mesh>
       <group position={[0, 0.7 * tall, 0]}>
         {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-          <mesh key={i} rotation={[Math.PI / 2.6, (i * Math.PI * 2) / 7, 0]} castShadow>
+          <mesh key={i} rotation={[Math.PI / 2.6, (i * Math.PI * 2) / 7, 0]}>
             <coneGeometry args={[0.07, 0.5, 4]} />
             <meshStandardMaterial color="#65a30d" roughness={0.75} />
           </mesh>
@@ -203,11 +210,11 @@ const Acacia: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.06, 0.08, 0.4, 6]} />
         <meshStandardMaterial color="#78350f" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.55, 0]} castShadow>
+      <mesh position={[0, 0.55, 0]}>
         <cylinderGeometry args={[0.35, 0.15, 0.12, 10]} />
         <meshStandardMaterial color={color} roughness={0.9} />
       </mesh>
-      <mesh position={[0.08, 0.62, 0.02]} castShadow>
+      <mesh position={[0.08, 0.62, 0.02]}>
         <cylinderGeometry args={[0.18, 0.1, 0.08, 8]} />
         <meshStandardMaterial color={color} roughness={0.9} />
       </mesh>
@@ -223,7 +230,7 @@ const Baobab: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.18, 0.22, 0.5, 8]} />
         <meshStandardMaterial color="#78350f" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.55, 0]} castShadow>
+      <mesh position={[0, 0.55, 0]}>
         <cylinderGeometry args={[0.28, 0.18, 0.1, 10]} />
         <meshStandardMaterial color="#a3e635" roughness={0.9} />
       </mesh>
@@ -242,7 +249,7 @@ const JunglePalm: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
       </mesh>
       <group position={[0, 0.85 * tall, 0]}>
         {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-          <mesh key={i} rotation={[Math.PI / 2.8, (i * Math.PI * 2) / 9, 0]} castShadow>
+          <mesh key={i} rotation={[Math.PI / 2.8, (i * Math.PI * 2) / 9, 0]}>
             <coneGeometry args={[0.09, 0.55, 4]} />
             <meshStandardMaterial color="#15803d" roughness={0.75} />
           </mesh>
@@ -260,7 +267,7 @@ const Banyan: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.14, 0.18, 0.3, 8]} />
         <meshStandardMaterial color="#44352a" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.5, 0]} castShadow>
+      <mesh position={[0, 0.5, 0]}>
         <sphereGeometry args={[0.4, 10, 8]} />
         <meshStandardMaterial color="#166534" roughness={0.85} />
       </mesh>
@@ -286,7 +293,7 @@ const Fir: React.FC<SpeciesProps> = ({ seed, scale = 1 }) => {
         <cylinderGeometry args={[0.06, 0.08, 0.16, 6]} />
         <meshStandardMaterial color="#44352a" roughness={0.95} />
       </mesh>
-      <mesh position={[0, 0.55 * tall, 0]} castShadow>
+      <mesh position={[0, 0.55 * tall, 0]}>
         <coneGeometry args={[0.22, 0.9 * tall, 8]} />
         <meshStandardMaterial color="#064e3b" roughness={0.85} />
       </mesh>
@@ -347,7 +354,7 @@ const Tree: React.FC<{ climate: ClimateZone; seed: number; scale?: number }> = (
 const Rock: React.FC<{ pos: [number, number]; tone?: 'gray' | 'red' | 'sand' }> = ({ pos, tone = 'gray' }) => {
   const color = tone === 'red' ? '#b45309' : tone === 'sand' ? '#d6a86c' : '#9ca3af';
   return (
-    <mesh position={[pos[0], 0, pos[1]]} castShadow rotation={[0.2, rng(pos[0] + pos[1]) * 6, 0.1]}>
+    <mesh position={[pos[0], 0, pos[1]]} rotation={[0.2, rng(pos[0] + pos[1]) * 6, 0.1]}>
       <coneGeometry args={[0.11, 0.14, 5]} />
       <meshStandardMaterial color={color} roughness={0.95} flatShading />
     </mesh>
@@ -375,15 +382,15 @@ const GrassTuft: React.FC<{ pos: [number, number]; color?: string }> = ({ pos, c
 // A cactus — three segment saguaro.
 const Cactus: React.FC<{ pos: [number, number] }> = ({ pos }) => (
   <group position={[pos[0], 0, pos[1]]}>
-    <mesh position={[0, 0.15, 0]} castShadow>
+    <mesh position={[0, 0.15, 0]}>
       <cylinderGeometry args={[0.06, 0.08, 0.3, 6]} />
       <meshStandardMaterial color="#15803d" roughness={0.85} />
     </mesh>
-    <mesh position={[0.1, 0.18, 0]} rotation={[0, 0, -0.4]} castShadow>
+    <mesh position={[0.1, 0.18, 0]} rotation={[0, 0, -0.4]}>
       <cylinderGeometry args={[0.04, 0.05, 0.15, 5]} />
       <meshStandardMaterial color="#15803d" roughness={0.85} />
     </mesh>
-    <mesh position={[-0.08, 0.2, 0]} rotation={[0, 0, 0.3]} castShadow>
+    <mesh position={[-0.08, 0.2, 0]} rotation={[0, 0, 0.3]}>
       <cylinderGeometry args={[0.04, 0.05, 0.14, 5]} />
       <meshStandardMaterial color="#15803d" roughness={0.85} />
     </mesh>
@@ -434,11 +441,11 @@ const Scrub: React.FC<{ pos: [number, number]; tone?: string }> = ({ pos, tone =
 // A pile of rocks — 2-3 stones stacked. Alpine/boreal.
 const RockPile: React.FC<{ pos: [number, number] }> = ({ pos }) => (
   <group position={[pos[0], 0, pos[1]]}>
-    <mesh position={[0, 0.05, 0]} castShadow>
+    <mesh position={[0, 0.05, 0]}>
       <coneGeometry args={[0.13, 0.1, 5]} />
       <meshStandardMaterial color="#78716c" roughness={0.95} flatShading />
     </mesh>
-    <mesh position={[0.08, 0.14, 0.03]} rotation={[0.3, 0.4, 0]} castShadow>
+    <mesh position={[0.08, 0.14, 0.03]} rotation={[0.3, 0.4, 0]}>
       <coneGeometry args={[0.07, 0.1, 5]} />
       <meshStandardMaterial color="#9ca3af" roughness={0.95} flatShading />
     </mesh>
@@ -852,12 +859,22 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
     metalness: matMetalness,
     emissive: new THREE.Color(matEmissive),
     emissiveIntensity: matEmissiveIntensity,
+    // polygonOffset biases the depth test so overlapping top caps never
+    // Z-fight with neighbours. Without this, the scale fudge alone cannot
+    // guarantee which face wins at the depth buffer's precision limit,
+    // which is what caused the strobing flicker after commit 85e8aef.
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   }), [isHovered, terrainColor, matRoughness, matMetalness, matEmissive, matEmissiveIntensity]);
 
   const bottomMat = React.useMemo(() => new THREE.MeshStandardMaterial({
     color: isHovered ? '#d1d5db' : terrainColor,
     roughness: 1,
     metalness: 0,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   }), [isHovered, terrainColor]);
 
   const materials = React.useMemo(
@@ -867,15 +884,16 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
 
   return (
     <group position={[x, yPos, z]}>
-      {/* Single hex cylinder with transparent sides.  Scaled ~4% wider
-          so top faces overlap neighbours — but because the side material
-          is invisible, no side-face Z-fighting occurs.  Only the flat
-          top caps compete at boundaries, and polygonOffset resolves that. */}
+      {/* Single hex cylinder with transparent sides. Scale is 1.0 —
+          the ground plane at y=-0.3 hides any hair-thin seam gaps, and
+          polygonOffset on the top/bottom materials keeps adjacent tiles
+          from Z-fighting. Earlier scale=1.04 overlap created coplanar
+          top-cap collisions that the depth buffer couldn't resolve. */}
       <mesh
         geometry={hexGeometry}
         material={materials}
         onClick={(e) => { e.stopPropagation(); onClick(); }}
-        scale={[1.04, height, 1.04]}
+        scale={[1.0, height, 1.0]}
         receiveShadow
         castShadow
       />

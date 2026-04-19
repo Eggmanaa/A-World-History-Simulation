@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import {
   Home,
@@ -44,8 +44,10 @@ import {
   TECHNOLOGIES,
   CULTURAL_STAGE_MULTIPLIERS,
   CULTURAL_STAGE_THRESHOLDS,
-  VICTORY_CONDITIONS,
+  SCORING_TRACKS,
+  calculateFinalScore,
 } from "./constants";
+import { LiveLeaderboard } from "./components/LiveLeaderboard";
 import {
   TileData,
   TerrainType,
@@ -150,7 +152,7 @@ const STAT_EXPLANATIONS: Record<string, {
       'Trait bonus: Strength doubles your Martial total.',
       'Cultural Stages (Imperial/Modern) scale Martial.',
     ],
-    affects: ['Attack rolls (vs target Martial)', 'Raid mitigation each turn', 'Conquest victory progress'],
+    affects: ['Attack rolls (vs target Martial)', 'Raid mitigation each turn', 'Conquest score (8 pts per decisive conquest)'],
   },
   faith: {
     title: 'Faith',
@@ -165,7 +167,7 @@ const STAT_EXPLANATIONS: Record<string, {
   },
   culture: {
     title: 'Culture',
-    body: 'Arts, customs, and identity. Drives progression through Cultural Stages and contributes directly to the Legacy victory score. Also grants passive Cultural Prestige bonuses to Martial and Diplomacy.',
+    body: 'Arts, customs, and identity. Drives progression through Cultural Stages and contributes directly to the Legacy score track. Also grants passive Cultural Prestige bonuses to Martial and Diplomacy.',
     raise: [
       'Develop action: +Culture Yield and +2 per Amphitheatre.',
       'Amphitheatres give +3 base Culture.',
@@ -175,11 +177,11 @@ const STAT_EXPLANATIONS: Record<string, {
       'Cultural treaties: +2 Culture per active treaty.',
       'Trait bonus: Creativity doubles Culture.',
     ],
-    affects: ['Cultural Stage progression', 'Legacy victory score', 'Cultural Prestige passive bonuses (Martial, Diplomacy)'],
+    affects: ['Cultural Stage progression', 'Legacy score track', 'Cultural Prestige passive bonuses (Martial, Diplomacy)'],
   },
   science: {
     title: 'Science',
-    body: 'Your civilization\'s knowledge. Reaching science thresholds permanently unlocks stat bonuses and abilities like siege engineering. Contributes to the Innovation victory score.',
+    body: 'Your civilization\'s knowledge. Reaching science thresholds permanently unlocks stat bonuses and abilities like siege engineering. Contributes to the Innovation score track.',
     raise: [
       'Research action: +Science Yield and +2 per Library.',
       'Libraries give +2 yield on Research.',
@@ -188,7 +190,7 @@ const STAT_EXPLANATIONS: Record<string, {
       'Trait bonus: Intelligence doubles Science.',
       'Cultural Stages (Classical/Enlightenment/Modern) scale Science heavily.',
     ],
-    affects: ['Science unlock milestones (every 5–80)', 'Wall-bypass in combat (30+)', 'Innovation victory'],
+    affects: ['Science unlock milestones (every 5–80)', 'Wall-bypass in combat (30+)', 'Innovation score track'],
   },
   diplomacy: {
     title: 'Diplomacy',
@@ -617,16 +619,18 @@ const calculateStats = (
       const tech = TECHNOLOGIES.find((t) => t.id === techId);
       if (!tech) return;
 
+      // STRUCTURAL tech effects (reapplied each render — safe because the
+      // base values are re-derived from civData.baseStats every call).
       if (tech.effect === "martial_2x") martial *= 2;
       if (tech.effect === "martial_3x") martial *= 3;
-      if (tech.effect === "science_bonus_3") science += 3;
-      if (tech.effect === "science_bonus_5") science += 5;
       if (tech.effect === "industry_bonus_5") industry += 5;
-      if (tech.effect === "faith_to_science") {
-        const faithConvert = Math.floor(faith * 0.25);
-        science += faithConvert;
-        faith -= faithConvert;
-      }
+
+      // ACCUMULATING tech effects (science_bonus_3, science_bonus_5,
+      // faith_to_science) are intentionally NOT applied here. Mutating the
+      // accumulating totals (science/faith) inside calculateStats causes
+      // them to compound every render. These tech bonuses are applied
+      // ONCE at the moment the tech is unlocked, inside processTimelineEvent.
+      // See the STAT DERIVATION CONTRACT above.
     });
   }
 
@@ -721,7 +725,7 @@ const App: React.FC = () => {
   // --- STATE ---
   const [tiles, setTiles] = useState<TileData[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "build" | "science" | "culture" | "world" | "wonders" | "religion" | "war" | "victory" | "scoreboard"
+    "build" | "science" | "culture" | "world" | "wonders" | "religion" | "war" | "scoreboard"
   >("build");
   // Tracks which stat/block in the left sidebar is currently expanded for
   // its rich explanation. null = nothing expanded. Click again to collapse.
@@ -1227,6 +1231,24 @@ const App: React.FC = () => {
           return; // Skip if prerequisite not met
         }
         newTechnologies.push(tech.id);
+        // One-shot application of accumulating-stat tech bonuses. This runs
+        // exactly once — at the moment the tech is discovered — so the
+        // bonus doesn't compound each render inside calculateStats.
+        if (tech.effect === "science_bonus_3") {
+          const cur = (changes.science ?? currentCiv.stats.science ?? 0);
+          changes.science = cur + 3;
+        } else if (tech.effect === "science_bonus_5") {
+          const cur = (changes.science ?? currentCiv.stats.science ?? 0);
+          changes.science = cur + 5;
+        } else if (tech.effect === "faith_to_science") {
+          const curFaith = (changes.faith ?? currentCiv.stats.faith ?? 0);
+          const conv = Math.floor(curFaith * 0.25);
+          const curScience = (changes.science ?? currentCiv.stats.science ?? 0);
+          changes.science = curScience + conv;
+          // Intentionally do NOT drain faith — Philosophy represents the
+          // synthesis of faith and reason, not the erosion of belief. The
+          // old behavior silently ticked faith down every render.
+        }
         messages.push(
           `Your civilization has discovered ${tech.name}! ${tech.description}`,
         );
@@ -1492,7 +1514,12 @@ const App: React.FC = () => {
     event.globalEffects.forEach(effect => {
       if (effect.message) globalMessages.push(effect.message);
       if (effect.type === 'modify_stat' && effect.stat && effect.value) {
-        const current = (gameState.civilization.stats as any)[effect.stat] ?? 0;
+        // Accumulate across multiple effects hitting the same stat — read
+        // from the running globalChanges first, then fall back to the
+        // stored stat. Previously this only read the stored value, so the
+        // second of two same-stat effects overwrote the first.
+        const current = ((globalChanges as any)[effect.stat])
+          ?? ((gameState.civilization.stats as any)[effect.stat] ?? 0);
         (globalChanges as any)[effect.stat] = current + effect.value;
       }
       if (effect.type === 'modify_yield' && effect.stat && effect.value) {
@@ -1500,7 +1527,8 @@ const App: React.FC = () => {
           effect.stat === 'science' ? 'scienceYield' :
           effect.stat === 'culture' ? 'cultureYield' :
           effect.stat === 'faith' ? 'faithYield' : effect.stat;
-        const current = (gameState.civilization.stats as any)[yieldKey] ?? 0;
+        const current = ((globalChanges as any)[yieldKey])
+          ?? ((gameState.civilization.stats as any)[yieldKey] ?? 0);
         (globalChanges as any)[yieldKey] = current + effect.value;
       }
       if (effect.type === 'lose_population' && effect.value) {
@@ -1544,9 +1572,14 @@ const App: React.FC = () => {
       if (!meetsCondition(effect.condition)) return;
       if (effect.message) choiceMessages.push(effect.message);
       if (effect.type === 'modify_stat' && effect.stat && effect.value) {
+        // Priority: already-applied choiceChanges > globalChanges > stored.
+        // Without reading choiceChanges first, two same-stat effects in the
+        // same choice would see each other overwrite instead of stacking.
         const currentBase = (gameState.civilization.stats as any)[effect.stat] ?? 0;
         const globalMod = (globalChanges as any)[effect.stat];
-        const current = globalMod !== undefined ? globalMod : currentBase;
+        const choiceMod = (choiceChanges as any)[effect.stat];
+        const current = choiceMod !== undefined ? choiceMod
+          : (globalMod !== undefined ? globalMod : currentBase);
         (choiceChanges as any)[effect.stat] = current + effect.value;
       }
       if (effect.type === 'modify_yield' && effect.stat && effect.value) {
@@ -1556,7 +1589,9 @@ const App: React.FC = () => {
           effect.stat === 'faith' ? 'faithYield' : effect.stat;
         const currentBase = (gameState.civilization.stats as any)[yieldKey] ?? 0;
         const globalMod = (globalChanges as any)[yieldKey];
-        const current = globalMod !== undefined ? globalMod : currentBase;
+        const choiceMod = (choiceChanges as any)[yieldKey];
+        const current = choiceMod !== undefined ? choiceMod
+          : (globalMod !== undefined ? globalMod : currentBase);
         (choiceChanges as any)[yieldKey] = current + effect.value;
       }
       if (effect.type === 'lose_population' && effect.value) {
@@ -1644,7 +1679,10 @@ const App: React.FC = () => {
     civEvent.effects.forEach(effect => {
       if (effect.message) civMessages.push(effect.message);
       if (effect.type === 'modify_stat' && effect.stat && effect.value) {
-        const current = (gameState.civilization.stats as any)[effect.stat] ?? 0;
+        // Accumulate same-stat effects (e.g., Gaul's two martial bonuses
+        // should stack to +5, not be overwritten to the last one).
+        const current = ((civChanges as any)[effect.stat])
+          ?? ((gameState.civilization.stats as any)[effect.stat] ?? 0);
         (civChanges as any)[effect.stat] = current + effect.value;
       }
       if (effect.type === 'modify_yield' && effect.stat && effect.value) {
@@ -1652,7 +1690,8 @@ const App: React.FC = () => {
           effect.stat === 'science' ? 'scienceYield' :
           effect.stat === 'culture' ? 'cultureYield' :
           effect.stat === 'faith' ? 'faithYield' : effect.stat;
-        const current = (gameState.civilization.stats as any)[yieldKey] ?? 0;
+        const current = ((civChanges as any)[yieldKey])
+          ?? ((gameState.civilization.stats as any)[yieldKey] ?? 0);
         (civChanges as any)[yieldKey] = current + effect.value;
       }
       if (effect.type === 'lose_population' && effect.value) {
@@ -3203,6 +3242,17 @@ const App: React.FC = () => {
 
   const { civilization: civ } = gameState;
 
+  // Memoized climate for the 3D map. Recomputes only when the civ preset
+  // changes, not on every GameApp re-render. This lets MapScene and its
+  // memoized children skip work when only unrelated state updates.
+  const mapClimate = useMemo(() => {
+    const id = gameState.civilization?.presetId;
+    const preset = CIV_PRESETS.find((c) => c.id === id);
+    if (preset?.climate) return preset.climate;
+    const respawn = RESPAWN_CIVS.find((c) => c.id === id);
+    return respawn?.climate || 'temperate';
+  }, [gameState.civilization?.presetId]);
+
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative">
       {/* V2 TURN PHASE UI */}
@@ -4086,13 +4136,7 @@ const App: React.FC = () => {
           <MapScene
             tiles={tiles}
             onTileClick={handleTileClick}
-            climate={(() => {
-              const id = gameState.civilization?.presetId;
-              const preset = CIV_PRESETS.find(c => c.id === id);
-              if (preset?.climate) return preset.climate;
-              const respawn = RESPAWN_CIVS.find(c => c.id === id);
-              return respawn?.climate || 'temperate';
-            })()}
+            climate={mapClimate}
           />
           {gameState.fogOfWar && (
             <div
@@ -4121,7 +4165,7 @@ const App: React.FC = () => {
         {/* RIGHT TABBED PANEL - Hidden on mobile */}
         <aside className="hidden md:flex w-80 bg-slate-900 border-l border-slate-800 flex-col z-10 shadow-xl">
           <div className="flex border-b border-slate-800">
-            {["build", "science", "culture", "world", "wonders", "religion", "war", "victory"].map((tab) => (
+            {["build", "science", "culture", "world", "wonders", "religion", "war", "scoreboard"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
@@ -4135,7 +4179,7 @@ const App: React.FC = () => {
                 {tab === "wonders" && <Crown size={18} />}
                 {tab === "religion" && <Star size={18} />}
                 {tab === "war" && <Sword size={18} />}
-                {tab === "victory" && <Trophy size={18} />}
+                {tab === "scoreboard" && <Trophy size={18} />}
               </button>
             ))}
           </div>
@@ -4582,9 +4626,9 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="bg-amber-900/20 rounded-lg p-3 border border-amber-700/40">
-                  <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest mb-1">Victory Contribution</h3>
+                  <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest mb-1">Scoring Contribution</h3>
                   <p className="text-[11px] text-amber-100/80 leading-relaxed">
-                    Culture feeds the <b>Legacy</b> victory score, which combines your Culture Total, +10 per Wonder, bonuses for advanced stages, and +3 per Amphitheatre.
+                    Culture feeds the <b>Legacy</b> score track: your Culture Total, +8 per Wonder, stage bonuses (Classical 10 · Imperial 20 · Enlightenment 35 · Modern 50), and +2 per Amphitheatre.
                   </p>
                 </div>
               </div>
@@ -4974,11 +5018,11 @@ const App: React.FC = () => {
                   <div className="w-full bg-slate-700 rounded-full h-2 mt-2 overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-red-600 to-red-400 h-2 transition-all"
-                      style={{ width: `${Math.min(100, ((gameState.conqueredTerritories || 0) / 5) * 100)}%` }}
+                      style={{ width: `${Math.min(100, ((gameState.conqueredTerritories || 0) / 6) * 100)}%` }}
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 mt-2 italic">
-                    Conquer <b className="text-red-300">5 civilizations</b> via Decisive Victory (margin ≥ 6) to win the Conquest victory.
+                    Each <b className="text-red-300">decisive conquest</b> (margin ≥ 6) is worth <b className="text-red-300">+8 Conquest points</b> toward your Final Score. Non-decisive wins still score +2 each.
                   </p>
                 </div>
 
@@ -5102,66 +5146,96 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* VICTORY TAB — shows progress toward all 4 victory paths so
-                students can see exactly what they're working toward and what
-                contributes to their score. */}
-            {activeTab === "victory" && (() => {
+            {/* SCOREBOARD TAB — live scoring across all four thematic tracks.
+                Highest total at turn 24 wins overall; highest per-track
+                wins Track Champion. No threshold victory: every civ plays
+                the full 24 turns, so scores are cumulative points, not
+                targets to race toward. */}
+            {activeTab === "scoreboard" && (() => {
               // Build a state shape that matches what the recipe callbacks expect.
               const vState = {
                 tiles,
                 warsWon: gameState.warsWon,
+                conqueredTerritories: gameState.conqueredTerritories,
                 religionSpread: gameState.religionSpread,
                 wondersBuilt: gameState.wondersBuilt,
                 civilization: gameState.civilization,
               };
-              const conditionKeys = ['military', 'scientific', 'cultural', 'religious'] as const;
-              const scores = conditionKeys.map((key) => {
-                const cond = VICTORY_CONDITIONS[key];
-                const score = cond.calculate(vState);
-                return { key, cond, score };
+              const trackKeys = ['conquest', 'innovation', 'legacy', 'faith'] as const;
+              const scores = trackKeys.map((key) => {
+                const track = SCORING_TRACKS[key];
+                const score = track.calculate(vState);
+                return { key, track, score };
               });
-              const leader = scores.reduce((a, b) => (b.score / b.cond.target) > (a.score / a.cond.target) ? b : a);
+              // Highest-scoring track is this civ's "strongest lane"; we
+              // highlight it so students can see where their strategy is paying off.
+              const leader = scores.reduce((a, b) => b.score > a.score ? b : a);
+              const finalScore = calculateFinalScore(vState);
               return (
                 <div className="space-y-3">
                   <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    Paths to Victory
+                    Scoreboard
                   </h2>
                   <p className="text-[11px] text-slate-400 leading-relaxed -mt-1">
-                    Four paths, each with a target score. Focus on one or blend strategies. Progress is tallied live. Your strongest path is highlighted in gold.
+                    Four scoring tracks. The highest total at the end of turn 24 wins overall. The highest score in each track earns a <b className="text-yellow-300">Track Champion</b> award. Specialize, diversify, or do both.
                   </p>
-                  {scores.map(({ key, cond, score }) => {
-                    const pct = Math.min(100, Math.round((score / cond.target) * 100));
+
+                  {/* TOTAL SCORE HEADER — the big number students check first */}
+                  <div className="bg-gradient-to-br from-yellow-900/30 via-slate-800 to-slate-800 rounded-lg p-3 border border-yellow-700/40">
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest">Final Score</div>
+                        <div className="text-[10px] text-slate-500">Strongest lane: <span className="text-slate-300">{leader.track.name}</span></div>
+                      </div>
+                      <div className="text-3xl font-bold text-yellow-300">{finalScore.total}</div>
+                    </div>
+                    {finalScore.milestones > 0 && (
+                      <div className="mt-2 pt-2 border-t border-yellow-900/30 flex justify-between text-[10px]">
+                        <span className="text-slate-400">Milestone bonuses</span>
+                        <span className="text-yellow-300 font-bold">+{finalScore.milestones}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* LIVE LEADERBOARD — polls the server every 10s for all
+                      civs in this period and shows rank + total + top lane.
+                      Offline/solo mode renders a compact placeholder so the
+                      layout stays consistent. */}
+                  <LiveLeaderboard periodId={syncState.periodId} />
+
+                  {scores.map(({ key, track, score }) => {
+                    const pct = Math.min(100, Math.round((score / track.benchmark) * 100));
                     const isLeader = leader.key === key;
-                    const isComplete = score >= cond.target;
-                    const recipe = cond.recipe(vState);
-                    const barColor = key === 'military'   ? 'from-red-600 to-red-400'
-                                  : key === 'scientific' ? 'from-cyan-600 to-cyan-400'
-                                  : key === 'cultural'   ? 'from-pink-600 to-pink-400'
+                    const atBenchmark = score >= track.benchmark;
+                    const recipe = track.recipe(vState);
+                    const barColor = track.color === 'red'   ? 'from-red-600 to-red-400'
+                                  : track.color === 'cyan'   ? 'from-cyan-600 to-cyan-400'
+                                  : track.color === 'pink'   ? 'from-pink-600 to-pink-400'
                                   : 'from-amber-600 to-amber-400';
-                    const borderColor = isComplete
-                      ? 'border-emerald-500/60 ring-1 ring-emerald-500/30'
-                      : isLeader
-                        ? 'border-yellow-500/50 ring-1 ring-yellow-500/20'
+                    const borderColor = isLeader
+                      ? 'border-yellow-500/50 ring-1 ring-yellow-500/20'
+                      : atBenchmark
+                        ? 'border-emerald-500/40'
                         : 'border-slate-700';
                     return (
                       <div key={key} className={`bg-slate-800 rounded-lg p-3 border ${borderColor}`}>
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2">
-                            {key === 'military'   && <Sword size={16} className="text-red-400" />}
-                            {key === 'scientific' && <FlaskConical size={16} className="text-cyan-400" />}
-                            {key === 'cultural'   && <Landmark size={16} className="text-pink-400" />}
-                            {key === 'religious'  && <Scroll size={16} className="text-amber-400" />}
-                            <span className="text-sm font-bold text-slate-100">{cond.name}</span>
-                            {isLeader && !isComplete && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">LEADING</span>}
-                            {isComplete && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50">VICTORY!</span>}
+                            {key === 'conquest'   && <Sword size={16} className="text-red-400" />}
+                            {key === 'innovation' && <FlaskConical size={16} className="text-cyan-400" />}
+                            {key === 'legacy'     && <Landmark size={16} className="text-pink-400" />}
+                            {key === 'faith'      && <Scroll size={16} className="text-amber-400" />}
+                            <span className="text-sm font-bold text-slate-100">{track.name}</span>
+                            {isLeader && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300 border border-yellow-700/50">YOUR LANE</span>}
+                            {atBenchmark && !isLeader && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">ON PACE</span>}
                           </div>
-                          <span className="text-xs font-bold text-slate-300">{score} / {cond.target}</span>
+                          <span className="text-xs font-bold text-slate-300">{score} <span className="text-slate-500 font-normal">pts</span></span>
                         </div>
-                        <p className="text-[11px] text-slate-400 leading-relaxed mb-2">{cond.description}</p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed mb-2">{track.description}</p>
                         <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
                           <div className={`bg-gradient-to-r ${barColor} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-1 text-right">{pct}%</div>
+                        <div className="text-[10px] text-slate-500 mt-1 text-right">Benchmark: {track.benchmark} pts · {pct}%</div>
                         <div className="mt-2 pt-2 border-t border-slate-700 space-y-0.5">
                           {recipe.map((r, i) => (
                             <div key={i} className="flex justify-between items-baseline text-[11px]">
@@ -5182,7 +5256,7 @@ const App: React.FC = () => {
                     );
                   })}
                   <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700 text-[11px] text-slate-400 leading-relaxed">
-                    <b className="text-slate-200">How victory works:</b> reaching a target declares that path won but the classroom sim keeps running — scores are a measure of trajectory, not a hard stop. The teacher (or single-player End Turn) ultimately decides when the game ends. Aim for the path that best fits your civ's traits and neighbors.
+                    <b className="text-slate-200">How scoring works:</b> the game runs all 24 turns. Your Final Score is the sum of all four tracks plus milestone bonuses (first wonder, deep research, reaching Modern, etc.). The highest total wins overall. The civ with the most points in any single track earns that lane's Track Champion award — so specialists stay honored even if they lose the grand total.
                   </div>
                 </div>
               );
