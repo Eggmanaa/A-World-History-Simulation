@@ -11,7 +11,8 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "@cloudflare/workers-types/2023-07-01"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
