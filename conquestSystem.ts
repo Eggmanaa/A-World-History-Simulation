@@ -79,9 +79,13 @@ export function calculateConquestRewards(
     messages.push(`+${buildingGains.barracks * 3} Martial from captured Barracks.`);
   }
   if (buildingGains.walls) {
-    // Walls' defense bonus is folded into Martial now.
-    statChanges.martial = (statChanges.martial || victorState.civilization.stats.martial || 0) + (buildingGains.walls * 5);
-    messages.push(`+${buildingGains.walls * 5} Martial from captured Walls.`);
+    // Walls no longer grant flat Martial. Their value is the +1d8 defense
+    // die per wall (capped at 3) which takes effect automatically when the
+    // wall tiles transfer into the victor's building counts. The only stat
+    // carry-over here is population-capacity (interior protected from raids),
+    // and that is derived from the tile count in calculateStats on next
+    // recompute — no direct stat write needed.
+    messages.push(`Captured ${buildingGains.walls} Wall${buildingGains.walls === 1 ? '' : 's'} (+1d8 defense die each, up to 3 total).`);
   }
 
   // Extra production loot

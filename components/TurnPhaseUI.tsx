@@ -464,7 +464,7 @@ const BuildPhasePanel: React.FC<{
     { type: 'Temple', cost: 10, effect: '+2 Faith, +1 Faith Yield', icon: Landmark, color: 'text-purple-400' },
     { type: 'Amphitheatre', cost: 10, effect: '+2 Culture Yield, +3 Culture', icon: Crown, color: 'text-pink-400' },
     { type: 'Barracks', cost: 10, effect: '+3 Martial', icon: Sword, color: 'text-red-400' },
-    { type: 'Wall', cost: 10, effect: '+3 Martial, +1 Cap, +1d8 on defense (max 3)', icon: Shield, color: 'text-red-400' },
+    { type: 'Wall', cost: 10, effect: '+1 Cap, +1d8 on defense (max 3 dice)', icon: Shield, color: 'text-red-400' },
   ];
 
   return (

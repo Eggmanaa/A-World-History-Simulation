@@ -142,8 +142,8 @@ const STAT_EXPLANATIONS: Record<string, {
     body: 'Your unified combat stat — used for BOTH attack rolls and defense against raids. Walls, terrain, Archimedes Tower, cultural prestige, Holy War, Masonry tech, and peace treaties all feed directly into Martial, so a single number tells you how strong your civ is in combat.',
     raise: [
       'Population: every 4 pop adds +1 Martial (citizen militia).',
-      'Build Barracks (+3 each) or Walls (+3 each, +6 with Troy) — all stack into Martial.',
-      'Each Wall tile also adds +1d8 to every defense roll (raids + incoming attacks), up to 3 dice.',
+      'Build Barracks (+3 Martial each) — the dedicated offense/defense stat building.',
+      'Walls do NOT add Martial; they add +1d8 to every defense roll (raids + incoming attacks), up to 3 dice. Troy doubles the wall-dice count.',
       'Fortify action: +1 Defense Die (d8), stacks to 3, decays by 1 each turn.',
       'Archimedes Tower gives +20 Martial (requires 30 Science).',
       'Terrain: mountains, hills, islands, and rivers contribute Martial.',
@@ -327,7 +327,7 @@ const calculateStats = (
   //   Barracks     +3 Martial per tile
   //   Temple       +1 Faith Yield per tile (one-time +2 Faith Total at place)
   //   Amphitheatre +2 Culture Yield per tile (one-time +3 Culture at place)
-  //   Wall         +3 Martial + +1 Capacity per tile (Troy: +6 Martial)
+  //   Wall         +1 Capacity per tile (defense die rolled in actionSystem.ts)
   //   ArchTower    +10 Martial per tile (requires 30 Science to build)
   let buildingDefense = 0;
   let buildingMartial = 0;
@@ -352,10 +352,12 @@ const calculateStats = (
       buildingMartial += 3;
     }
     if (b === BuildingType.Wall) {
-      // Sidegrade with Barracks: Wall = +3 Martial + +1 Capacity, Barracks =
-      // +3 Martial only. Troy's flag doubles wall martial to +6.
-      const wallMartial = civData.flags.troyWallDouble ? 6 : 3;
-      buildingDefense += wallMartial;
+      // Walls are PURELY defensive now: no flat Martial bonus. Each wall
+      // tile adds +1d8 on defense rolls (raids + incoming attacks, up to 3)
+      // and +1 Population Capacity (interior protected from raiders).
+      // Barracks is the Martial-generating building (+3 each); Walls are the
+      // turtle/defense-specialist building. Troy's flag doubles the wall-dice
+      // count (handled in actionSystem.ts raid path).
       buildingCapacity += 1;
     }
     if (b === BuildingType.Temple) {
@@ -2950,22 +2952,29 @@ const App: React.FC = () => {
     const attackRoll = Math.floor(Math.random() * 20) + 1;
     const attackScore = civ.stats.martial + attackRoll + treatyViolationPenalty;
 
-    // Estimate defender's wall strength from their defense stat
-    const estimatedWalls = Math.max(0, Math.floor(neighbor.defense / 5));
-    let wallBonus = estimatedWalls * 3;
+    // Estimate defender's wall count from their defense stat. Walls no
+    // longer add flat Martial — instead each estimated wall rolls +1d8 for
+    // the defender (cap 3), matching the student-facing defense die mechanic.
+    const estimatedWalls = Math.max(0, Math.min(3, Math.floor(neighbor.defense / 5)));
+    let wallDiceCount = estimatedWalls;
     let wallNote = "";
 
     // Science level bypasses defender walls
     if (civ.stats.science >= 30) {
       // SCIENCE_UNLOCKS level 30: "Bypass basic walls in combat"
-      const bypassed = Math.min(estimatedWalls, 2);
-      wallBonus = Math.max(0, wallBonus - bypassed * 3);
+      const bypassed = Math.min(wallDiceCount, 2);
+      wallDiceCount = Math.max(0, wallDiceCount - bypassed);
       wallNote = bypassed >= estimatedWalls
         ? " (all walls bypassed by siege tech)"
         : ` (${bypassed} walls bypassed by siege tech)`;
     }
 
-    // Defense score = (Martial + Defense + Wall bonus) + d20 roll
+    const wallDiceRolls = Array.from({ length: wallDiceCount }, () =>
+      Math.floor(Math.random() * 8) + 1,
+    );
+    const wallBonus = wallDiceRolls.reduce((a, b) => a + b, 0);
+
+    // Defense score = (Martial + Defense) + d20 roll + wall defense dice
     const defenseRoll = Math.floor(Math.random() * 20) + 1;
     const defenseScore =
       neighbor.martial + neighbor.defense + wallBonus + defenseRoll;
@@ -2975,7 +2984,7 @@ const App: React.FC = () => {
     let resultMsg = "";
     const wallEffectMsg =
       estimatedWalls > 0
-        ? ` Enemy walls added +${wallBonus} martial (${estimatedWalls} walls)${wallNote}.`
+        ? ` Enemy walls rolled +${wallBonus} defense (${wallDiceCount}d8 from ${estimatedWalls} walls${wallNote}).`
         : "";
 
     // Remove peace treaty if violated
@@ -4297,7 +4306,7 @@ const App: React.FC = () => {
                     { type: BuildingType.Library,     name: 'Library',     cost: 10, icon: FlaskConical, color: 'cyan',    effect: '+2 Sci Yield' },
                     { type: BuildingType.Barracks,    name: 'Barracks',    cost: 10, icon: Sword,        color: 'red',     effect: '+3 Martial' },
                     { type: BuildingType.Temple,      name: 'Temple',      cost: 10, icon: Landmark,     color: 'blue',    effect: '+2 Faith, +1 Faith Yield' },
-                    { type: BuildingType.Wall,        name: 'Wall',        cost: 10, icon: BrickWall,    color: 'slate',   effect: '+3 Martial, +1 Cap, +1d8 on defense (max 3)' },
+                    { type: BuildingType.Wall,        name: 'Wall',        cost: 10, icon: BrickWall,    color: 'slate',   effect: '+1 Cap, +1d8 on defense (max 3 dice)' },
                     { type: BuildingType.Amphitheatre, name: 'Amphitheatre', cost: 10, icon: Users,      color: 'pink',    effect: '+2 Culture Yield, +3 Culture' },
                     { type: BuildingType.ArchimedesTower, name: 'Archimedes Tower', cost: 20, icon: TowerControl, color: 'purple', effect: '+20 Martial (needs 30 Sci)' },
                   ];

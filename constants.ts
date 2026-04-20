@@ -613,7 +613,7 @@ export const RESPAWN_CIVS: RespawnCiv[] = [
     {
         id: 'dacia', name: 'Dacia', availableTurn: 19, region: 'Eastern Europe',
         baseStats: { martial: 4, defense: 4, faith: 3, industry: 3, fertility: 2, productionIncome: 3, scienceYield: 2, cultureYield: 2, faithYield: 3, capacity: 12 },
-        trait: 'Mountain Fortress', traitDescription: 'Impregnable mountain strongholds. Walls grant +8 Martial instead of +5. +2 Martial while defending.',
+        trait: 'Mountain Fortress', traitDescription: 'Impregnable mountain strongholds. +4 starting defense bakes straight into Martial, and mountain/high-mountain terrain stacks on top. Built to turtle.',
         waterResource: 'River', colors: { base: '#4a5568', accent: '#a3bffa' },
         centerBiomes: [TerrainType.Mountain, TerrainType.Forest, TerrainType.Plains],
         edgeBiomes: [TerrainType.HighMountain, TerrainType.Mountain, TerrainType.Forest],
