@@ -617,6 +617,31 @@ const calculateStats = (
     }
   });
 
+  // NAVAL TECH BONUSES — coastal/island civs get extra benefits from
+  // Shipbuilding (L13) and Navigation (L35).  A civ counts as "naval"
+  // if it's an island OR its waterResource is Ocean / River / Lake /
+  // LakeBrackish / Marsh (any body of water big enough to launch ships).
+  // Mainland-inland civs (wells only) don't qualify — they can still
+  // research the techs and get the baseline bonus, just not the marine
+  // multipliers.
+  const isNavalCiv = civData.isIsland
+    || civData.waterResource === 'Ocean'
+    || civData.waterResource === 'River'
+    || civData.waterResource === 'Lake'
+    || civData.waterResource === 'LakeBrackish'
+    || civData.waterResource === 'Marsh';
+  if (isNavalCiv) {
+    if (science >= 13) {
+      // Shipbuilding: +2 Martial (naval defense), +1 Industry (trade income)
+      martial += 2;
+      industry += 1;
+    }
+    if (science >= 35) {
+      // Navigation: +5 Martial (triremes dominate coastal waters)
+      martial += 5;
+    }
+  }
+
   // Apply Technology Bonuses
   if (civData.technologies) {
     civData.technologies.forEach((techId: string) => {

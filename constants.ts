@@ -690,10 +690,19 @@ export const RESPAWN_BONUSES: RespawnBonus[] = [
 export const SCIENCE_UNLOCKS: ScienceUnlock[] = [
     { level: 5,  effect: 'Pottery: +1 Capacity, +1 Fertility',          statBonus: { capacity: 1, fertility: 1 } },
     { level: 10, effect: 'Bronze Working: +3 Martial',                  statBonus: { martial: 2, defense: 1 } },
+    // L13 Shipbuilding — coastal/island civs gain naval defense and trade range.
+    // Structural statBonus applies to all civs (+1 Capacity from larger granary
+    // ships, +1 Diplomacy from trade reach). Additional coastal-only bonuses
+    // (+2 Martial, +1 Industry) are applied in calculateStats's naval block.
+    { level: 13, effect: 'Shipbuilding: +1 Capacity, +1 Diplomacy (coastal/island: +2 Martial, +1 Industry)', unlocks: 'shipbuilding', statBonus: { capacity: 1, diplomacy: 1 } },
     { level: 15, effect: 'Writing: +2 Culture, +1 Diplomacy',           statBonus: { culture: 2, diplomacy: 1 } },
     { level: 20, effect: 'Irrigation: +2 Industry, +1 Capacity',        statBonus: { industry: 2, capacity: 1 } },
     { level: 25, effect: 'Masonry: +2 Martial, +2 Capacity',            statBonus: { defense: 2, capacity: 2 } },
     { level: 30, effect: 'Siege Engineering: Bypass walls, +2 Martial', unlocks: 'bypass_walls', statBonus: { martial: 2 } },
+    // L35 Navigation — triremes dominate. All civs get +2 Martial from marine
+    // infantry tactics. Coastal/island civs get +5 more Martial and can attack
+    // ANY unconquered neighbor (not just adjacent) via naval landings.
+    { level: 35, effect: 'Navigation: +2 Martial (coastal/island: +5 Martial, attack any neighbor)', unlocks: 'navigation', statBonus: { martial: 2 } },
     { level: 40, effect: 'Steel: +5 Martial',                           statBonus: { martial: 3, defense: 2 } },
     { level: 50, effect: 'Currency: +2 Industry, +2 Diplomacy',         statBonus: { industry: 2, diplomacy: 2 } },
     { level: 60, effect: 'Philosophy: +3 Culture, +2 Faith',            statBonus: { culture: 3, faith: 2 } },
