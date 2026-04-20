@@ -4,13 +4,9 @@ import { authRouter } from './routes/auth';
 import { teacherRouter } from './routes/teacher';
 import { studentRouter } from './routes/student';
 import { gameRouter } from './routes/game';
+import type { AppEnv } from './types';
 
-// Define bindings for Cloudflare Workers
-type Bindings = {
-  DB: D1Database;
-};
-
-const api = new Hono<{ Bindings: Bindings }>();
+const api = new Hono<AppEnv>();
 
 // Enable CORS
 api.use('/*', cors({

@@ -1,17 +1,10 @@
 import { Hono } from 'hono';
+import type { AppEnv } from '../types';
 import { teacherAuthMiddleware, studentAuthMiddleware } from '../middleware/auth';
-import { TIMELINE_EVENTS, CIV_PRESETS } from '../../constants';
+import { TIMELINE_EVENTS, CIV_PRESETS, SCORING_TRACKS, calculateFinalScore } from '../../constants';
 import type { GameState, StatKey } from '../../types';
 
-type Bindings = {
-  DB: D1Database;
-};
-
-type Variables = {
-  user: any;
-};
-
-export const gameRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+export const gameRouter = new Hono<AppEnv>();
 
 // ============================================================================
 // TEACHER ENDPOINTS
@@ -28,7 +21,7 @@ gameRouter.post('/teacher/:periodId/start', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
@@ -37,7 +30,7 @@ gameRouter.post('/teacher/:periodId/start', async (c) => {
     // Check if game state already exists
     const existing = await c.env.DB.prepare(
       'SELECT id FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     if (existing) {
       return c.json({ message: 'Game already started for this period' }, 400);
@@ -49,7 +42,7 @@ gameRouter.post('/teacher/:periodId/start', async (c) => {
       FROM students s
       LEFT JOIN game_sessions gs ON s.id = gs.student_id
       WHERE s.period_id = ?
-    `).bind(periodId).all();
+    `).bind(periodId).all<any>();
 
     // Initialize game state
     const initialGameData = {
@@ -103,7 +96,7 @@ gameRouter.post('/teacher/:periodId/advance', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
@@ -112,7 +105,7 @@ gameRouter.post('/teacher/:periodId/advance', async (c) => {
     // Get current game state
     const gameState = await c.env.DB.prepare(
       'SELECT * FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     if (!gameState) {
       return c.json({ message: 'Game not started' }, 400);
@@ -137,11 +130,18 @@ gameRouter.post('/teacher/:periodId/advance', async (c) => {
         timestamp: new Date().toISOString()
       });
 
-      await c.env.DB.prepare(`
+      // Conditional update: only succeed if timeline_index is still what we
+      // read. Prevents two teacher tabs from both clicking "Advance" and
+      // double-skipping an event.
+      const advanceRes = await c.env.DB.prepare(`
         UPDATE game_states
         SET timeline_index = ?, current_year = ?, event_log = ?, updated_at = datetime('now')
-        WHERE period_id = ?
-      `).bind(timelineIndex, currentYear, JSON.stringify(eventLog), periodId).run();
+        WHERE period_id = ? AND timeline_index = ?
+      `).bind(timelineIndex, currentYear, JSON.stringify(eventLog), periodId, gameState.timeline_index).run();
+
+      if (((advanceRes.meta as any) || {}).changes === 0) {
+        return c.json({ message: 'Timeline already advanced in another tab. Please refresh.' }, 409);
+      }
 
       // Update period current_year
       await c.env.DB.prepare(
@@ -177,7 +177,7 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT current_year FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
@@ -186,7 +186,7 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
     // Get game state
     const gameState = await c.env.DB.prepare(
       'SELECT * FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     if (!gameState) {
       return c.json({ message: 'Game not started' }, 400);
@@ -200,17 +200,28 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
       FROM students s
       LEFT JOIN game_sessions gs ON s.id = gs.student_id
       WHERE s.period_id = ?
-    `).bind(periodId).all();
+    `).bind(periodId).all<any>();
 
     // Get pending actions
     const pendingActions = await c.env.DB.prepare(`
       SELECT * FROM pending_actions
       WHERE period_id = ? AND status = 'pending'
       ORDER BY created_at DESC
-    `).bind(periodId).all();
+    `).bind(periodId).all<any>();
 
     const civStates = sessions.results.map((session: any) => {
       const progressData = session.progress_data ? JSON.parse(session.progress_data) : {};
+      // Compute live Final Score so the teacher dashboard can show rankings
+      // without any extra round-trip. calculateFinalScore is defensive —
+      // missing fields fall back to 0, so newly-created civs return a zero
+      // score cleanly.
+      let finalScore = { total: 0, breakdown: [], milestones: 0 };
+      try {
+        finalScore = calculateFinalScore(progressData);
+      } catch (e) {
+        // swallow — prefer to return the rest of the overview than 500 the
+        // whole dashboard over a malformed progress_data blob.
+      }
       return {
         studentId: session.id,
         studentName: session.name,
@@ -219,7 +230,8 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
         alliances: progressData.alliances || [],
         wondersBuilt: progressData.wondersBuilt || [],
         population: progressData.population || 0,
-        stats: progressData.stats || {}
+        stats: progressData.stats || {},
+        finalScore,
       };
     });
 
@@ -242,7 +254,7 @@ gameRouter.post('/teacher/:periodId/resolve-war', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { actionId, result } = await c.req.json();
+    const { actionId, result } = await c.req.json() as any;
 
     if (!actionId || !result || !['attacker_wins', 'defender_wins', 'stalemate'].includes(result)) {
       return c.json({ message: 'Invalid action or result' }, 400);
@@ -251,7 +263,7 @@ gameRouter.post('/teacher/:periodId/resolve-war', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
@@ -260,7 +272,7 @@ gameRouter.post('/teacher/:periodId/resolve-war', async (c) => {
     // Get pending action
     const action = await c.env.DB.prepare(
       'SELECT * FROM pending_actions WHERE id = ? AND period_id = ?'
-    ).bind(actionId, periodId).first();
+    ).bind(actionId, periodId).first<any>();
 
     if (!action) {
       return c.json({ message: 'Action not found' }, 404);
@@ -279,11 +291,11 @@ gameRouter.post('/teacher/:periodId/resolve-war', async (c) => {
     if (actionData.attackerId && actionData.defenderId) {
       const attacker = await c.env.DB.prepare(
         'SELECT progress_data FROM game_sessions WHERE student_id = ?'
-      ).bind(actionData.attackerId).first();
+      ).bind(actionData.attackerId).first<any>();
 
       const defender = await c.env.DB.prepare(
         'SELECT progress_data FROM game_sessions WHERE student_id = ?'
-      ).bind(actionData.defenderId).first();
+      ).bind(actionData.defenderId).first<any>();
 
       if (attacker && defender) {
         const attackerData = JSON.parse(attacker.progress_data || '{}');
@@ -324,7 +336,7 @@ gameRouter.post('/teacher/:periodId/custom-event', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { name, description, affectedCivIds, statModifications } = await c.req.json();
+    const { name, description, affectedCivIds, statModifications } = await c.req.json() as any;
 
     if (!name || !description) {
       return c.json({ message: 'Name and description are required' }, 400);
@@ -333,7 +345,7 @@ gameRouter.post('/teacher/:periodId/custom-event', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
@@ -342,7 +354,7 @@ gameRouter.post('/teacher/:periodId/custom-event', async (c) => {
     // Get game state
     const gameState = await c.env.DB.prepare(
       'SELECT * FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     if (!gameState) {
       return c.json({ message: 'Game not started' }, 400);
@@ -370,12 +382,12 @@ gameRouter.post('/teacher/:periodId/custom-event', async (c) => {
       for (const civId of affectedCivIds) {
         const student = await c.env.DB.prepare(
           'SELECT id FROM students WHERE period_id = ? AND id = ?'
-        ).bind(periodId, civId).first();
+        ).bind(periodId, civId).first<any>();
 
         if (student) {
           const session = await c.env.DB.prepare(
             'SELECT progress_data FROM game_sessions WHERE student_id = ?'
-          ).bind(civId).first();
+          ).bind(civId).first<any>();
 
           if (session) {
             const data = JSON.parse(session.progress_data || '{}');
@@ -418,13 +430,13 @@ gameRouter.post('/teacher/:periodId/broadcast', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { message, type } = await c.req.json();
+    const { message, type } = await c.req.json() as any;
     if (!message || !['info', 'warning', 'pause'].includes(type)) {
       return c.json({ message: 'Message and valid type required' }, 400);
     }
-    const period = await c.env.DB.prepare('SELECT id FROM periods WHERE id = ? AND teacher_id = ?').bind(periodId, user.id).first();
+    const period = await c.env.DB.prepare('SELECT id FROM periods WHERE id = ? AND teacher_id = ?').bind(periodId, user.id).first<any>();
     if (!period) return c.json({ message: 'Period not found' }, 404);
-    const gameState = await c.env.DB.prepare('SELECT * FROM game_states WHERE period_id = ?').bind(periodId).first();
+    const gameState = await c.env.DB.prepare('SELECT * FROM game_states WHERE period_id = ?').bind(periodId).first<any>();
     if (!gameState) return c.json({ message: 'Game not started' }, 400);
     const eventLog = JSON.parse(gameState.event_log || '[]');
     const broadcast = { type: 'broadcast', broadcastType: type, message, teacherName: user.name || 'Teacher', timestamp: new Date().toISOString() };
@@ -448,9 +460,9 @@ gameRouter.post('/teacher/:periodId/end', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const period = await c.env.DB.prepare('SELECT id FROM periods WHERE id = ? AND teacher_id = ?').bind(periodId, user.id).first();
+    const period = await c.env.DB.prepare('SELECT id FROM periods WHERE id = ? AND teacher_id = ?').bind(periodId, user.id).first<any>();
     if (!period) return c.json({ message: 'Period not found' }, 404);
-    const gameState = await c.env.DB.prepare('SELECT * FROM game_states WHERE period_id = ?').bind(periodId).first();
+    const gameState = await c.env.DB.prepare('SELECT * FROM game_states WHERE period_id = ?').bind(periodId).first<any>();
     if (!gameState) return c.json({ message: 'Game not started' }, 400);
     const gameData = JSON.parse(gameState.game_data || '{}');
     gameData.gameEnded = true;
@@ -469,7 +481,7 @@ gameRouter.post('/teacher/:periodId/end', async (c) => {
 gameRouter.get('/student/:periodId/broadcasts', async (c) => {
   try {
     const periodId = c.req.param('periodId');
-    const gameState = await c.env.DB.prepare('SELECT event_log, game_data FROM game_states WHERE period_id = ?').bind(periodId).first();
+    const gameState = await c.env.DB.prepare('SELECT event_log, game_data FROM game_states WHERE period_id = ?').bind(periodId).first<any>();
     if (!gameState) return c.json({ broadcasts: [], gamePaused: false });
     const eventLog = JSON.parse(gameState.event_log || '[]');
     const broadcasts = eventLog.filter((e: any) => e.type === 'broadcast').slice(-10);
@@ -486,6 +498,43 @@ gameRouter.get('/student/:periodId/broadcasts', async (c) => {
 
 gameRouter.use('/student/*', studentAuthMiddleware());
 
+// GET /student/me/session - returns the logged-in student's session record.
+// The client uses this right after login to discover the student's periodId
+// and civilization without having to be handed a periodId through some
+// external channel. (Was a missing primitive called out in the multiplayer
+// sync audit — every other student poll assumed periodId was already known.)
+gameRouter.get('/student/me/session', async (c) => {
+  try {
+    const user = c.get('user');
+    const row = await c.env.DB.prepare(`
+      SELECT s.id AS studentId, s.name AS studentName, s.period_id AS periodId,
+             p.name AS periodName, p.current_year AS currentYear,
+             gs.civilization_id AS civilizationId, gs.progress_data AS progressData
+      FROM students s
+      JOIN periods p ON s.period_id = p.id
+      LEFT JOIN game_sessions gs ON s.id = gs.student_id
+      WHERE s.id = ?
+    `).bind(user.id).first<any>();
+
+    if (!row) {
+      return c.json({ message: 'Student not found' }, 404);
+    }
+
+    return c.json({
+      studentId: (row as any).studentId,
+      studentName: (row as any).studentName,
+      periodId: (row as any).periodId,
+      periodName: (row as any).periodName,
+      currentYear: (row as any).currentYear,
+      civilizationId: (row as any).civilizationId || null,
+      progressData: (row as any).progressData ? JSON.parse((row as any).progressData) : null,
+    }, 200);
+  } catch (error) {
+    console.error('Get student session error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
 // GET /game/:periodId/state - Student polls for current game state
 gameRouter.get('/student/:periodId/state', async (c) => {
   try {
@@ -495,7 +544,7 @@ gameRouter.get('/student/:periodId/state', async (c) => {
     // Get student info
     const student = await c.env.DB.prepare(
       'SELECT id, period_id FROM students WHERE id = ? AND period_id = ?'
-    ).bind(user.id, periodId).first();
+    ).bind(user.id, periodId).first<any>();
 
     if (!student) {
       return c.json({ message: 'Student not found in this period' }, 404);
@@ -504,7 +553,7 @@ gameRouter.get('/student/:periodId/state', async (c) => {
     // Get game state
     const gameState = await c.env.DB.prepare(
       'SELECT * FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     if (!gameState) {
       return c.json({ message: 'Game not started' }, 400);
@@ -513,7 +562,7 @@ gameRouter.get('/student/:periodId/state', async (c) => {
     // Get student's game session
     const session = await c.env.DB.prepare(
       'SELECT * FROM game_sessions WHERE student_id = ?'
-    ).bind(user.id).first();
+    ).bind(user.id).first<any>();
 
     const progressData = session ? JSON.parse(session.progress_data || '{}') : {};
 
@@ -527,7 +576,7 @@ gameRouter.get('/student/:periodId/state', async (c) => {
       LEFT JOIN game_sessions gs ON s.id = gs.student_id
       WHERE s.period_id = ? AND s.id != ?
       LIMIT 3
-    `).bind(periodId, user.id).all();
+    `).bind(periodId, user.id).all<any>();
 
     const adjacentCivs = otherStudents.results.map((student: any) => ({
       studentId: student.id,
@@ -564,7 +613,7 @@ gameRouter.post('/student/:periodId/action', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { actionType, actionData } = await c.req.json();
+    const { actionType, actionData } = await c.req.json() as any;
 
     if (!actionType) {
       return c.json({ message: 'Action type is required' }, 400);
@@ -578,7 +627,7 @@ gameRouter.post('/student/:periodId/action', async (c) => {
     // Verify student and period
     const student = await c.env.DB.prepare(
       'SELECT id FROM students WHERE id = ? AND period_id = ?'
-    ).bind(user.id, periodId).first();
+    ).bind(user.id, periodId).first<any>();
 
     if (!student) {
       return c.json({ message: 'Student not found in this period' }, 404);
@@ -587,7 +636,7 @@ gameRouter.post('/student/:periodId/action', async (c) => {
     // Get game state for validation
     const gameState = await c.env.DB.prepare(
       'SELECT timeline_index FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     if (!gameState) {
       return c.json({ message: 'Game not started' }, 400);
@@ -619,7 +668,7 @@ gameRouter.post('/student/:periodId/action', async (c) => {
     if (actionType === 'build') {
       const session = await c.env.DB.prepare(
         'SELECT progress_data FROM game_sessions WHERE student_id = ?'
-      ).bind(user.id).first();
+      ).bind(user.id).first<any>();
 
       if (session) {
         const data = JSON.parse(session.progress_data || '{}');
@@ -664,7 +713,7 @@ gameRouter.post('/student/:periodId/save', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { progressData } = await c.req.json();
+    const { progressData } = await c.req.json() as any;
 
     if (!progressData) {
       return c.json({ message: 'Progress data is required' }, 400);
@@ -673,7 +722,7 @@ gameRouter.post('/student/:periodId/save', async (c) => {
     // Verify student and period
     const student = await c.env.DB.prepare(
       'SELECT id FROM students WHERE id = ? AND period_id = ?'
-    ).bind(user.id, periodId).first();
+    ).bind(user.id, periodId).first<any>();
 
     if (!student) {
       return c.json({ message: 'Student not found in this period' }, 404);
@@ -682,7 +731,7 @@ gameRouter.post('/student/:periodId/save', async (c) => {
     // Get or create game session
     const session = await c.env.DB.prepare(
       'SELECT id FROM game_sessions WHERE student_id = ?'
-    ).bind(user.id).first();
+    ).bind(user.id).first<any>();
 
     if (session) {
       // Update existing session
@@ -715,12 +764,12 @@ gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { timerMinutes } = await c.req.json();
+    const { timerMinutes } = await c.req.json() as any;
 
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
@@ -729,14 +778,25 @@ gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
     // Get all students in period
     const students = await c.env.DB.prepare(
       'SELECT COUNT(*) as count FROM students WHERE period_id = ?'
-    ).bind(periodId).first();
+    ).bind(periodId).first<any>();
 
     const totalPlayers = (students as any).count || 1;
     const deadline = Date.now() + (timerMinutes || 5) * 60 * 1000;
 
+    // Read current turn_number so we can stamp this turn correctly and so
+    // turn_decisions rows key against the right turn.
+    const current = await c.env.DB.prepare(
+      'SELECT turn_number, turn_state_version FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first<any>();
+    if (!current) {
+      return c.json({ message: 'Game not started' }, 400);
+    }
+    const nextTurnNumber = ((current as any).turn_number || 0) + 1;
+    const expectedVersion = (current as any).turn_state_version || 0;
+
     // Create turn state
     const turnState = {
-      number: 1,
+      number: nextTurnNumber,
       phase: 'decision',
       timeRemaining: (timerMinutes || 5) * 60,
       submittedCount: 0,
@@ -745,12 +805,20 @@ gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
       deadline
     };
 
-    // Store turn state in game_states
-    await c.env.DB.prepare(`
+    // Atomic: only advance the turn if version still matches what we read.
+    // If a second tab raced us, we bail with 409 rather than silently
+    // clobbering their newer state.
+    const startRes = await c.env.DB.prepare(`
       UPDATE game_states
-      SET turn_state = ?, updated_at = datetime('now')
-      WHERE period_id = ?
-    `).bind(JSON.stringify(turnState), periodId).run();
+      SET turn_state = ?, turn_number = ?,
+          turn_state_version = turn_state_version + 1,
+          updated_at = datetime('now')
+      WHERE period_id = ? AND turn_state_version = ?
+    `).bind(JSON.stringify(turnState), nextTurnNumber, periodId, expectedVersion).run();
+
+    if (((startRes.meta as any) || {}).changes === 0) {
+      return c.json({ message: 'Turn state changed in another tab. Please refresh.' }, 409);
+    }
 
     return c.json({
       message: 'Turn started',
@@ -771,30 +839,37 @@ gameRouter.post('/teacher/:periodId/end-phase', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
     }
 
-    // Get current turn state
+    // Get current turn state + version for optimistic concurrency.
     const gameState = await c.env.DB.prepare(
-      'SELECT turn_state FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+      'SELECT turn_state, turn_state_version FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first<any>();
 
     const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+    const expectedVersion = ((gameState as any)?.turn_state_version) || 0;
 
     if (turnState.phase === 'decision') {
       turnState.phase = 'resolution';
       turnState.timeRemaining = -1;
     }
 
-    // Update turn state
-    await c.env.DB.prepare(`
+    // Conditional update — another click (e.g. timer auto-transition)
+    // between our read and write is detected and rejected.
+    const endRes = await c.env.DB.prepare(`
       UPDATE game_states
-      SET turn_state = ?, updated_at = datetime('now')
-      WHERE period_id = ?
-    `).bind(JSON.stringify(turnState), periodId).run();
+      SET turn_state = ?, turn_state_version = turn_state_version + 1,
+          updated_at = datetime('now')
+      WHERE period_id = ? AND turn_state_version = ?
+    `).bind(JSON.stringify(turnState), periodId, expectedVersion).run();
+
+    if (((endRes.meta as any) || {}).changes === 0) {
+      return c.json({ message: 'Turn state changed in another tab. Please refresh.' }, 409);
+    }
 
     return c.json({
       message: 'Phase ended',
@@ -815,26 +890,33 @@ gameRouter.post('/teacher/:periodId/pause', async (c) => {
     // Verify period belongs to teacher
     const period = await c.env.DB.prepare(
       'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
-    ).bind(periodId, user.id).first();
+    ).bind(periodId, user.id).first<any>();
 
     if (!period) {
       return c.json({ message: 'Period not found' }, 404);
     }
 
-    // Get current turn state
+    // Get current turn state + version for optimistic concurrency.
     const gameState = await c.env.DB.prepare(
-      'SELECT turn_state FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+      'SELECT turn_state, turn_state_version FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first<any>();
 
     const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+    const expectedVersion = ((gameState as any)?.turn_state_version) || 0;
     turnState.isPaused = !turnState.isPaused;
 
-    // Update turn state
-    await c.env.DB.prepare(`
+    // Conditional update — if something else bumped the version (e.g. a
+    // submit-turn mirror write) we bail instead of stomping its changes.
+    const pauseRes = await c.env.DB.prepare(`
       UPDATE game_states
-      SET turn_state = ?, updated_at = datetime('now')
-      WHERE period_id = ?
-    `).bind(JSON.stringify(turnState), periodId).run();
+      SET turn_state = ?, turn_state_version = turn_state_version + 1,
+          updated_at = datetime('now')
+      WHERE period_id = ? AND turn_state_version = ?
+    `).bind(JSON.stringify(turnState), periodId, expectedVersion).run();
+
+    if (((pauseRes.meta as any) || {}).changes === 0) {
+      return c.json({ message: 'Turn state changed in another tab. Please refresh.' }, 409);
+    }
 
     return c.json({
       message: `Turn ${turnState.isPaused ? 'paused' : 'resumed'}`,
@@ -851,47 +933,63 @@ gameRouter.post('/student/:periodId/submit-turn', async (c) => {
   try {
     const user = c.get('user');
     const periodId = c.req.param('periodId');
-    const { decision } = await c.req.json();
+    const { decision } = await c.req.json() as any;
 
     // Verify student and period
     const student = await c.env.DB.prepare(
       'SELECT id FROM students WHERE id = ? AND period_id = ?'
-    ).bind(user.id, periodId).first();
+    ).bind(user.id, periodId).first<any>();
 
     if (!student) {
       return c.json({ message: 'Student not found in this period' }, 404);
     }
 
-    // Store turn decision
-    await c.env.DB.prepare(`
-      INSERT INTO turn_decisions (period_id, student_id, decision_data, created_at)
-      VALUES (?, ?, ?, datetime('now'))
-    `).bind(periodId, user.id, JSON.stringify(decision)).run();
-
-    // Update submission count in turn state
+    // Read current turn scope. We reject submissions outside the decision
+    // phase so a student can't sneak a decision in after the teacher ends it.
     const gameState = await c.env.DB.prepare(
-      'SELECT turn_state FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+      'SELECT turn_state, turn_number, turn_state_version FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first<any>();
 
-    const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
+    if (!gameState) {
+      return c.json({ message: 'Game not started' }, 400);
+    }
 
-    // Count submissions
+    const turnNumber = (gameState as any).turn_number || 0;
+    const turnState = JSON.parse((gameState as any).turn_state || '{}');
+
+    if (turnNumber === 0 || turnState.phase !== 'decision') {
+      return c.json({ message: 'Not in decision phase' }, 409);
+    }
+
+    // Idempotent upsert keyed on (period, student, turn). UNIQUE + REPLACE
+    // means a double-clicked submit never inflates the count; it just
+    // overwrites the prior row for the same turn.
+    await c.env.DB.prepare(`
+      INSERT OR REPLACE INTO turn_decisions (period_id, student_id, turn_number, decision_data, created_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).bind(periodId, user.id, turnNumber, JSON.stringify(decision)).run();
+
+    // Count for *this* turn from truth, not from a drifty JSON counter.
     const submissions = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM turn_decisions WHERE period_id = ? AND created_at > datetime("now", "-1 minute")'
-    ).bind(periodId).first();
+      'SELECT COUNT(*) as count FROM turn_decisions WHERE period_id = ? AND turn_number = ?'
+    ).bind(periodId, turnNumber).first<any>();
+    const submittedCount = (submissions as any)?.count || 0;
 
-    turnState.submittedCount = (submissions as any)?.count || 1;
-
-    // Update turn state
+    // Mirror the count into turn_state so polling clients see it. Use
+    // optimistic concurrency; a miss here is cosmetic (count is still
+    // authoritative in turn_decisions).
+    turnState.submittedCount = submittedCount;
+    const expectedVersion = (gameState as any).turn_state_version || 0;
     await c.env.DB.prepare(`
       UPDATE game_states
-      SET turn_state = ?, updated_at = datetime('now')
-      WHERE period_id = ?
-    `).bind(JSON.stringify(turnState), periodId).run();
+      SET turn_state = ?, turn_state_version = turn_state_version + 1,
+          updated_at = datetime('now')
+      WHERE period_id = ? AND turn_state_version = ?
+    `).bind(JSON.stringify(turnState), periodId, expectedVersion).run();
 
     return c.json({
       message: 'Turn submitted',
-      result: { submitted: true, submittedCount: turnState.submittedCount }
+      result: { submitted: true, submittedCount }
     }, 201);
   } catch (error) {
     console.error('Submit turn error:', error);
@@ -904,10 +1002,12 @@ gameRouter.get('/student/:periodId/turn-state', async (c) => {
   try {
     const periodId = c.req.param('periodId');
 
-    // Get current turn state
+    // Get current turn state + version. We need the version so the
+    // auto-transition below can be done atomically when 25 students all
+    // poll in the same second after the timer hits zero.
     const gameState = await c.env.DB.prepare(
-      'SELECT turn_state FROM game_states WHERE period_id = ?'
-    ).bind(periodId).first();
+      'SELECT turn_state, turn_state_version FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first<any>();
 
     const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
 
@@ -916,20 +1016,96 @@ gameRouter.get('/student/:periodId/turn-state', async (c) => {
       const remaining = Math.max(0, Math.floor((turnState.deadline - Date.now()) / 1000));
       turnState.timeRemaining = remaining;
 
-      // If time expired and phase is still decision, auto-transition to resolution
+      // If time expired and phase is still decision, *try* to auto-transition.
+      // Conditional on version: exactly one poll wins; the rest just return
+      // the resolution-phase state without double-writing.
       if (remaining === 0 && turnState.phase === 'decision') {
+        const expectedVersion = ((gameState as any)?.turn_state_version) || 0;
         turnState.phase = 'resolution';
         await c.env.DB.prepare(`
           UPDATE game_states
-          SET turn_state = ?, updated_at = datetime('now')
-          WHERE period_id = ?
-        `).bind(JSON.stringify(turnState), periodId).run();
+          SET turn_state = ?, turn_state_version = turn_state_version + 1,
+              updated_at = datetime('now')
+          WHERE period_id = ? AND turn_state_version = ?
+        `).bind(JSON.stringify(turnState), periodId, expectedVersion).run();
       }
     }
 
     return c.json(turnState, 200);
   } catch (error) {
     console.error('Get turn state error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// ============================================================================
+// LIVE LEADERBOARD — accessible to students (and teachers via same route)
+// ============================================================================
+// Returns all civs in a period sorted by Final Score. Drives the in-game
+// scoreboard tab's "Live Leaderboard" panel so every student can see how
+// their total compares to the rest of the class in real time. Poll this
+// every ~10s from the client (not too fast — a 30-student classroom
+// hitting a 5s poll would be chatty for no real benefit).
+gameRouter.get('/student/:periodId/leaderboard', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+
+    // Verify the requesting student belongs to this period. Teachers can
+    // also hit this endpoint (same path) but will fail the student middleware
+    // — they have the /teacher/*overview path for their dashboard.
+    const student = await c.env.DB.prepare(
+      'SELECT id FROM students WHERE id = ? AND period_id = ?'
+    ).bind(user.id, periodId).first<any>();
+
+    if (!student) {
+      return c.json({ message: 'Not a member of this period' }, 403);
+    }
+
+    const sessions = await c.env.DB.prepare(`
+      SELECT s.id, s.name, gs.civilization_id, gs.progress_data
+      FROM students s
+      LEFT JOIN game_sessions gs ON s.id = gs.student_id
+      WHERE s.period_id = ?
+    `).bind(periodId).all<any>();
+
+    const rows = sessions.results.map((session: any) => {
+      const progressData = session.progress_data ? JSON.parse(session.progress_data) : {};
+      let finalScore = { total: 0, breakdown: [] as any[], milestones: 0 };
+      try {
+        finalScore = calculateFinalScore(progressData);
+      } catch (e) {
+        // Keep zero-score on parse failure; don't break the leaderboard.
+      }
+      return {
+        studentId: session.id,
+        studentName: session.name,
+        civilizationId: session.civilization_id || 'egypt',
+        total: finalScore.total,
+        breakdown: finalScore.breakdown,
+        milestones: finalScore.milestones,
+        isYou: session.id === user.id,
+      };
+    });
+
+    // Sort descending; ties are broken by studentId for stability so the
+    // UI doesn't reshuffle every poll on equal scores.
+    rows.sort((a: any, b: any) => b.total - a.total || a.studentId - b.studentId);
+
+    // Award ranks (1-indexed). Tied scores share a rank.
+    let lastScore = -1;
+    let lastRank = 0;
+    rows.forEach((r: any, i: number) => {
+      if (r.total !== lastScore) {
+        lastRank = i + 1;
+        lastScore = r.total;
+      }
+      r.rank = lastRank;
+    });
+
+    return c.json({ periodId, rows }, 200);
+  } catch (error) {
+    console.error('Leaderboard error:', error);
     return c.json({ message: 'Internal server error' }, 500);
   }
 });

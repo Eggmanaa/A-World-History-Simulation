@@ -1,12 +1,9 @@
 import { Hono } from 'hono';
+import type { AppEnv } from '../types';
 import { hashPassword, verifyPassword, generateToken } from '../utils/crypto';
 import { getJWTSecret } from '../middleware/auth';
 
-type Bindings = {
-  DB: D1Database;
-};
-
-export const authRouter = new Hono<{ Bindings: Bindings }>();
+export const authRouter = new Hono<AppEnv>();
 
 // Teacher Registration
 authRouter.post('/teacher/register', async (c) => {

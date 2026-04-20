@@ -1,9 +1,14 @@
 import { Context, Next, HonoRequest } from 'hono';
 import { verifyToken } from '../utils/crypto';
 
-// Get JWT_SECRET from environment or use fallback
+// Get JWT_SECRET strictly from environment. No hardcoded fallback:
+// a missing secret must hard-fail so we never sign or verify tokens with a known value.
 const getJWTSecret = (env?: any): string => {
-  return env?.JWT_SECRET || 'your-secret-key-change-in-production';
+  const secret = env?.JWT_SECRET;
+  if (!secret || typeof secret !== 'string' || secret.length < 32) {
+    throw new Error('JWT_SECRET is missing or too short. Set it via wrangler pages secret put JWT_SECRET.');
+  }
+  return secret;
 };
 
 export const authMiddleware = (jwtSecret?: string) => {

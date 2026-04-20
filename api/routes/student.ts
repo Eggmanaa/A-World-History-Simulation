@@ -1,11 +1,8 @@
 import { Hono } from 'hono';
+import type { AppEnv } from '../types';
 import { studentAuthMiddleware } from '../middleware/auth';
 
-type Bindings = {
-  DB: D1Database;
-};
-
-export const studentRouter = new Hono<{ Bindings: Bindings }>();
+export const studentRouter = new Hono<AppEnv>();
 
 // Apply authentication middleware to all student routes
 studentRouter.use('/*', studentAuthMiddleware());

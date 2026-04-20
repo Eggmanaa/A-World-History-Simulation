@@ -1,12 +1,9 @@
 import { Hono } from 'hono';
+import type { AppEnv } from '../types';
 import { teacherAuthMiddleware } from '../middleware/auth';
 import { generateInviteCode } from '../utils/crypto';
 
-type Bindings = {
-  DB: D1Database;
-};
-
-export const teacherRouter = new Hono<{ Bindings: Bindings }>();
+export const teacherRouter = new Hono<AppEnv>();
 
 // Apply authentication middleware to all teacher routes
 teacherRouter.use('/*', teacherAuthMiddleware());
