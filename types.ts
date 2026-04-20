@@ -215,7 +215,7 @@ export interface TurnDecision {
 }
 
 // New Event System Types
-export type StatKey = 'martial' | 'defense' | 'faith' | 'industry' | 'fertility' | 'science' | 'culture' | 'diplomacy' | 'capacity';
+export type StatKey = 'martial' | 'defense' | 'faith' | 'industry' | 'fertility' | 'science' | 'culture' | 'diplomacy' | 'capacity' | 'population' | 'productionPool';
 
 export type EventActionType = 
   | 'MODIFY_STAT' // Permanent flat or percent bonus to a stat
@@ -468,7 +468,6 @@ export interface GameState {
   currentWorldEvent: WorldEvent | null;
   currentCivEvent: CivSpecificEvent | null;
   selectedWorldChoice: 'A' | 'B' | 'C' | null;
-  selectedAction: BuildingType | null; // kept for backward compat
   selectedPlayerAction: PlayerActionType | null;
   turnResolution: TurnResolution | null;
   actionPlacements: number; // remaining placements for grow/build actions
@@ -549,15 +548,32 @@ export interface ThresholdPopup {
   cta?: string;                   // call-to-action button label
 }
 
-export interface VictoryCondition {
+// SCORING SYSTEM — four thematic tracks that each contribute points to a
+// civilization's Final Score at the end of the game. There is NO threshold
+// victory; the game always runs its full 24 turns and the highest Final
+// Score wins, with a "Track Champion" award for the highest score in each
+// category. This preserves the drama of specialization while guaranteeing
+// no premature win and keeping every turn meaningful to every student.
+export interface ScoringTrack {
+    key: 'conquest' | 'innovation' | 'legacy' | 'faith';
     name: string;
     description: string;
     icon: string;
-    target: number; // Score needed to win this path.
+    // Dominant color for the UI — used by the scoreboard bar.
+    color: 'red' | 'cyan' | 'pink' | 'amber';
+    // An advisory "strong score" goal used only for UI pacing (progress bars,
+    // "on pace" hints). It is NOT a win condition — the game never ends
+    // just because a track hits this value.
+    benchmark: number;
     calculate: (state: any) => number;
     // Breakdown of line items feeding the score, for UI display.
     recipe: (state: any) => { label: string; value: number; points: number; formula: string }[];
 }
+
+// Kept as an alias for any remaining UI code that expects the old shape —
+// VictoryCondition is semantically the same structure. New code should use
+// ScoringTrack.
+export type VictoryCondition = ScoringTrack & { target: number };
 
 export interface Broadcast {
     id: string;

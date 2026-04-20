@@ -1036,7 +1036,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       },
     ],
     civSpecificEvents: [
-      { civId: 'rome', name: 'Pax Romana', description: 'The Roman Empire reaches its peak of power and stability.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial.' }, { type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial.' }] },
+      { civId: 'rome', name: 'Pax Romana', description: 'The Roman Empire reaches its peak of power and stability.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial from Pax Romana stability.' }] },
       { civId: 'israel', name: 'Birth of Christianity', description: 'A new faith emerges from the land of Israel.', effects: [{ type: 'modify_stat', stat: 'faith', value: 5, message: 'Israel: +5 Faith Total (birthplace of Christianity).' }] },
     ],
     unlocks: ['christianity'],
@@ -1082,7 +1082,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     ],
     civSpecificEvents: [
       { civId: 'rome', name: 'Antonine Plague', description: 'Rome suffers catastrophic plague losses.', effects: [{ type: 'lose_population', value: 2, message: 'Rome: -2 additional Population from Antonine Plague.' }] },
-      { civId: 'mesopotamia', name: 'Earthquake', description: 'A massive earthquake devastates Mesopotamia.', effects: [{ type: 'modify_stat', stat: 'martial', value: -2, message: 'Mesopotamia: -2 Martial.' }, { type: 'modify_stat', stat: 'martial', value: -2, message: 'Mesopotamia: -2 Martial.' }] },
+      { civId: 'mesopotamia', name: 'Earthquake', description: 'A massive earthquake devastates Mesopotamia.', effects: [{ type: 'modify_stat', stat: 'martial', value: -2, message: 'Mesopotamia: -2 Martial from earthquake devastation.' }] },
     ],
     unlocks: [],
   },
@@ -1102,7 +1102,6 @@ export const WORLD_EVENTS: WorldEvent[] = [
         label: 'Fight the Barbarians',
         description: 'Stand your ground and defend your civilization.',
         effects: [
-          { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial for the final battle.' },
           { type: 'modify_stat', stat: 'martial', value: 3, message: '+3 Martial for the final battle.' },
         ],
       },

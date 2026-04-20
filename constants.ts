@@ -1,5 +1,5 @@
 
-import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock, VictoryCondition, RespawnCiv, RespawnBonus } from './types';
+import { TerrainType, TileData, BuildingType, CivPreset, WonderDefinition, ReligionTenet, NeighborCiv, TimelineEvent, ScienceUnlock, ScoringTrack, VictoryCondition, RespawnCiv, RespawnBonus } from './types';
 
 export const HEX_SIZE = 1.0;
 export const MAP_RADIUS = 9;
@@ -796,105 +796,172 @@ export const CULTURAL_STAGE_THRESHOLDS: { stage: 'Classical' | 'Imperial' | 'Enl
     { stage: 'Modern',        minCulture: 200, flavor: 'A civilization at its zenith. Every yield amplified.' },
 ];
 
-// VICTORY CONDITIONS — four paths, each with a target score tuned to be
-// achievable in a 24-turn game if the civ specializes. Each condition also
-// publishes a `recipe` of line items the UI reads to show granular progress,
-// so students see exactly what's contributing and what to invest in next.
-// Targets were calibrated against a typical Egypt run: ~4 base production,
-// ~3 per-turn yields, modest combat / wonder engagement.
-export const VICTORY_CONDITIONS: Record<string, VictoryCondition> = {
-    military: {
+// SCORING TRACKS — four thematic categories that each contribute points to a
+// civilization's Final Score. There is NO threshold victory; the game runs
+// all 24 turns and the highest Final Score wins overall, with a "Track
+// Champion" awarded for the highest score in each individual category.
+//
+// DESIGN RATIONALE:
+//   • No premature victory — every civ plays the full campaign.
+//   • Hybrid builds are rewarded — a Rome that goes half-Conquest / half-Legacy
+//     is no longer punished by missing both thresholds.
+//   • Track Champion awards keep specialists honored even if they lose overall.
+//   • Weights are tuned so a focused civ lands ~150-220 points in its primary
+//     track by turn 24, a generalist ~80-130 per track. Total score for a
+//     strong civ lands in the 350-500 range.
+//   • `benchmark` is an advisory pacing goal for the UI progress bar —
+//     reaching it signals "on pace for Track Champion" but is NOT a win.
+export const SCORING_TRACKS: Record<string, ScoringTrack> = {
+    conquest: {
+        key: 'conquest',
         name: 'Conquest',
-        description: 'Conquer 5 civilizations through decisive victories.',
+        description: 'Military dominance through decisive battles and territorial expansion.',
         icon: 'Sword',
-        // BALANCE RATIONALE: Egypt (median civ) has 6 neighbors. Respawn civs
-        // appear on turn 15+, so there's a steady supply of new targets if the
-        // board thins out. Reaching Martial 15+ by turn 5-6 is achievable
-        // with a Barracks (+3) + Bronze Working unlock (+2) + a respawn bonus,
-        // and the margin-6 decisive victory requirement means you can't just
-        // squeak through — you need a real military civ. Five conquests over
-        // 24 turns = roughly one per 4-5 turns with Martial-focused play.
-        target: 5,
-        calculate: (state) => state.conqueredTerritories || 0,
+        color: 'red',
+        benchmark: 60,
+        calculate: (state) => {
+            const conquered = state.conqueredTerritories || 0;
+            const warsWon = state.warsWon || 0;
+            const martial = state.civilization?.stats?.martial || 0;
+            return conquered * 8 + warsWon * 2 + Math.floor(martial / 2);
+        },
         recipe: (state) => {
             const conquered = state.conqueredTerritories || 0;
             const warsWon = state.warsWon || 0;
+            const martial = state.civilization?.stats?.martial || 0;
             const territory = state.tiles?.filter((t: any) => t.building && t.building !== 'None').length || 0;
             return [
-                { label: 'Civilizations conquered', value: conquered, points: conquered, formula: '1 pt per decisive conquest (the only thing that counts toward victory)' },
-                { label: 'Total battles won',      value: warsWon,   points: 0,         formula: 'Informational — non-decisive wins don\'t conquer' },
-                { label: 'Tiles with buildings',   value: territory, points: 0,         formula: 'Informational — shows civ footprint' },
+                { label: 'Civilizations conquered', value: conquered, points: conquered * 8, formula: '8 pts per decisive conquest' },
+                { label: 'Battles won',            value: warsWon,   points: warsWon * 2,  formula: '2 pts per combat victory' },
+                { label: 'Martial strength',       value: martial,   points: Math.floor(martial / 2), formula: '1 pt per 2 Martial (endgame snapshot)' },
+                { label: 'Developed tiles',        value: territory, points: 0,            formula: 'Informational — shows civ footprint' },
             ];
         }
     },
-    scientific: {
+    innovation: {
+        key: 'innovation',
         name: 'Innovation',
-        description: 'Advance science to the highest level and collect historical technologies.',
+        description: 'Scientific progress, technological mastery, and accumulated knowledge.',
         icon: 'FlaskConical',
-        target: 70,
+        color: 'cyan',
+        benchmark: 100,
         calculate: (state) => {
             const science = state.civilization?.stats?.science || 0;
-            return science + (state.civilization?.technologies?.length || 0) * 3;
+            const techs = state.civilization?.technologies?.length || 0;
+            const libraries = state.civilization?.buildings?.libraries || 0;
+            return science + techs * 5 + libraries * 2;
         },
         recipe: (state) => {
             const science = state.civilization?.stats?.science || 0;
             const techs = state.civilization?.technologies?.length || 0;
+            const libraries = state.civilization?.buildings?.libraries || 0;
             return [
-                { label: 'Science Total',    value: science, points: science,  formula: '1 pt per Science' },
-                { label: 'Technologies',     value: techs,   points: techs * 3, formula: '3 pts per technology' },
+                { label: 'Science Total',    value: science,   points: science,       formula: '1 pt per Science' },
+                { label: 'Technologies',     value: techs,     points: techs * 5,     formula: '5 pts per tech unlocked' },
+                { label: 'Libraries',        value: libraries, points: libraries * 2, formula: '2 pts each' },
             ];
         }
     },
-    cultural: {
+    legacy: {
+        key: 'legacy',
         name: 'Legacy',
-        description: 'Amass Culture, erect Wonders, and reach advanced Cultural Stages.',
+        description: 'Cultural achievement, wonders, and civilizational maturity.',
         icon: 'Landmark',
-        target: 120,
+        color: 'pink',
+        benchmark: 140,
         calculate: (state) => {
             const culture = state.civilization?.stats?.culture || 0;
-            const wonders = (state.wondersBuilt?.length || 0) * 10;
+            const wonders = (state.wondersBuilt?.length || 0) * 8;
             const stage = state.civilization?.culturalStage;
-            const stageBonus = stage === 'Modern' ? 60
-                : stage === 'Enlightenment' ? 45
-                : stage === 'Imperial' ? 30
-                : stage === 'Classical' ? 15
+            const stageBonus = stage === 'Modern' ? 50
+                : stage === 'Enlightenment' ? 35
+                : stage === 'Imperial' ? 20
+                : stage === 'Classical' ? 10
                 : 0;
-            const amphitheatres = (state.civilization?.buildings?.amphitheatres || 0) * 3;
+            const amphitheatres = (state.civilization?.buildings?.amphitheatres || 0) * 2;
             return culture + wonders + stageBonus + amphitheatres;
         },
         recipe: (state) => {
             const culture = state.civilization?.stats?.culture || 0;
             const wonders = state.wondersBuilt?.length || 0;
             const stage = state.civilization?.culturalStage;
-            const stageBonus = stage === 'Modern' ? 60
-                : stage === 'Enlightenment' ? 45
-                : stage === 'Imperial' ? 30
-                : stage === 'Classical' ? 15
+            const stageBonus = stage === 'Modern' ? 50
+                : stage === 'Enlightenment' ? 35
+                : stage === 'Imperial' ? 20
+                : stage === 'Classical' ? 10
                 : 0;
             const amphitheatres = state.civilization?.buildings?.amphitheatres || 0;
             return [
-                { label: 'Culture Total',         value: culture,       points: culture,          formula: '1 pt per Culture' },
-                { label: 'Wonders built',         value: wonders,       points: wonders * 10,     formula: '10 pts per Wonder' },
-                { label: `Stage: ${stage}`,       value: stageBonus > 0 ? 1 : 0, points: stageBonus, formula: 'Classical 15 · Imperial 30 · Enlightenment 45 · Modern 60' },
-                { label: 'Amphitheatres',         value: amphitheatres, points: amphitheatres * 3, formula: '3 pts each' },
+                { label: 'Culture Total',          value: culture,       points: culture,           formula: '1 pt per Culture' },
+                { label: 'Wonders built',          value: wonders,       points: wonders * 8,       formula: '8 pts per Wonder' },
+                { label: `Stage: ${stage || 'Barbarism'}`, value: stageBonus > 0 ? 1 : 0, points: stageBonus, formula: 'Classical 10 · Imperial 20 · Enlightenment 35 · Modern 50' },
+                { label: 'Amphitheatres',          value: amphitheatres, points: amphitheatres * 2, formula: '2 pts each' },
             ];
         }
     },
-    religious: {
+    faith: {
+        key: 'faith',
         name: 'Faith',
-        description: 'Grow spiritual power and spread your religion to neighboring civs.',
+        description: 'Spiritual power, religious depth, and missionary reach.',
         icon: 'Scroll',
-        target: 30,
+        color: 'amber',
+        benchmark: 60,
         calculate: (state) => {
-            return (state.civilization?.stats?.faith || 0) + (state.religionSpread || 0) * 5;
+            const faith = state.civilization?.stats?.faith || 0;
+            const spread = state.religionSpread || 0;
+            const temples = state.civilization?.buildings?.temples || 0;
+            return faith + spread * 4 + temples * 2;
         },
         recipe: (state) => {
             const faith = state.civilization?.stats?.faith || 0;
             const spread = state.religionSpread || 0;
+            const temples = state.civilization?.buildings?.temples || 0;
             return [
-                { label: 'Faith Total',            value: faith,  points: faith,     formula: '1 pt per Faith' },
-                { label: 'Neighbors converted',    value: spread, points: spread * 5, formula: '5 pts per conversion' },
+                { label: 'Faith Total',            value: faith,   points: faith,       formula: '1 pt per Faith' },
+                { label: 'Neighbors converted',    value: spread,  points: spread * 4,  formula: '4 pts per conversion' },
+                { label: 'Temples',                value: temples, points: temples * 2, formula: '2 pts each' },
             ];
         }
     }
+};
+
+// Compute a civilization's total Final Score across all tracks plus any
+// milestone bonuses. Returns both the aggregate and the per-track breakdown
+// so the UI can show a leaderboard and highlight Track Champions.
+export function calculateFinalScore(state: any): {
+    total: number;
+    breakdown: { key: string; name: string; score: number; benchmark: number }[];
+    milestones: number;
+} {
+    const breakdown = Object.values(SCORING_TRACKS).map(t => ({
+        key: t.key,
+        name: t.name,
+        score: t.calculate(state),
+        benchmark: t.benchmark,
+    }));
+    // Cross-track milestone bonuses — rewards for crossing meaningful
+    // historical thresholds. Kept small (max ~50 pts) so tracks remain the
+    // main scoring driver.
+    const wonders = state.wondersBuilt?.length || 0;
+    const techs = state.civilization?.technologies?.length || 0;
+    const stage = state.civilization?.culturalStage;
+    let milestones = 0;
+    if (wonders >= 1) milestones += 5;       // First wonder
+    if (wonders >= 3) milestones += 10;      // Three wonders
+    if (techs >= 4) milestones += 10;        // Deep research
+    if (techs >= 6) milestones += 15;        // All core techs
+    if (stage === 'Modern') milestones += 20; // Peak civilization
+    if ((state.conqueredTerritories || 0) >= 3) milestones += 10; // Hegemon
+    const trackTotal = breakdown.reduce((sum, b) => sum + b.score, 0);
+    return { total: trackTotal + milestones, breakdown, milestones };
+}
+
+// LEGACY ALIAS — older code may still import VICTORY_CONDITIONS. We alias
+// the new SCORING_TRACKS to the old name and synthesize a `target` field
+// (using benchmark) so any lingering UI that reads `target` still works.
+export const VICTORY_CONDITIONS: Record<string, VictoryCondition> = {
+    military: { ...SCORING_TRACKS.conquest, target: SCORING_TRACKS.conquest.benchmark },
+    scientific: { ...SCORING_TRACKS.innovation, target: SCORING_TRACKS.innovation.benchmark },
+    cultural: { ...SCORING_TRACKS.legacy, target: SCORING_TRACKS.legacy.benchmark },
+    religious: { ...SCORING_TRACKS.faith, target: SCORING_TRACKS.faith.benchmark },
 };

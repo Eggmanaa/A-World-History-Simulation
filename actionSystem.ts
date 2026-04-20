@@ -38,12 +38,17 @@ export interface ActionPreview {
 
 /**
  * ACTION UNLOCK PROGRESSION:
- * Turn 1+  (Ancient):     Grow, Research (2 actions) + Build Phase every turn
- * Turn 3+  (Age of Walls): Fortify (4) - defense becomes important
- * Turn 5+  (Bronze Age):  Trade, Develop (6) - bronze age brings commerce and culture
- * Turn 7+  (Age of Wonders): Wonder (7) - monumental construction
- * Turn 9+  (Iron Age):    Worship, Diplomacy (9) - religion and politics emerge
- * Turn 11+ (Age of Conquest): Attack (10) - warfare unlocked
+ * Turn 1+  (Ancient):     Grow, Research + Build Phase every turn
+ * Turn 3+  (Age of Walls): Fortify, Attack - defense and early raiding
+ * Turn 4+  (Late Neolithic): Faith/Worship (early shrines and sacred sites)
+ * Turn 5+  (Bronze Age):  Trade, Develop - bronze age commerce and culture
+ * Turn 7+  (Age of Wonders): Wonder - monumental construction
+ * Turn 9+  (Iron Age):    Diplomacy - formal diplomacy between powers
+ *
+ * NOTE: Attack was originally gated until Turn 11 (Age of Conquest), but early
+ * playtests showed students lacked meaningful decisions in the mid-early game.
+ * We moved it to Turn 3 — the Turn 11 "Age of Conquest" world event still
+ * fires as a narrative beat but no longer flips the warfare flag.
  */
 export const ACTION_DEFINITIONS: ActionDefinition[] = [
   {
@@ -685,7 +690,10 @@ export function calculateIncome(state: GameState): {
   const changes: Partial<GameState['civilization']['stats']> = {};
 
   // 1. Production Pool += Production Income
-  const income = stats.productionIncome || stats.industry;
+  // Use ?? (not ||) so a legitimately-zero productionIncome is respected instead
+  // of silently falling through to industry. Industry is the legacy base stat
+  // used only when productionIncome hasn't been initialized (pre-V2 saves).
+  const income = stats.productionIncome ?? stats.industry;
   changes.productionPool = (stats.productionPool || 0) + income;
   messages.push(`+${income} Production Pool from income (total: ${changes.productionPool}).`);
 
