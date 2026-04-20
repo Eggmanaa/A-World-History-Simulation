@@ -342,6 +342,34 @@ export interface WorldEvent {
   unlocks?: string[]; // e.g., ['religion', 'warfare', 'wonders_ancient']
 }
 
+// Primary source snippet attached to world events. Aligned with the Stanford
+// Reading Like a Historian framework (sourcing, contextualization,
+// corroboration, close reading). Keep excerpts short (under ~50 words) for
+// classroom readability. Use only public-domain classical translations.
+export type HistoricalThinkingTag =
+  | 'sourcing'
+  | 'contextualization'
+  | 'corroboration'
+  | 'close_reading';
+
+export interface PrimarySource {
+  turn: number;               // matches WorldEvent.turn
+  excerpt: string;            // the quoted passage
+  attribution: string;        // author / work / date
+  sourceType:
+    | 'inscription'
+    | 'literary'
+    | 'religious'
+    | 'legal'
+    | 'historical'
+    | 'artifact'
+    | 'eyewitness';
+  sourcingQuestion: string;      // "Who wrote this? When? Why?"
+  contextQuestion: string;       // "What was happening in the world at this time?"
+  analysisPrompt: string;        // close reading / corroboration prompt
+  historicalThinkingTag: HistoricalThinkingTag;
+}
+
 // Turn resolution summary
 export interface TurnResolution {
   turn: number;

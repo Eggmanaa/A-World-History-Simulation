@@ -4,6 +4,7 @@ import { authRouter } from './routes/auth';
 import { teacherRouter } from './routes/teacher';
 import { studentRouter } from './routes/student';
 import { gameRouter } from './routes/game';
+import { diplomacyRouter } from './routes/diplomacy';
 import type { AppEnv } from './types';
 
 const api = new Hono<AppEnv>();
@@ -24,5 +25,6 @@ api.route('/auth', authRouter);
 api.route('/teacher', teacherRouter);
 api.route('/student', studentRouter);
 api.route('/game', gameRouter);
+api.route('/diplomacy', diplomacyRouter);
 
 export { api };

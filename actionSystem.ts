@@ -1,5 +1,5 @@
 /**
- * ACTION SYSTEM - Through History v2
+ * ACTION SYSTEM - Ancient World Simulation v2
  * 10 actions a student can choose each turn.
  * Each action has clear trade-offs: you can only pick ONE per turn.
  * This creates the core strategic tension of the game.
@@ -785,6 +785,7 @@ export function calculateIncome(state: GameState): {
       messages.push(`🛡️ A raid was beaten back — defense ${effectiveDef}${defenseBreakdown} held off raid power ${raidPower}. No losses.`);
     }
   }
+
 
   return { messages, statChanges: changes };
 }

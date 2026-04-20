@@ -10,7 +10,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Coins, Globe, MapPin, Zap, ChevronRight, Check, X, Sword, Shield,
   ShieldPlus, FlaskConical, Palette, Scroll, Sprout, Hammer, Handshake,
-  Landmark, Clock, Star, Crown, TrendingUp, AlertTriangle,
+  Landmark, Clock, Star, Crown, TrendingUp, AlertTriangle, BookOpen, Quote,
 } from 'lucide-react';
 import type {
   GameState, WorldEvent, CivSpecificEvent, PlayerActionType,
@@ -22,6 +22,7 @@ import {
   type ActionDefinition,
 } from '../actionSystem';
 import { WONDERS_LIST, RELIGION_TENETS } from '../constants';
+import { getPrimarySourceForTurn } from '../primarySources';
 
 // Icon mapping
 const ICON_MAP: Record<string, React.FC<any>> = {
@@ -115,6 +116,7 @@ const WorldEventPanel: React.FC<{
   const [hoveredChoice, setHoveredChoice] = useState<'A' | 'B' | 'C' | null>(null);
   const [selectedChoice, setSelectedChoice] = useState<'A' | 'B' | 'C' | null>(null);
   const [revealed, setRevealed] = useState(false);
+  const [sourceExpanded, setSourceExpanded] = useState(false);
 
   const eraColors: Record<string, string> = {
     Ancient: 'border-amber-500 bg-amber-500/10',
@@ -135,6 +137,7 @@ const WorldEventPanel: React.FC<{
   };
 
   const selectedChoiceData = selectedChoice ? event.choices.find(c => c.id === selectedChoice) : null;
+  const primarySource = getPrimarySourceForTurn(event.turn);
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -156,6 +159,60 @@ const WorldEventPanel: React.FC<{
 
         {/* Description */}
         <p className="text-slate-300 text-sm leading-relaxed mb-4">{event.description}</p>
+
+        {/* Primary Source — Reading Like a Historian */}
+        {primarySource && (
+          <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg p-4 mb-4">
+            <button
+              type="button"
+              onClick={() => setSourceExpanded(!sourceExpanded)}
+              className="w-full flex items-center justify-between gap-2 mb-2 hover:text-amber-300 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  Primary Source
+                </span>
+                <span className="text-[10px] text-amber-500/70 uppercase">
+                  {primarySource.sourceType}
+                </span>
+              </div>
+              <ChevronRight className={`w-4 h-4 text-amber-400 transition-transform ${sourceExpanded ? 'rotate-90' : ''}`} />
+            </button>
+            <div className="flex gap-2 items-start">
+              <Quote className="w-4 h-4 text-amber-500/60 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-100 italic leading-relaxed">
+                {primarySource.excerpt}
+              </p>
+            </div>
+            <p className="text-xs text-amber-400/80 mt-2 text-right">
+              — {primarySource.attribution}
+            </p>
+
+            {sourceExpanded && (
+              <div className="mt-3 pt-3 border-t border-amber-700/40 space-y-2 text-xs text-amber-100/90">
+                <div>
+                  <p className="font-semibold text-amber-400 text-[10px] uppercase tracking-wider mb-0.5">
+                    Sourcing
+                  </p>
+                  <p>{primarySource.sourcingQuestion}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-400 text-[10px] uppercase tracking-wider mb-0.5">
+                    Context
+                  </p>
+                  <p>{primarySource.contextQuestion}</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-400 text-[10px] uppercase tracking-wider mb-0.5">
+                    Analysis
+                  </p>
+                  <p>{primarySource.analysisPrompt}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Global Effects */}
         {event.globalEffects.length > 0 && (

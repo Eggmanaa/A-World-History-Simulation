@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import MapScene from "./components/MapScene";
 import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
+import ReflectionTurn, { type ReflectionResult } from "./components/ReflectionTurn";
 import { useGameSync } from "./hooks/useGameSync";
 import { useAutoSave } from "./hooks/useAutoSave";
 import {
@@ -48,6 +49,7 @@ import {
   calculateFinalScore,
 } from "./constants";
 import { LiveLeaderboard } from "./components/LiveLeaderboard";
+import { DiplomacyPanel } from "./components/DiplomacyPanel";
 import {
   TileData,
   TerrainType,
@@ -725,7 +727,7 @@ const App: React.FC = () => {
   // --- STATE ---
   const [tiles, setTiles] = useState<TileData[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "build" | "science" | "culture" | "world" | "wonders" | "religion" | "war" | "scoreboard"
+    "build" | "science" | "culture" | "world" | "wonders" | "religion" | "war" | "scoreboard" | "diplomacy"
   >("build");
   // Tracks which stat/block in the left sidebar is currently expanded for
   // its rich explanation. null = nothing expanded. Click again to collapse.
@@ -1364,6 +1366,35 @@ const App: React.FC = () => {
   const [conquestMessages, setConquestMessages] = useState<string[]>([]);
   const [conquestTargetName, setConquestTargetName] = useState<string>('');
   const [showConquestReward, setShowConquestReward] = useState(false);
+
+  // --- REFLECTION TURN STATE ---
+  // Decision log: each consequential choice the student makes is appended
+  // here so the post-game Reflection screen can show them as turning-point
+  // candidates. Stored per-game in localStorage so refresh doesn't lose it.
+  const [decisionLog, setDecisionLog] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem('aws_decision_log');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [reflectionDismissed, setReflectionDismissed] = useState(false);
+  const appendDecision = (entry: string) => {
+    setDecisionLog((prev) => {
+      const next = [...prev, entry];
+      try {
+        window.localStorage.setItem('aws_decision_log', JSON.stringify(next));
+      } catch { /* ignore */ }
+      return next;
+    });
+  };
+  const handleReflectionComplete = (result: ReflectionResult) => {
+    try {
+      window.localStorage.setItem('aws_reflection_result', JSON.stringify(result));
+    } catch { /* ignore */ }
+  };
   // showRespawnPanel is declared earlier to keep respawn trigger useEffect valid.
   // takenRespawnIds is declared earlier (near the save/load block) to avoid TDZ.
 
@@ -1506,6 +1537,12 @@ const App: React.FC = () => {
 
     const selectedChoice = event.choices.find(c => c.id === choice);
     if (!selectedChoice) return;
+
+    // Record this decision so the Reflection Turn can surface it as a
+    // turning-point candidate later.
+    appendDecision(
+      `Turn ${event.turn} (${event.yearLabel}) — ${event.name}: chose ${choice} (${selectedChoice.label})`
+    );
 
     // Apply global effects
     const globalMessages: string[] = [];
@@ -3188,10 +3225,10 @@ const App: React.FC = () => {
       <div className="h-screen w-full bg-slate-900 flex items-center justify-center p-10 font-sans">
         <div className="max-w-5xl w-full bg-slate-800 rounded-2xl shadow-2xl p-8 border border-slate-700 flex flex-col max-h-full overflow-hidden">
           <h1 className="text-4xl font-bold text-orange-500 mb-2 flex items-center gap-3">
-            <History size={40} /> Through History
+            <History size={40} /> Ancient World Simulation
           </h1>
           <p className="text-slate-400 mb-8">
-            Select a Civilization to begin the simulation.
+            Choose a civilization to lead from the first settlements through the Fall of Rome.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
             {CIV_PRESETS.map((civ) => (
@@ -3290,6 +3327,20 @@ const App: React.FC = () => {
           messages={conquestMessages}
           conqueredName={conquestTargetName}
           onDismiss={() => setShowConquestReward(false)}
+        />
+      )}
+
+      {/* REFLECTION TURN — appears once after Turn 24 finishes. The
+          student can dismiss it (X button on the screen wraps onComplete) so
+          they aren't forced to redo it on every refresh. */}
+      {gameState.gameEnded && !reflectionDismissed && (
+        <ReflectionTurn
+          gameState={gameState}
+          decisionHistory={decisionLog}
+          onComplete={(result) => {
+            handleReflectionComplete(result);
+            setReflectionDismissed(true);
+          }}
         />
       )}
 
@@ -4166,7 +4217,7 @@ const App: React.FC = () => {
         {/* RIGHT TABBED PANEL - Hidden on mobile */}
         <aside className="hidden md:flex w-80 bg-slate-900 border-l border-slate-800 flex-col z-10 shadow-xl">
           <div className="flex border-b border-slate-800">
-            {["build", "science", "culture", "world", "wonders", "religion", "war", "scoreboard"].map((tab) => (
+            {["build", "science", "culture", "world", "wonders", "religion", "war", "diplomacy", "scoreboard"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
@@ -4180,6 +4231,7 @@ const App: React.FC = () => {
                 {tab === "wonders" && <Crown size={18} />}
                 {tab === "religion" && <Star size={18} />}
                 {tab === "war" && <Sword size={18} />}
+                {tab === "diplomacy" && <Handshake size={18} />}
                 {tab === "scoreboard" && <Trophy size={18} />}
               </button>
             ))}
@@ -5147,6 +5199,27 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* DIPLOMACY TAB — student-to-student trading and relations.
+                Students can propose resource trades, accept/reject incoming
+                offers, cancel their own outstanding offers, and declare
+                relation state (neutral/treaty/alliance/hostile) with each
+                classmate. Teachers see the full period overview. Solo/offline
+                mode renders a compact placeholder. */}
+            {activeTab === "diplomacy" && (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                  Diplomacy &amp; Trade
+                </h2>
+                <p className="text-[11px] text-slate-400 leading-relaxed -mt-1">
+                  Negotiate with other civilizations in your period. Propose trades of production, science, culture, or faith. Declare alliances, treaties, or hostilities.
+                </p>
+                <DiplomacyPanel
+                  periodId={syncState.periodId}
+                  currentTurn={gameState.turnNumber || 1}
+                />
+              </div>
+            )}
+
             {/* SCOREBOARD TAB — live scoring across all four thematic tracks.
                 Highest total at turn 24 wins overall; highest per-track
                 wins Track Champion. No threshold victory: every civ plays
@@ -5529,3 +5602,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+              

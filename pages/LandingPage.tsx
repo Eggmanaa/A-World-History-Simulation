@@ -33,15 +33,15 @@ const LandingPage: React.FC = () => {
               <Globe className="w-10 h-10 text-amber-400" />
             </div>
             <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight">
-              Through History
+              Ancient World Simulation
             </h1>
           </div>
 
           <p className="text-xl text-slate-700 mb-2 font-medium">
-            A World History Simulation Game for High School Students
+            A Classroom Civilization Game for High School History
           </p>
           <p className="text-slate-500 mb-8">
-            Build civilizations, manage resources, and survive from 50,000 BCE to 362 CE
+            Lead an ancient civilization from the first settlements through the Fall of Rome (3000 BCE - 476 CE)
           </p>
 
           {/* Single Player Button */}

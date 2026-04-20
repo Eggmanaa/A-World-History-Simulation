@@ -1,5 +1,5 @@
 /**
- * WORLD EVENTS - Through History v2
+ * WORLD EVENTS - Ancient World Simulation v2
  * 24 turns of historical events, each with:
  * - Global effects applied to all players
  * - A/B/C choices with distinct strategic trade-offs
@@ -153,6 +153,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     civSpecificEvents: [
       { civId: 'china', name: 'Great Wall Tradition', description: 'China begins its legendary wall-building tradition.', effects: [{ type: 'set_flag', message: 'China: Walls cost 2 less Production.' }] },
       { civId: 'mesopotamia', name: 'Ziggurats Rise', description: 'Massive temple-towers dominate Mesopotamian cities.', effects: [{ type: 'modify_stat', stat: 'faith', value: 2, message: 'Mesopotamia: +2 Faith from Ziggurats.' }] },
+      { civId: 'crete', name: 'Minoan Palaces', description: 'Crete begins constructing elaborate multi-story palaces at Knossos and Phaistos.', effects: [{ type: 'modify_stat', stat: 'culture', value: 2, message: 'Crete: +2 Culture Total from Minoan palace construction.' }, { type: 'modify_yield', stat: 'industry', value: 1, message: 'Crete: +1 Production Income from trade network.' }] },
     ],
     unlocks: [],
   },
@@ -249,6 +250,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'troy', name: 'Walls of Ilium', description: 'Troy builds legendary fortifications controlling the Hellespont.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Troy: +4 Martial from legendary walls.' }] },
       { civId: 'scythia', name: 'Horse Lords of the Steppe', description: 'Scythian riders master mounted archery on the open plains.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Scythia: +3 Martial from mounted archery.' }] },
       { civId: 'olmec', name: 'Colossal Heads', description: 'The Olmec create massive stone heads honoring their rulers.', effects: [{ type: 'modify_stat', stat: 'culture', value: 3, message: 'Olmec: +3 Culture Total from monumental art.' }] },
+      { civId: 'crete', name: 'Minoan Thalassocracy', description: 'Crete dominates Aegean trade with painted pottery, bronze goods, and saffron.', effects: [{ type: 'modify_yield', stat: 'industry', value: 2, message: 'Crete: +2 Production Income from Aegean trade dominance.' }] },
     ],
     unlocks: ['bronze_age'],
   },
@@ -337,6 +339,8 @@ export const WORLD_EVENTS: WorldEvent[] = [
     ],
     civSpecificEvents: [
       { civId: 'egypt', name: 'Monument Builders', description: 'Egypt\'s wonder-building tradition activates.', effects: [{ type: 'modify_stat', stat: 'productionPool', value: 3, message: 'Egypt: +3 Production Pool (Monument Builders trait).' }] },
+      { civId: 'troy', name: 'Walls of Ilium Completed', description: 'King Priam\'s Troy commands the Hellespont; its walls will stand against Achaean siege.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Troy: +2 Martial from legendary fortifications.' }, { type: 'modify_yield', stat: 'industry', value: 1, message: 'Troy: +1 Production Income from Hellespont tolls.' }] },
+      { civId: 'olmec', name: 'San Lorenzo Flourishes', description: 'The Olmec carve colossal basalt heads portraying their rulers; writing and calendar systems emerge.', effects: [{ type: 'modify_stat', stat: 'culture', value: 3, message: 'Olmec: +3 Culture Total from monumental art.' }, { type: 'modify_yield', stat: 'science', value: 1, message: 'Olmec: +1 Science Yield from early calendar.' }] },
     ],
     unlocks: ['wonders_ancient'],
   },
@@ -385,6 +389,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'troy', name: 'Fall of Troy', description: 'After a long siege, Troy falls to Greek forces but its legacy endures.', effects: [{ type: 'modify_stat', stat: 'culture', value: 5, message: 'Troy: +5 Culture Total (legendary legacy).' }, { type: 'modify_stat', stat: 'martial', value: -2, message: 'Troy: -2 Martial from siege losses.' }] },
       { civId: 'gaul', name: 'Celtic Ironwork', description: 'Gallic smiths develop distinctive iron weapons and art.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Gaul: +2 Martial from superior ironwork.' }, { type: 'modify_stat', stat: 'culture', value: 1, message: 'Gaul: +1 Culture from La Tene art.' }] },
       { civId: 'khmer', name: 'Mekong Basin Settlement', description: 'Khmer settlements flourish along the Mekong River delta.', effects: [{ type: 'modify_stat', stat: 'capacity', value: 2, message: 'Khmer: +2 Capacity from rice paddy agriculture.' }] },
+      { civId: 'anatolia', name: 'Hittite Empire Falls', description: 'The great Hittite capital Hattusa is destroyed; their iron-working knowledge scatters.', effects: [{ type: 'lose_population', value: 3, message: 'Anatolia: -3 Population from Hittite collapse.' }, { type: 'modify_yield', stat: 'science', value: 1, message: 'Anatolia: +1 Science Yield as iron-working spreads.' }] },
     ],
     unlocks: [],
   },
@@ -434,6 +439,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     civSpecificEvents: [
       { civId: 'assyria', name: 'Elite Soldiers', description: 'Assyria fields the ancient world\'s most feared army.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Assyria: +4 Martial from elite soldiers.' }] },
       { civId: 'israel', name: 'Temple of Solomon', description: 'A magnificent temple rises in Jerusalem.', effects: [{ type: 'modify_stat', stat: 'faith', value: 5, message: 'Israel: +5 Faith Total from the Temple.' }] },
+      { civId: 'india', name: 'Vedic Age Hymns', description: 'The Rig Veda is compiled; sacred hymns shape the Hindu tradition for millennia.', effects: [{ type: 'modify_yield', stat: 'faith', value: 3, message: 'India: +3 Faith Yield from Vedic tradition.' }, { type: 'modify_stat', stat: 'culture', value: 2, message: 'India: +2 Culture Total from scripture.' }] },
     ],
     unlocks: ['religion', 'iron_age'],
   },
@@ -481,6 +487,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     civSpecificEvents: [
       { civId: 'phoenicia', name: 'The Alphabet Spreads', description: 'Phoenician writing revolutionizes communication.', effects: [{ type: 'modify_yield', stat: 'science', value: 2, message: 'Phoenicia: +2 Science Yield from alphabet invention.' }] },
       { civId: 'persia', name: 'Medes Unite', description: 'The Median confederation grows in power.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Persia: +2 Martial from Median alliance.' }] },
+      { civId: 'assyria', name: 'Black Obelisk Campaigns', description: 'Shalmaneser III carves his victories in stone; tribute pours in from Israel, Tyre, and Damascus.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Assyria: +3 Martial from continuous campaigning.' }, { type: 'modify_yield', stat: 'industry', value: 1, message: 'Assyria: +1 Production Income from tribute.' }] },
     ],
     unlocks: [],
   },
@@ -526,6 +533,8 @@ export const WORLD_EVENTS: WorldEvent[] = [
     ],
     civSpecificEvents: [
       { civId: 'germania', name: 'Contact with the South', description: 'Germanic tribes begin interacting with Mediterranean civilizations.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Germania: +2 Martial from new weapons.' }] },
+      { civId: 'cush', name: 'Twenty-Fifth Dynasty', description: 'Cushite pharaoh Taharqa rules both Nubia and Egypt; the Kingdom of Kush reaches its zenith.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Cush: +3 Martial from double kingdom.' }, { type: 'modify_stat', stat: 'culture', value: 3, message: 'Cush: +3 Culture Total (rules two civilizations).' }] },
+      { civId: 'scythia', name: 'Scythian Incursion', description: 'Scythian cavalry sweep into the Near East; Herodotus records 28 years of Scythian dominion.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Scythia: +3 Martial from Near-East raids.' }, { type: 'modify_yield', stat: 'industry', value: 1, message: 'Scythia: +1 Production Income from plunder.' }] },
     ],
     unlocks: ['warfare'],
   },
@@ -621,6 +630,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'sparta', name: 'Thermopylae', description: '300 Spartans hold the pass against the Persian horde.', effects: [{ type: 'modify_stat', stat: 'martial', value: 8, message: 'Sparta: +8 Martial this turn (Thermopylae).' }, { type: 'modify_stat', stat: 'culture', value: 5, message: 'Sparta: +5 Culture Total from legendary last stand.' }] },
       { civId: 'greece', name: 'Fleet of Salamis', description: 'Athens builds the fleet that will save Greece.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Greece: +4 Martial from naval superiority.' }] },
       { civId: 'persia', name: 'March of the Immortals', description: 'Persia\'s elite soldiers lead the invasion.', effects: [{ type: 'modify_stat', stat: 'martial', value: 5, message: 'Persia: +5 Martial for the invasion.' }] },
+      { civId: 'anatolia', name: 'Ionian Revolt Aftermath', description: 'The Ionian Greek cities of Anatolia are recovering from their failed revolt against Persia.', effects: [{ type: 'lose_population', value: 1, message: 'Anatolia: -1 Population from Persian reprisals.' }, { type: 'modify_stat', stat: 'culture', value: 2, message: 'Anatolia: +2 Culture Total as Ionian philosophy spreads.' }] },
     ],
     unlocks: ['wonders_classical'],
   },
@@ -667,6 +677,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'greece', name: 'Golden Age of Athens', description: 'Athens enters its most glorious period.', effects: [{ type: 'modify_stat', stat: 'culture', value: 4, message: 'Greece: +4 Culture Total (Golden Age).' }, { type: 'modify_stat', stat: 'science', value: 3, message: 'Greece: +3 Science Total.' }] },
       { civId: 'rome', name: 'Latin Culture Emerges', description: 'Rome begins to develop its own cultural identity.', effects: [{ type: 'modify_yield', stat: 'culture', value: 1, message: 'Rome: +1 Culture Yield.' }] },
       { civId: 'carthage', name: 'Western Mediterranean Power', description: 'Carthage dominates western Mediterranean trade.', effects: [{ type: 'modify_stat', stat: 'productionPool', value: 3, message: 'Carthage: +3 Production Pool from trade dominance.' }] },
+      { civId: 'sparta', name: 'Spartan Hegemony', description: 'After victory in the Peloponnesian War, Sparta dominates Greece — briefly.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Sparta: +3 Martial from hegemony.' }, { type: 'modify_stat', stat: 'culture', value: -1, message: 'Sparta: -1 Culture (austerity remains unchanged).' }] },
     ],
     unlocks: [],
   },
@@ -710,6 +721,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     civSpecificEvents: [
       { civId: 'macedon', name: 'Alexander\'s Conquest', description: 'Alexander leads Macedonia to unprecedented glory.', effects: [{ type: 'modify_stat', stat: 'martial', value: 10, message: 'Macedonia: +10 Martial (Alexander\'s Conquest).' }, { type: 'modify_stat', stat: 'culture', value: 5, message: 'Macedonia: +5 Culture Total.' }] },
       { civId: 'persia', name: 'Fall of Persepolis', description: 'The Persian capital falls to Alexander.', effects: [{ type: 'modify_stat', stat: 'martial', value: -3, message: 'Persia: -3 Martial from defeat.' }, { type: 'modify_stat', stat: 'martial', value: -2, message: 'Persia: -2 Martial.' }] },
+      { civId: 'india', name: 'Mauryan Foundation', description: 'Chandragupta Maurya unites India, halts Alexander\'s heirs, and begins the subcontinent\'s first empire.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'India: +3 Martial from unified empire.' }, { type: 'modify_stat', stat: 'culture', value: 2, message: 'India: +2 Culture Total from Mauryan rise.' }] },
     ],
     unlocks: [],
   },
@@ -899,6 +911,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
       { civId: 'khmer', name: 'Funan Kingdom', description: 'The Khmer-influenced Funan kingdom controls vital trade routes.', effects: [{ type: 'modify_stat', stat: 'productionPool', value: 3, message: 'Khmer: +3 Production Pool from maritime trade.' }, { type: 'modify_stat', stat: 'culture', value: 2, message: 'Khmer: +2 Culture Total from Indianized culture.' }] },
       { civId: 'ethiopia', name: 'Rise of Aksum', description: 'The Kingdom of Aksum becomes a major trading power.', effects: [{ type: 'modify_stat', stat: 'productionPool', value: 3, message: 'Ethiopia: +3 Production Pool from Red Sea trade.' }, { type: 'modify_stat', stat: 'faith', value: 2, message: 'Ethiopia: +2 Faith Total from early Christianity.' }] },
       { civId: 'gaul', name: 'Vercingetorix\'s Stand', description: 'Gaul unites under a single chieftain against Roman invasion.', effects: [{ type: 'modify_stat', stat: 'martial', value: 2, message: 'Gaul: +2 Martial from tribal unity.' }, { type: 'modify_stat', stat: 'martial', value: 3, message: 'Gaul: +3 Martial from fortified positions.' }] },
+      { civId: 'macedon', name: 'Fourth Macedonian War', description: 'Rome crushes the final Macedonian revolt and annexes Alexander\'s homeland as a Roman province.', effects: [{ type: 'lose_population', value: 3, message: 'Macedon: -3 Population from Roman conquest.' }, { type: 'modify_stat', stat: 'martial', value: -3, message: 'Macedon: -3 Martial (absorbed into Rome).' }] },
     ],
     unlocks: [],
   },
@@ -946,6 +959,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     ],
     civSpecificEvents: [
       { civId: 'israel', name: 'Maccabean Revolt', description: 'Israel fights for religious freedom.', effects: [{ type: 'modify_stat', stat: 'faith', value: 3, message: 'Israel: +3 Faith Total.' }, { type: 'modify_stat', stat: 'martial', value: 2, message: 'Israel: +2 Martial.' }] },
+      { civId: 'germania', name: 'Warriors of the Rhine', description: 'Ariovistus and his Suebi harden their warrior culture as Roman legions approach Gaul.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Germania: +3 Martial from warrior tradition.' }, { type: 'modify_yield', stat: 'industry', value: 1, message: 'Germania: +1 Production Income from trade with Rome.' }] },
     ],
     unlocks: ['wonders_late'],
   },
@@ -1038,6 +1052,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     civSpecificEvents: [
       { civId: 'rome', name: 'Pax Romana', description: 'The Roman Empire reaches its peak of power and stability.', effects: [{ type: 'modify_stat', stat: 'martial', value: 3, message: 'Rome: +3 Martial from Pax Romana stability.' }] },
       { civId: 'israel', name: 'Birth of Christianity', description: 'A new faith emerges from the land of Israel.', effects: [{ type: 'modify_stat', stat: 'faith', value: 5, message: 'Israel: +5 Faith Total (birthplace of Christianity).' }] },
+      { civId: 'cush', name: 'Meroitic Kingdom', description: 'Kush\'s southern capital Meroe becomes an iron-smelting powerhouse trading with Rome and India.', effects: [{ type: 'modify_yield', stat: 'industry', value: 2, message: 'Cush: +2 Production Income from iron and ivory trade.' }, { type: 'modify_yield', stat: 'science', value: 1, message: 'Cush: +1 Science Yield from Meroitic script.' }] },
     ],
     unlocks: ['christianity'],
   },
@@ -1127,6 +1142,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     civSpecificEvents: [
       { civId: 'rome', name: 'Fall of Rome', description: 'The Eternal City faces its darkest hour. Barbarians batter the gates.', effects: [{ type: 'special', message: 'Rome: Must defend against TWO barbarian attacks.' }] },
       { civId: 'persia', name: 'Sassanid Revival', description: 'A new Persian dynasty rises to face the barbarian threat.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Persia: +4 Martial from Sassanid revival.' }] },
+      { civId: 'germania', name: 'Great Migrations', description: 'Germanic tribes cross the frozen Rhine; Vandals, Goths, and Franks carve kingdoms from Rome\'s corpse.', effects: [{ type: 'modify_stat', stat: 'martial', value: 4, message: 'Germania: +4 Martial from migration-era warriors.' }, { type: 'modify_stat', stat: 'culture', value: 2, message: 'Germania: +2 Culture Total (successor kingdoms found a new age).' }] },
     ],
     unlocks: [],
   },
