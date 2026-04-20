@@ -21,6 +21,7 @@ import {
 import type { GameState } from '../types';
 import { getCivHistoricalOutcome } from '../civHistoricalOutcomes';
 import { calculateFinalScore } from '../constants';
+import { exportEndgameSummaryPdf } from '../endgamePdf';
 
 interface ReflectionTurnProps {
   gameState: GameState;
@@ -328,8 +329,40 @@ const ReflectionTurn: React.FC<ReflectionTurnProps> = ({
             <Sparkles className="w-12 h-12 text-amber-400 mx-auto" />
             <h2 className="text-2xl font-bold text-white">Reflection Complete</h2>
             <p className="text-slate-300 text-sm max-w-md mx-auto">
-              Your responses have been saved. You can now export an end-of-game summary or return to the main screen.
+              Your responses have been saved. Export your end-of-game summary as a PDF to turn in or keep as a record.
             </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => {
+                  // Pull decision log from localStorage (set by GameApp during play).
+                  let decisionLog: string[] = [];
+                  try {
+                    const raw = window.localStorage.getItem('aws_decision_log');
+                    decisionLog = raw ? JSON.parse(raw) : [];
+                  } catch { /* empty */ }
+                  let studentName = '';
+                  try {
+                    studentName = window.localStorage.getItem('studentName') || '';
+                  } catch { /* empty */ }
+                  const result: ReflectionResult = {
+                    civId, civName,
+                    finalScore: finalScore.total + finalScore.milestones,
+                    scoreBreakdown: finalScore.breakdown,
+                    turningPoints,
+                    responses: { surprised, wouldChange, comparison },
+                    completedAt: new Date().toISOString(),
+                  };
+                  const ok = exportEndgameSummaryPdf({ studentName, reflection: result, decisionLog });
+                  if (!ok) {
+                    alert('Pop-up blocked. Allow pop-ups for this site, then try again.');
+                  }
+                }}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold flex items-center gap-2 shadow-lg"
+              >
+                <BookOpen className="w-4 h-4" />
+                Download PDF Summary
+              </button>
+            </div>
           </div>
         )}
 
