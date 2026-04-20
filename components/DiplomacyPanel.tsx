@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Handshake, Send, Check, X, RefreshCw, Shield, Swords, ScrollText, AlertTriangle } from 'lucide-react';
+import { Handshake, Send, Check, X, RefreshCw, Shield, Swords, ScrollText, AlertTriangle, Flame, Dices } from 'lucide-react';
 
 /**
  * DiplomacyPanel
@@ -66,6 +66,56 @@ interface DecodedOffer {
   note?: string;
 }
 
+/**
+ * PvpAttack — one resolved student-vs-student combat record from the server.
+ * The server-authoritative dice roll lives in rolls_json; effects_json tells
+ * each side what deltas to apply locally.
+ */
+interface PvpAttack {
+  id: number;
+  period_id: number;
+  attacker_id: number;
+  defender_id: number;
+  turn_number: number;
+  attack_total: number;
+  defend_total: number;
+  margin: number;
+  outcome: 'attacker_decisive' | 'attacker_victory' | 'stalemate' | 'defender_victory' | 'defender_decisive';
+  rolls_json: string;
+  effects_json: string;
+  attacker_ack: number;
+  defender_ack: number;
+  created_at: string;
+  attacker_name?: string;
+  defender_name?: string;
+}
+
+interface PvpEffects {
+  warsWon?: number;
+  culture?: number;
+  science?: number;
+  martial?: number;
+  populationPct?: number;
+}
+
+interface PvpResolveResponse {
+  id: number;
+  outcome: PvpAttack['outcome'];
+  margin: number;
+  rolls: {
+    attackerMartial: number;
+    defenderMartial: number;
+    attackRoll: number;
+    defenseRoll: number;
+    wallRolls: number[];
+    fortifyRolls: number[];
+    attackTotal: number;
+    defendTotal: number;
+    margin: number;
+  };
+  effects: { attacker: PvpEffects; defender: PvpEffects };
+}
+
 type ResourceKey = 'productionPool' | 'science' | 'culture' | 'faith';
 
 const RESOURCE_LABELS: Record<ResourceKey, string> = {
@@ -82,6 +132,15 @@ interface Props {
   currentTurn: number;
   // Optional — lets the parent reflect trade effects into live game state.
   onOfferAccepted?: (offer: DecodedOffer, fromStudentId: number) => void;
+  // Optional — parent applies PvP combat deltas (wars/culture/science/pop)
+  // to the local civ when a PvP attack resolves (either launched or received).
+  onAttackResolved?: (result: {
+    isAttacker: boolean;
+    outcome: PvpAttack['outcome'];
+    effects: PvpEffects;
+    rolls: PvpResolveResponse['rolls'];
+    opponentName: string;
+  }) => void;
 }
 
 function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -124,14 +183,21 @@ const RELATION_STYLES: Record<DiplomacyRelation['relation_type'], { icon: React.
   hostile:  { icon: <Swords size={12} />,     label: 'Hostile',  cls: 'bg-rose-900/40 text-rose-200 border-rose-700' },
 };
 
-export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted }: Props) {
+export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted, onAttackResolved }: Props) {
   const [classmates, setClassmates] = useState<Classmate[]>([]);
   const [incoming, setIncoming] = useState<TradeOffer[]>([]);
   const [outgoing, setOutgoing] = useState<TradeOffer[]>([]);
   const [relations, setRelations] = useState<DiplomacyRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'offers' | 'propose' | 'relations'>('offers');
+  const [activeTab, setActiveTab] = useState<'offers' | 'propose' | 'relations' | 'war'>('offers');
+  const [incomingAttacks, setIncomingAttacks] = useState<PvpAttack[]>([]);
+  const [outgoingAttacks, setOutgoingAttacks] = useState<PvpAttack[]>([]);
+  const [attackTargetId, setAttackTargetId] = useState<number | ''>('');
+  const [launching, setLaunching] = useState(false);
+  // Track IDs we’ve already applied locally so polling doesn’t double-apply.
+  // Seeds from localStorage so a refresh doesn’t replay old attacks.
+  const appliedAttackIdsRef = React.useRef<Set<number>>(new Set());
 
   // Propose-form state
   const [recipientId, setRecipientId] = useState<number | ''>('');
@@ -153,28 +219,57 @@ export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted }: Props
       return;
     }
     try {
-      const [cRes, oRes, rRes] = await Promise.all([
+      const [cRes, oRes, rRes, aRes] = await Promise.all([
         authedFetch('/api/diplomacy/student/classmates'),
         authedFetch('/api/diplomacy/student/offers'),
         authedFetch('/api/diplomacy/student/relations'),
+        authedFetch('/api/diplomacy/student/attacks'),
       ]);
-      if (!cRes.ok || !oRes.ok || !rRes.ok) {
-        throw new Error(`Server error (${cRes.status}/${oRes.status}/${rRes.status})`);
+      if (!cRes.ok || !oRes.ok || !rRes.ok || !aRes.ok) {
+        throw new Error(`Server error (${cRes.status}/${oRes.status}/${rRes.status}/${aRes.status})`);
       }
       const cJson = await cRes.json() as { classmates: Classmate[] };
       const oJson = await oRes.json() as { incoming: TradeOffer[]; outgoing: TradeOffer[] };
       const rJson = await rRes.json() as { relations: DiplomacyRelation[] };
+      const aJson = await aRes.json() as { incoming: PvpAttack[]; outgoing: PvpAttack[] };
       setClassmates(cJson.classmates || []);
       setIncoming(oJson.incoming || []);
       setOutgoing(oJson.outgoing || []);
       setRelations(rJson.relations || []);
+      setIncomingAttacks(aJson.incoming || []);
+      setOutgoingAttacks(aJson.outgoing || []);
+
+      // Auto-apply any unacked DEFENDER-side attacks so the victim feels the
+      // hit without needing to click. We only do this once per ID per session.
+      for (const atk of aJson.incoming || []) {
+        if (atk.defender_ack) continue;
+        if (appliedAttackIdsRef.current.has(atk.id)) continue;
+        appliedAttackIdsRef.current.add(atk.id);
+        try {
+          const effects = JSON.parse(atk.effects_json || '{}') as { attacker: PvpEffects; defender: PvpEffects };
+          const rolls = JSON.parse(atk.rolls_json || '{}') as PvpResolveResponse['rolls'];
+          onAttackResolved?.({
+            isAttacker: false,
+            outcome: atk.outcome,
+            effects: effects.defender || {},
+            rolls,
+            opponentName: atk.attacker_name || 'A classmate',
+          });
+          // Fire-and-forget ack — if it fails we just re-apply next poll
+          // (our appliedAttackIdsRef still prevents a double-apply).
+          authedFetch(`/api/diplomacy/student/attacks/${atk.id}/ack`, { method: 'POST' }).catch(() => {});
+        } catch {
+          // swallow — malformed row shouldn’t break the panel
+        }
+      }
+
       setError(null);
     } catch (e: any) {
       setError(e?.message || 'Failed to load diplomacy data');
     } finally {
       setLoading(false);
     }
-  }, [periodId]);
+  }, [periodId, onAttackResolved]);
 
   useEffect(() => {
     loadAll();
@@ -254,6 +349,64 @@ export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted }: Props
     return (rel?.relation_type as DiplomacyRelation['relation_type']) || 'neutral';
   };
 
+  const launchAttack = async () => {
+    if (!attackTargetId) { setFlash('Pick a target.'); return; }
+    // Hard-block alliance/treaty clients side — server also blocks.
+    const rel = relationFor(attackTargetId as number);
+    if (rel === 'alliance' || rel === 'treaty') {
+      setFlash(`Cannot attack — active ${rel}. Change to neutral or hostile first.`);
+      return;
+    }
+    if (!window.confirm('Launching a PvP attack is irreversible. Continue?')) return;
+    setLaunching(true);
+    try {
+      const r = await authedFetch('/api/diplomacy/student/attacks', {
+        method: 'POST',
+        body: JSON.stringify({ defenderId: attackTargetId, turnNumber: currentTurn }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((j as any).message || `Failed (${r.status})`);
+      const res = j as PvpResolveResponse;
+      appliedAttackIdsRef.current.add(res.id);
+      // Apply attacker-side effects to local civ
+      const target = classmates.find((c) => c.id === attackTargetId);
+      onAttackResolved?.({
+        isAttacker: true,
+        outcome: res.outcome,
+        effects: res.effects.attacker,
+        rolls: res.rolls,
+        opponentName: target?.name || 'Opponent',
+      });
+      setFlash(`Attack resolved: ${res.outcome.replace('_', ' ')} (margin ${res.margin >= 0 ? '+' : ''}${res.margin})`);
+      setAttackTargetId('');
+      await loadAll();
+    } catch (e: any) {
+      setFlash(e?.message || 'Attack failed');
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  const outcomeLabel = (o: PvpAttack['outcome']): string => {
+    switch (o) {
+      case 'attacker_decisive': return 'Attacker decisive';
+      case 'attacker_victory':  return 'Attacker victory';
+      case 'stalemate':         return 'Stalemate';
+      case 'defender_victory':  return 'Defender victory';
+      case 'defender_decisive': return 'Defender decisive';
+    }
+  };
+
+  const outcomeColor = (o: PvpAttack['outcome'], fromAttackerPerspective: boolean): string => {
+    const attackerWin = o === 'attacker_decisive' || o === 'attacker_victory';
+    const defenderWin = o === 'defender_decisive' || o === 'defender_victory';
+    const myWin = fromAttackerPerspective ? attackerWin : defenderWin;
+    const myLoss = fromAttackerPerspective ? defenderWin : attackerWin;
+    if (myWin) return 'text-emerald-300';
+    if (myLoss) return 'text-rose-300';
+    return 'text-slate-400';
+  };
+
   // ---- Render -------------------------------------------------------------
 
   if (!periodId) {
@@ -288,19 +441,28 @@ export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted }: Props
 
       {/* Tabs */}
       <div className="flex gap-1 mb-2 text-[10px]">
-        {(['offers', 'propose', 'relations'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => { setActiveTab(tab); setFlash(null); }}
-            className={`flex-1 py-1 rounded uppercase tracking-widest font-bold ${
-              activeTab === tab
-                ? 'bg-amber-700/50 text-amber-100 border border-amber-500/60'
-                : 'bg-slate-900/40 text-slate-400 border border-slate-700 hover:text-slate-200'
-            }`}
-          >
-            {tab === 'offers' ? `Offers${incoming.length ? ` (${incoming.length})` : ''}` : tab}
-          </button>
-        ))}
+        {(['offers', 'propose', 'relations', 'war'] as const).map((tab) => {
+          const freshAttacks = incomingAttacks.filter((a) => !a.defender_ack).length;
+          const label =
+            tab === 'offers' ? `Offers${incoming.length ? ` (${incoming.length})` : ''}` :
+            tab === 'war'    ? `War${freshAttacks ? ` (${freshAttacks})` : ''}` :
+            tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => { setActiveTab(tab); setFlash(null); }}
+              className={`flex-1 py-1 rounded uppercase tracking-widest font-bold ${
+                activeTab === tab
+                  ? (tab === 'war'
+                      ? 'bg-rose-800/60 text-rose-100 border border-rose-500/60'
+                      : 'bg-amber-700/50 text-amber-100 border border-amber-500/60')
+                  : 'bg-slate-900/40 text-slate-400 border border-slate-700 hover:text-slate-200'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {flash && (
@@ -517,6 +679,108 @@ export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted }: Props
           <p className="text-[9px] text-slate-500 italic pt-1">
             Alliances require both sides to declare. Neutral/Hostile are unilateral.
           </p>
+        </div>
+      )}
+
+      {/* WAR TAB — PvP combat */}
+      {activeTab === 'war' && !loading && (
+        <div className="space-y-2">
+          <div className="bg-rose-950/30 border border-rose-900/50 rounded p-2">
+            <div className="flex items-center gap-1 mb-1">
+              <Flame size={12} className="text-rose-300" />
+              <span className="text-[10px] font-bold text-rose-200 uppercase tracking-widest">
+                Launch Attack
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-2 leading-snug">
+              Resolved server-side with real dice. Alliances and Treaties block attacks —
+              change the relationship first. Outcomes affect Culture, Population, and Wars Won.
+            </p>
+            <select
+              value={attackTargetId}
+              onChange={(e) => setAttackTargetId(e.target.value ? Number(e.target.value) : '')}
+              className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded px-2 py-1 mb-2"
+            >
+              <option value="">— pick a target —</option>
+              {classmates.map((c) => {
+                const rel = relationFor(c.id);
+                const blocked = rel === 'alliance' || rel === 'treaty';
+                return (
+                  <option key={c.id} value={c.id} disabled={blocked}>
+                    {c.name}{c.display_civ_name ? ` (${c.display_civ_name})` : ''}
+                    {blocked ? ` — ${rel} blocks attack` : ''}
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              onClick={launchAttack}
+              disabled={launching || !attackTargetId}
+              className="w-full bg-rose-700 hover:bg-rose-600 disabled:bg-slate-700 text-white text-xs font-bold py-1.5 rounded flex items-center justify-center gap-1"
+            >
+              <Swords size={12} />
+              {launching ? 'Rolling dice…' : 'Attack'}
+            </button>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+              <Dices size={10} /> Incoming ({incomingAttacks.length})
+            </div>
+            {incomingAttacks.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic">No incoming attacks.</p>
+            ) : (
+              <ul className="space-y-1">
+                {incomingAttacks.slice(0, 10).map((a) => {
+                  const fresh = !a.defender_ack;
+                  return (
+                    <li key={a.id} className={`border rounded p-2 ${fresh ? 'bg-rose-950/40 border-rose-800' : 'bg-slate-900/60 border-slate-700'}`}>
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="text-[11px] text-slate-200 font-bold">
+                          {a.attacker_name} attacked you
+                          <span className={`ml-1 text-[10px] font-normal ${outcomeColor(a.outcome, false)}`}>
+                            · {outcomeLabel(a.outcome)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Atk {a.attack_total} vs Def {a.defend_total}
+                        <span className="ml-1 text-slate-500">(margin {a.margin >= 0 ? '+' : ''}{a.margin})</span>
+                        <span className="ml-2 text-slate-500">Turn {a.turn_number}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+              <Dices size={10} /> Outgoing ({outgoingAttacks.length})
+            </div>
+            {outgoingAttacks.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic">No outgoing attacks.</p>
+            ) : (
+              <ul className="space-y-1">
+                {outgoingAttacks.slice(0, 10).map((a) => (
+                  <li key={a.id} className="bg-slate-900/60 border border-slate-700 rounded p-2">
+                    <div className="text-[11px] text-slate-200 font-bold">
+                      You attacked {a.defender_name}
+                      <span className={`ml-1 text-[10px] font-normal ${outcomeColor(a.outcome, true)}`}>
+                        · {outcomeLabel(a.outcome)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Atk {a.attack_total} vs Def {a.defend_total}
+                      <span className="ml-1 text-slate-500">(margin {a.margin >= 0 ? '+' : ''}{a.margin})</span>
+                      <span className="ml-2 text-slate-500">Turn {a.turn_number}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -5073,6 +5073,33 @@ const App: React.FC = () => {
                 <DiplomacyPanel
                   periodId={syncState.periodId}
                   currentTurn={gameState.turnNumber || 1}
+                  onAttackResolved={(r) => {
+                    // Apply PvP combat deltas to local civ state.
+                    // Effects shape: { warsWon?, culture?, science?, martial?, populationPct? }
+                    // Negative values subtract. populationPct is a fraction like -0.06.
+                    setGameState((prev) => {
+                      const stats = { ...prev.civilization.stats };
+                      const eff = r.effects || {};
+                      if (typeof eff.culture === 'number') {
+                        stats.culture = Math.max(0, (stats.culture || 0) + eff.culture);
+                      }
+                      if (typeof eff.science === 'number') {
+                        stats.science = Math.max(0, (stats.science || 0) + eff.science);
+                      }
+                      if (typeof eff.populationPct === 'number') {
+                        stats.population = Math.max(1, Math.floor((stats.population || 0) * (1 + eff.populationPct)));
+                      }
+                      // Build a human-readable combat log entry so the player
+                      // sees the PvP result next to the NPC combat history.
+                      const logLine = `${r.isAttacker ? 'You attacked' : 'Attacked by'} ${r.opponentName} — ${r.outcome.replace('_',' ')} (Atk ${r.rolls.attackTotal} vs Def ${r.rolls.defendTotal})`;
+                      return {
+                        ...prev,
+                        warsWon: (prev.warsWon || 0) + (eff.warsWon || 0),
+                        civilization: { ...prev.civilization, stats },
+                        messages: [logLine, ...prev.messages].slice(0, 50),
+                      };
+                    });
+                  }}
                 />
               </div>
             )}

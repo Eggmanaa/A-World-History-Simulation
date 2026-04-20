@@ -271,6 +271,236 @@ diplomacyRouter.post('/student/relations/:classmateId', async (c) => {
 });
 
 // ============================================================================
+// PVP COMBAT — student-vs-student attacks
+// ============================================================================
+//
+// Server-side combat resolution. The attacker POSTs here, server pulls both
+// sides' progress_data.stats.martial (plus defender walls/fortify dice),
+// rolls the dice, writes the row, and returns the full breakdown. The
+// client applies local stat deltas when it sees the result.
+
+/** Roll a fair n-sided die in [1, n]. */
+function rollDie(n: number): number {
+  // crypto.getRandomValues is available in Workers; fall back to Math.random.
+  try {
+    const buf = new Uint32Array(1);
+    (globalThis as any).crypto.getRandomValues(buf);
+    return (buf[0] % n) + 1;
+  } catch {
+    return Math.floor(Math.random() * n) + 1;
+  }
+}
+
+type PvpOutcome =
+  | 'attacker_decisive'
+  | 'attacker_victory'
+  | 'stalemate'
+  | 'defender_victory'
+  | 'defender_decisive';
+
+function outcomeFromMargin(margin: number): PvpOutcome {
+  if (margin >= 8) return 'attacker_decisive';
+  if (margin >= 2) return 'attacker_victory';
+  if (margin <= -8) return 'defender_decisive';
+  if (margin <= -2) return 'defender_victory';
+  return 'stalemate';
+}
+
+// POST /diplomacy/student/attacks — launch a PvP attack
+diplomacyRouter.post('/student/attacks', async (c) => {
+  const user = c.get('user');
+  try {
+    const body = await c.req.json<{ defenderId: number; turnNumber?: number }>();
+    if (!body.defenderId) return c.json({ message: 'defenderId required' }, 400);
+    if (body.defenderId === user.id) return c.json({ message: 'Cannot attack yourself' }, 400);
+
+    // Same-period check
+    const me = await c.env.DB.prepare(
+      'SELECT period_id FROM students WHERE id = ?'
+    ).bind(user.id).first<any>();
+    const them = await c.env.DB.prepare(
+      'SELECT period_id FROM students WHERE id = ?'
+    ).bind(body.defenderId).first<any>();
+    if (!me?.period_id || !them?.period_id || me.period_id !== them.period_id) {
+      return c.json({ message: 'Defender not in your class period' }, 403);
+    }
+
+    // Treaty check — alliance or treaty blocks PvP
+    const myId = Number(user.id);
+    const defId = Number(body.defenderId);
+    const a = Math.min(myId, defId);
+    const b = Math.max(myId, defId);
+    const rel = await c.env.DB.prepare(
+      `SELECT relation_type FROM diplomacy_relations
+         WHERE period_id = ? AND student_a_id = ? AND student_b_id = ?`
+    ).bind(me.period_id, a, b).first<any>();
+    if (rel?.relation_type === 'alliance' || rel?.relation_type === 'treaty') {
+      return c.json({
+        message: `Cannot attack — active ${rel.relation_type} in effect. Break it first.`,
+      }, 403);
+    }
+
+    // Load both sides' progress_data
+    const atkSession = await c.env.DB.prepare(
+      'SELECT progress_data FROM game_sessions WHERE student_id = ?'
+    ).bind(user.id).first<any>();
+    const defSession = await c.env.DB.prepare(
+      'SELECT progress_data FROM game_sessions WHERE student_id = ?'
+    ).bind(body.defenderId).first<any>();
+
+    const atkData = atkSession?.progress_data ? JSON.parse(atkSession.progress_data) : {};
+    const defData = defSession?.progress_data ? JSON.parse(defSession.progress_data) : {};
+    const atkMartial = Math.max(0, Number(atkData?.stats?.martial || 0));
+    const defMartial = Math.max(0, Number(defData?.stats?.martial || 0));
+    const defWalls = Math.min(3, Number(defData?.buildings?.walls || 0));
+    const defFortify = Math.min(3, Number(defData?.stats?.fortifyDice || 0));
+
+    // Roll dice
+    const attackRoll = rollDie(6);
+    const defenseRoll = rollDie(6);
+    const wallRolls: number[] = [];
+    for (let i = 0; i < defWalls; i++) wallRolls.push(rollDie(8));
+    const fortifyRolls: number[] = [];
+    for (let i = 0; i < defFortify; i++) fortifyRolls.push(rollDie(8));
+
+    const attackTotal = atkMartial + attackRoll;
+    const defendTotal =
+      defMartial + defenseRoll +
+      wallRolls.reduce((s, r) => s + r, 0) +
+      fortifyRolls.reduce((s, r) => s + r, 0);
+    const margin = attackTotal - defendTotal;
+    const outcome = outcomeFromMargin(margin);
+
+    // Effect deltas — client applies these locally
+    // Attacker gains: warsWon, culture, science (on win); nothing or small loss on loss
+    // Defender loses: population %, culture (on loss); small gain on successful defense
+    const effects: any = { attacker: {}, defender: {} };
+    switch (outcome) {
+      case 'attacker_decisive':
+        effects.attacker = { warsWon: 1, culture: 20, science: 100 };
+        effects.defender = { populationPct: -0.12, culture: -80, martial: -1 };
+        break;
+      case 'attacker_victory':
+        effects.attacker = { warsWon: 1, culture: 10, science: 50 };
+        effects.defender = { populationPct: -0.06, culture: -40 };
+        break;
+      case 'stalemate':
+        effects.attacker = { culture: -5 };
+        effects.defender = { culture: 5 };
+        break;
+      case 'defender_victory':
+        effects.attacker = { culture: -20, martial: -1 };
+        effects.defender = { warsWon: 1, culture: 20, science: 30 };
+        break;
+      case 'defender_decisive':
+        effects.attacker = { culture: -50, populationPct: -0.05, martial: -2 };
+        effects.defender = { warsWon: 1, culture: 40, science: 60 };
+        break;
+    }
+
+    const rolls = {
+      attackerMartial: atkMartial,
+      defenderMartial: defMartial,
+      attackRoll,
+      defenseRoll,
+      wallRolls,
+      fortifyRolls,
+      attackTotal,
+      defendTotal,
+      margin,
+    };
+
+    const insert = await c.env.DB.prepare(
+      `INSERT INTO pvp_attacks
+         (period_id, attacker_id, defender_id, turn_number,
+          attack_total, defend_total, margin, outcome,
+          rolls_json, effects_json, attacker_ack, defender_ack)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`
+    ).bind(
+      me.period_id,
+      user.id,
+      body.defenderId,
+      body.turnNumber || 0,
+      attackTotal,
+      defendTotal,
+      margin,
+      outcome,
+      JSON.stringify(rolls),
+      JSON.stringify(effects),
+    ).run();
+
+    return c.json({
+      id: insert.meta.last_row_id,
+      outcome,
+      margin,
+      rolls,
+      effects,
+    });
+  } catch (e) {
+    return c.json({ message: 'Failed to launch attack', error: String(e) }, 500);
+  }
+});
+
+// GET /diplomacy/student/attacks — my incoming + outgoing attacks
+diplomacyRouter.get('/student/attacks', async (c) => {
+  const user = c.get('user');
+  try {
+    const incoming = await c.env.DB.prepare(
+      `SELECT a.*, s.name AS attacker_name, s.username AS attacker_username
+         FROM pvp_attacks a
+         JOIN students s ON s.id = a.attacker_id
+        WHERE a.defender_id = ?
+        ORDER BY a.created_at DESC
+        LIMIT 50`
+    ).bind(user.id).all<any>();
+
+    const outgoing = await c.env.DB.prepare(
+      `SELECT a.*, s.name AS defender_name, s.username AS defender_username
+         FROM pvp_attacks a
+         JOIN students s ON s.id = a.defender_id
+        WHERE a.attacker_id = ?
+        ORDER BY a.created_at DESC
+        LIMIT 50`
+    ).bind(user.id).all<any>();
+
+    return c.json({
+      incoming: incoming.results || [],
+      outgoing: outgoing.results || [],
+    });
+  } catch (e) {
+    return c.json({ message: 'Failed to list attacks', error: String(e) }, 500);
+  }
+});
+
+// POST /diplomacy/student/attacks/:id/ack — mark an attack as consumed on my side
+diplomacyRouter.post('/student/attacks/:id/ack', async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  try {
+    // Who am I in this row? attacker or defender?
+    const row = await c.env.DB.prepare(
+      `SELECT attacker_id, defender_id FROM pvp_attacks WHERE id = ?`
+    ).bind(id).first<any>();
+    if (!row) return c.json({ message: 'Attack not found' }, 404);
+
+    if (Number(row.attacker_id) === Number(user.id)) {
+      await c.env.DB.prepare(
+        `UPDATE pvp_attacks SET attacker_ack = 1 WHERE id = ?`
+      ).bind(id).run();
+    } else if (Number(row.defender_id) === Number(user.id)) {
+      await c.env.DB.prepare(
+        `UPDATE pvp_attacks SET defender_ack = 1 WHERE id = ?`
+      ).bind(id).run();
+    } else {
+      return c.json({ message: 'Not a participant in this attack' }, 403);
+    }
+    return c.json({ id, ok: true });
+  } catch (e) {
+    return c.json({ message: 'Failed to ack attack', error: String(e) }, 500);
+  }
+});
+
+// ============================================================================
 // TEACHER ENDPOINTS
 // ============================================================================
 
@@ -313,3 +543,31 @@ diplomacyRouter.get('/teacher/:periodId/overview', async (c) => {
     return c.json({ message: 'Failed to load overview', error: String(e) }, 500);
   }
 });
+// GET /diplomacy/teacher/:periodId/attacks — PvP combat overview for the period
+diplomacyRouter.get('/teacher/:periodId/attacks', async (c) => {
+  const user = c.get('user');
+  const periodId = c.req.param('periodId');
+  try {
+    const period = await c.env.DB.prepare(
+      'SELECT id FROM periods WHERE id = ? AND teacher_id = ?'
+    ).bind(periodId, user.id).first<any>();
+    if (!period) return c.json({ message: 'Period not found' }, 404);
+
+    const attacks = await c.env.DB.prepare(
+      `SELECT a.*,
+              atk.name AS attacker_name,
+              def.name AS defender_name
+         FROM pvp_attacks a
+         JOIN students atk ON atk.id = a.attacker_id
+         JOIN students def ON def.id = a.defender_id
+        WHERE a.period_id = ?
+        ORDER BY a.created_at DESC
+        LIMIT 200`
+    ).bind(periodId).all<any>();
+
+    return c.json({ attacks: attacks.results || [] });
+  } catch (e) {
+    return c.json({ message: 'Failed to load PvP overview', error: String(e) }, 500);
+  }
+});
+
