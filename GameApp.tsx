@@ -1434,19 +1434,35 @@ const App: React.FC = () => {
     });
     setV2StatsBefore(before);
 
-    // Calculate income
+    // Calculate income (also rolls barbarian raids + NPC retaliation)
     const incomeResult = calculateIncome(gameState);
     setV2IncomeMessages(incomeResult.messages);
 
-    // Apply income changes immediately
-    setGameState((prev) => ({
-      ...prev,
-      turnPhase: 'income' as TurnPhaseV2,
-      civilization: {
-        ...prev.civilization,
-        stats: { ...prev.civilization.stats, ...incomeResult.statChanges },
-      },
-    }));
+    // Apply income changes immediately; also append any incoming-attack log
+    // entries from raids/retaliation so the War tab shows them, and apply
+    // NPC relationship changes (retaliating civs flip to Enemy).
+    setGameState((prev) => {
+      let nextNeighbors = prev.neighbors;
+      if (incomeResult.neighborRelationshipChanges && incomeResult.neighborRelationshipChanges.length > 0) {
+        const relMap = new Map(incomeResult.neighborRelationshipChanges.map((c) => [c.id, c.relationship]));
+        nextNeighbors = prev.neighbors.map((n) =>
+          relMap.has(n.id) ? { ...n, relationship: relMap.get(n.id)! } : n,
+        );
+      }
+      const nextLog = incomeResult.combatLogEntries && incomeResult.combatLogEntries.length > 0
+        ? [...(prev.combatLog || []), ...incomeResult.combatLogEntries]
+        : prev.combatLog || [];
+      return {
+        ...prev,
+        turnPhase: 'income' as TurnPhaseV2,
+        neighbors: nextNeighbors,
+        combatLog: nextLog,
+        civilization: {
+          ...prev.civilization,
+          stats: { ...prev.civilization.stats, ...incomeResult.statChanges },
+        },
+      };
+    });
   };
 
   // After income phase, move to unlocks (if any) then world event

@@ -5,7 +5,7 @@
  * This creates the core strategic tension of the game.
  */
 
-import type { GameState, PlayerActionType, BuildingType, TileData, TreatyType } from './types';
+import type { GameState, PlayerActionType, BuildingType, TileData, TreatyType, CombatLogEntry } from './types';
 import { FORTIFY_MAX } from './types';
 
 export interface ActionDefinition {
@@ -769,10 +769,16 @@ export function executeAction(
 export function calculateIncome(state: GameState): {
   messages: string[];
   statChanges: Partial<GameState['civilization']['stats']>;
+  combatLogEntries?: CombatLogEntry[];
+  // Per-neighbor relationship changes from NPC retaliation (if any). The
+  // turn-resolution pipeline in GameApp applies these to state.neighbors.
+  neighborRelationshipChanges?: { id: string; relationship: 'Neutral' | 'Ally' | 'Enemy' }[];
 } {
   const stats = state.civilization.stats;
   const messages: string[] = [];
   const changes: Partial<GameState['civilization']['stats']> = {};
+  const combatLogEntries: CombatLogEntry[] = [];
+  const neighborRelationshipChanges: { id: string; relationship: 'Neutral' | 'Ally' | 'Enemy' }[] = [];
 
   // 1. Production Pool += Production Income
   // Use ?? (not ||) so a legitimately-zero productionIncome is respected instead
@@ -853,24 +859,147 @@ export function calculateIncome(state: GameState): {
     const defenseBreakdown = wallCount + fortifyStacks > 0
       ? ` (Martial ${stats.martial} + ${wallCount}d8 walls [${wallDiceRolls.join('+') || 0}] + ${fortifyStacks}d8 fortify [${fortifyDiceRolls.join('+') || 0}])`
       : ` (Martial ${stats.martial})`;
+    const raidPopLoss = damage > 0 ? Math.min(damage, Math.max(0, (changes.population ?? stats.population) - 1)) : 0;
+    const raidProdLoss = damage > 0 ? Math.min(Math.floor(damage / 2), changes.productionPool ?? stats.productionPool ?? 0) : 0;
     if (damage > 0) {
       const currentPop = changes.population ?? stats.population;
       const currentHouses = changes.houses ?? stats.houses;
-      const popLoss = Math.min(damage, Math.max(0, currentPop - 1));
-      const prodLoss = Math.min(Math.floor(damage / 2), changes.productionPool ?? stats.productionPool ?? 0);
-      if (popLoss > 0) {
-        changes.population = Math.max(1, currentPop - popLoss);
-        changes.houses = Math.max(0, currentHouses - popLoss);
+      if (raidPopLoss > 0) {
+        changes.population = Math.max(1, currentPop - raidPopLoss);
+        changes.houses = Math.max(0, currentHouses - raidPopLoss);
       }
-      if (prodLoss > 0) {
-        changes.productionPool = Math.max(0, (changes.productionPool ?? stats.productionPool ?? 0) - prodLoss);
+      if (raidProdLoss > 0) {
+        changes.productionPool = Math.max(0, (changes.productionPool ?? stats.productionPool ?? 0) - raidProdLoss);
       }
-      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs defense ${effectiveDef}${defenseBreakdown}). Lost ${popLoss} Population${prodLoss > 0 ? ` and ${prodLoss} Production` : ''}.`);
+      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs defense ${effectiveDef}${defenseBreakdown}). Lost ${raidPopLoss} Population${raidProdLoss > 0 ? ` and ${raidProdLoss} Production` : ''}.`);
     } else {
       messages.push(`🛡️ A raid was beaten back — defense ${effectiveDef}${defenseBreakdown} held off raid power ${raidPower}. No losses.`);
+    }
+
+    // Log raid as an INCOMING combat entry so the war tab shows it.
+    combatLogEntries.push({
+      turn: state.turnNumber || 1,
+      target: state.civilization.name, // target OF the raid = us
+      attackerName: 'Barbarian Raiders',
+      incoming: true,
+      attackTotal: raidPower,
+      defendTotal: effectiveDef,
+      margin: effectiveDef - raidPower,
+      outcome: damage > 0 ? 'defeat' : 'victory',
+      popLost: raidPopLoss,
+      martialLost: 0,
+      rolls: {
+        attackerMartial: 0,
+        attackerBaseRoll: raidRoll,
+        defenderMartial: stats.martial || 0,
+        defenderBaseRoll: 0,
+        wallDice: wallDiceRolls,
+        fortifyDice: fortifyDiceRolls,
+        bypassedWalls: false,
+      },
+    });
+  }
+
+  // 6. NPC RETALIATION — If the player has been aggressive (warsWon > 0 and
+  // they attacked any neighbor recently), rival civs may strike back.
+  // Trigger conditions:
+  //   - At least 1 neighbor is Enemy (player attacked them before), OR
+  //   - Player's warsWon >= 2 (they've built a reputation as a warmonger)
+  // Chance: 20% base per turn, +5% per warsWon, capped at 50%.
+  // Attacker = highest-martial non-conquered non-allied neighbor.
+  // This keeps aggressive play risky — conquest snowballs invite pushback.
+  // Alliance/peace/military treaties with the attacker block retaliation.
+  const enemyNeighbors = state.neighbors.filter(
+    (n) => !n.isConquered && n.relationship === 'Enemy',
+  );
+  const warsWon = state.warsWon || 0;
+  const hasAggression = enemyNeighbors.length > 0 || warsWon >= 2;
+  if (hasAggression && state.turnNumber >= 4) {
+    const retaliationChance = Math.min(0.5, 0.2 + warsWon * 0.05);
+    if (Math.random() < retaliationChance) {
+      // Pick attacker: strongest unconquered enemy with no blocking treaty.
+      const eligibleAttackers = state.neighbors
+        .filter((n) => !n.isConquered)
+        .filter((n) => {
+          const treaty = (state.treaties || []).find(
+            (t) => t.neighborId === n.id && t.turnsRemaining > 0,
+          );
+          // Peace/alliance/military treaties prevent retaliation.
+          return !treaty || (treaty.type !== 'peace' && treaty.type !== 'alliance' && treaty.type !== 'military');
+        })
+        .sort((a, b) => (b.martial || 0) - (a.martial || 0));
+      const attacker = eligibleAttackers[0];
+      if (attacker && (attacker.martial || 0) >= 1) {
+        const rRoll = Math.floor(Math.random() * 6) + 1;
+        const rDefRoll = Math.floor(Math.random() * 6) + 1;
+        const rWallCount = Math.min(3, state.civilization.buildings.walls || 0);
+        const rFortify = currentFortify;
+        const rWallDice = Array.from({ length: rWallCount }, () => Math.floor(Math.random() * 8) + 1);
+        const rFortifyDice = Array.from({ length: rFortify }, () => Math.floor(Math.random() * 8) + 1);
+        const rWallSum = rWallDice.reduce((a, b) => a + b, 0);
+        const rFortifySum = rFortifyDice.reduce((a, b) => a + b, 0);
+        const attackTotal = (attacker.martial || 0) + rRoll;
+        const defendTotal = (stats.martial || 0) + rDefRoll + rWallSum + rFortifySum;
+        const margin = attackTotal - defendTotal;
+        let retPopLoss = 0;
+        let retMartialLost = 0;
+        let outcome: CombatLogEntry['outcome'];
+        if (margin > 0) {
+          retPopLoss = Math.min(2, Math.max(0, (changes.population ?? stats.population) - 1));
+          if (retPopLoss > 0) {
+            changes.population = Math.max(1, (changes.population ?? stats.population) - retPopLoss);
+            changes.houses = Math.max(0, (changes.houses ?? stats.houses) - retPopLoss);
+          }
+          if (margin >= 5) {
+            retMartialLost = 1;
+            changes.martial = Math.max(0, (changes.martial ?? stats.martial) - 1);
+          }
+          outcome = margin >= 5 ? 'decisive_victory' : 'victory';
+          messages.push(`🗡️ RETALIATION! ${attacker.name} strikes back (${attackTotal} vs ${defendTotal}). Lost ${retPopLoss} Population${retMartialLost ? ' and 1 Martial' : ''}.`);
+        } else if (margin === 0) {
+          outcome = 'stalemate';
+          messages.push(`🛡️ ${attacker.name} attempted retaliation but it was a stalemate (${attackTotal} vs ${defendTotal}).`);
+        } else {
+          outcome = 'defeat';
+          messages.push(`🛡️ ${attacker.name} attempted retaliation but we held (${attackTotal} vs ${defendTotal}).`);
+        }
+        // Reverse the outcome value since we recorded it from the attacker's
+        // perspective above; for an INCOMING entry the outcome should reflect
+        // whether THE ATTACKER won.
+        combatLogEntries.push({
+          turn: state.turnNumber || 1,
+          target: state.civilization.name,
+          attackerName: attacker.name,
+          incoming: true,
+          attackTotal,
+          defendTotal,
+          margin,
+          outcome,
+          popLost: retPopLoss,
+          martialLost: retMartialLost,
+          rolls: {
+            attackerMartial: attacker.martial || 0,
+            attackerBaseRoll: rRoll,
+            defenderMartial: stats.martial || 0,
+            defenderBaseRoll: rDefRoll,
+            wallDice: rWallDice,
+            fortifyDice: rFortifyDice,
+            bypassedWalls: false,
+          },
+        });
+        // Retaliation marks the attacker as Enemy going forward.
+        if (attacker.relationship !== 'Enemy') {
+          neighborRelationshipChanges.push({ id: attacker.id, relationship: 'Enemy' });
+        }
+      }
     }
   }
 
 
-  return { messages, statChanges: changes };
+  return {
+    messages,
+    statChanges: changes,
+    combatLogEntries: combatLogEntries.length > 0 ? combatLogEntries : undefined,
+    neighborRelationshipChanges: neighborRelationshipChanges.length > 0 ? neighborRelationshipChanges : undefined,
+  };
 }
