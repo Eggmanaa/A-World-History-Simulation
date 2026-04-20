@@ -169,7 +169,7 @@ export interface ScienceUnlock {
 }
 
 export type Relationship = 'Neutral' | 'Ally' | 'Enemy';
-export type TreatyType = 'peace' | 'trade' | 'military' | 'cultural';
+export type TreatyType = 'peace' | 'trade' | 'military' | 'cultural' | 'alliance';
 
 export interface Treaty {
     neighborId: string;

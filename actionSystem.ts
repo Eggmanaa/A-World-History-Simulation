@@ -5,7 +5,7 @@
  * This creates the core strategic tension of the game.
  */
 
-import type { GameState, PlayerActionType, BuildingType, TileData } from './types';
+import type { GameState, PlayerActionType, BuildingType, TileData, TreatyType } from './types';
 import { FORTIFY_MAX } from './types';
 
 export interface ActionDefinition {
@@ -357,7 +357,7 @@ export interface ActionExecutionResult {
   buildingChanges?: Partial<GameState['civilization']['buildings']>;
   enableMapPlacement?: 'house' | 'building' | 'wall';
   maxPlacements?: number;
-  newTreaty?: { neighborId: string; type: 'peace' | 'trade' | 'military' | 'cultural'; turnsRemaining: number };
+  newTreaty?: { neighborId: string; type: TreatyType; turnsRemaining: number };
   combatResult?: {
     target: string;
     won: boolean;
@@ -655,10 +655,13 @@ export function executeAction(
     case 'diplomacy': {
       // DESIGN NOTE: Diplomacy has no resource cost on purpose. Like Trade,
       // it consumes the player's strategic action for the turn — that IS the
-      // cost. The reward is a 5-turn peace treaty which calculateStats turns
-      // into +1 Martial per active peace treaty. We do NOT also bump
+      // cost. The reward is a 5-turn alliance which calculateStats turns into
+      // +2 Martial per active alliance (stronger than a peace treaty's +1,
+      // because alliances require mutual commitment). We do NOT bump
       // stats.martial here — that would double-count once the treaty bonus
-      // gets re-applied in calc each render.
+      // gets re-applied in calc each render. Backstabbing an ally via attack
+      // breaks the alliance AND takes a -8 roll penalty + 2 Culture loss
+      // (see case 'attack').
       const allyId = params?.targetId;
       const target = state.neighbors.find(n => n.id === allyId);
       if (!target) {
@@ -666,9 +669,9 @@ export function executeAction(
       }
 
       return {
-        messages: [`Alliance formed with ${target.name}! +1 Martial while peace treaty is active (5 turns).`],
+        messages: [`Alliance formed with ${target.name}! +2 Martial while active (5 turns).`],
         statChanges: {},
-        newTreaty: { neighborId: allyId, type: 'peace', turnsRemaining: 5 },
+        newTreaty: { neighborId: allyId, type: 'alliance', turnsRemaining: 5 },
       };
     }
 

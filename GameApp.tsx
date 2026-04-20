@@ -665,16 +665,24 @@ const calculateStats = (
   if (activeBonuses.industry) industry = Math.floor(industry * 1.5);
 
   // Apply Treaty Bonuses (Feature 1)
+  // Alliance = mutual military commitment: +2 Martial per active alliance.
+  // Military treaty = formal pact: +3 Martial (strongest bonus, because it's
+  // typically limited-duration and tied to a specific war).
+  // Peace = non-aggression: +1 Martial (reduced raid fear lets civs focus
+  // attention and resources on defense posture).
+  // Trade/Cultural = economic/soft power only, no martial.
   if (treaties && treaties.length > 0) {
     const tradeTreatyCount = treaties.filter((t) => t.type === "trade").length;
     const culturalTreatyCount = treaties.filter((t) => t.type === "cultural").length;
     const militaryTreatyCount = treaties.filter((t) => t.type === "military").length;
     const peaceTreatyCount = treaties.filter((t) => t.type === "peace").length;
+    const allianceTreatyCount = treaties.filter((t) => t.type === "alliance").length;
 
     industry += tradeTreatyCount * 2;
     culture += culturalTreatyCount * 2;
     martial += militaryTreatyCount * 3;
-    martial += peaceTreatyCount * 1; // Defense folded in.
+    martial += peaceTreatyCount * 1;
+    martial += allianceTreatyCount * 2;
   }
 
   // Cultural Prestige — soft-power effects that scale with Culture total.
