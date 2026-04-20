@@ -665,24 +665,20 @@ const calculateStats = (
   if (activeBonuses.industry) industry = Math.floor(industry * 1.5);
 
   // Apply Treaty Bonuses (Feature 1)
-  // Alliance = mutual military commitment: +2 Martial per active alliance.
-  // Military treaty = formal pact: +3 Martial (strongest bonus, because it's
-  // typically limited-duration and tied to a specific war).
-  // Peace = non-aggression: +1 Martial (reduced raid fear lets civs focus
-  // attention and resources on defense posture).
-  // Trade/Cultural = economic/soft power only, no martial.
   if (treaties && treaties.length > 0) {
     const tradeTreatyCount = treaties.filter((t) => t.type === "trade").length;
     const culturalTreatyCount = treaties.filter((t) => t.type === "cultural").length;
     const militaryTreatyCount = treaties.filter((t) => t.type === "military").length;
     const peaceTreatyCount = treaties.filter((t) => t.type === "peace").length;
+    // Alliance = mutual defense. +2 Martial per active alliance, stronger than
+    // peace treaty's +1 because alliances commit both sides to mutual aid.
     const allianceTreatyCount = treaties.filter((t) => t.type === "alliance").length;
 
     industry += tradeTreatyCount * 2;
     culture += culturalTreatyCount * 2;
     martial += militaryTreatyCount * 3;
     martial += peaceTreatyCount * 1;
-    martial += allianceTreatyCount * 2;
+    martial += allianceTreatyCount * 2; // Defense folded in.
   }
 
   // Cultural Prestige — soft-power effects that scale with Culture total.
@@ -1948,10 +1944,15 @@ const App: React.FC = () => {
 
     setV2TurnResolution(turnRes);
 
-    // Apply treaty if created
-    const newTreaties = result.newTreaty
+    // Apply treaty if created, and expire any treaties that the 'attack'
+    // action broke (peace/alliance/military pact with the target).
+    let newTreaties = result.newTreaty
       ? [...gameState.treaties, result.newTreaty]
       : gameState.treaties;
+    if (result.brokenTreatiesWithNeighbors && result.brokenTreatiesWithNeighbors.length > 0) {
+      const brokenSet = new Set(result.brokenTreatiesWithNeighbors);
+      newTreaties = newTreaties.filter((t) => !brokenSet.has(t.neighborId));
+    }
 
     // CONQUEST: when the Attack action yields a victory, actually record it.
     let updatedNeighbors = gameState.neighbors;
@@ -1989,6 +1990,11 @@ const App: React.FC = () => {
       const rollDetail = cr.rolls;
       if (rollDetail) {
         const popupEffects: string[] = [];
+        // Treaty-break headline — goes first so the student SEES the diplomatic
+        // fallout before the mechanical loot/loss breakdown.
+        if ((rollDetail.treatyPenalty ?? 0) > 0) {
+          popupEffects.push(`BROKEN TREATY! -${rollDetail.treatyPenalty} attack, -${rollDetail.treatyCulturalCost ?? 0} Culture`);
+        }
         if (outcome === 'decisive_victory') {
           popupEffects.push('+3 Culture Total', '+3 Production Pool loot', '+1 conquered territory');
         } else if (outcome === 'victory') {
@@ -2014,6 +2020,8 @@ const App: React.FC = () => {
             wallDice: rollDetail.wallDice,
             fortifyDice: rollDetail.fortifyDice,
             bypassedWalls: rollDetail.bypassedWalls,
+            treatyPenalty: rollDetail.treatyPenalty,
+            treatyCulturalCost: rollDetail.treatyCulturalCost,
           },
           effects: popupEffects,
         });
@@ -2037,6 +2045,19 @@ const App: React.FC = () => {
           : outcome === 'victory'
             ? { culture: 2, production: 2 }
             : undefined,
+        rolls: cr.rolls
+          ? {
+              attackerMartial: cr.rolls.attackerMartial,
+              attackerBaseRoll: cr.rolls.attackerBaseRoll,
+              defenderMartial: cr.rolls.defenderMartial,
+              defenderBaseRoll: cr.rolls.defenderBaseRoll,
+              wallDice: cr.rolls.wallDice,
+              fortifyDice: cr.rolls.fortifyDice,
+              bypassedWalls: cr.rolls.bypassedWalls,
+              treatyPenalty: cr.rolls.treatyPenalty,
+              treatyCulturalCost: cr.rolls.treatyCulturalCost,
+            }
+          : undefined,
       };
     }
     if (lootTiles.length > 0) {

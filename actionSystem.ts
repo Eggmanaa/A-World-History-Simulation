@@ -375,8 +375,13 @@ export interface ActionExecutionResult {
       bypassedWalls: boolean;
       attackTotal: number;
       defendTotal: number;
+      treatyPenalty?: number;
+      treatyCulturalCost?: number;
     };
   };
+  // When the 'attack' action breaks one or more treaties, list the neighbor
+  // IDs whose treaties should be expired by the turn-resolution pipeline.
+  brokenTreatiesWithNeighbors?: string[];
   wonderInvestment?: { wonderId: string; amount: number };
   foundReligion?: boolean;
 }
@@ -467,8 +472,50 @@ export function executeAction(
         return { messages: ['You have no martial strength. Build Barracks first.'], statChanges: {} };
       }
 
+      // TREATY VIOLATION CHECK
+      // Peace treaty    = non-aggression pact.  Breaking it: -5 attack penalty, -2 Culture.
+      // Alliance        = mutual defense pact.  Backstabbing: -8 attack penalty, -3 Culture.
+      // Military pact   = joint military pact.  Breaking it: -6 attack penalty, -2 Culture.
+      // (Trade and cultural treaties do not constrain attacks.)
+      // Penalty applies to the attack ROLL (not Martial itself) so the backstabber
+      // has a realistic chance of losing the war they started. Penalties stack if
+      // multiple restrictive treaties exist with the same target. All broken
+      // treaties expire at turn resolution.
+      const activeTreaties = (state.treaties || []).filter(
+        (t) => t.neighborId === targetId && t.turnsRemaining > 0,
+      );
+      const hasPeace = activeTreaties.some((t) => t.type === 'peace');
+      const hasAlliance = activeTreaties.some((t) => t.type === 'alliance');
+      const hasMilitaryPact = activeTreaties.some((t) => t.type === 'military');
+
+      let treatyPenalty = 0;
+      let treatyCulturalCost = 0;
+      const violationMessages: string[] = [];
+      if (hasAlliance) {
+        treatyPenalty += 8;
+        treatyCulturalCost += 3;
+        violationMessages.push(
+          `BETRAYAL! ${target.name} was your ally — alliance broken. -8 attack roll, -3 Culture.`,
+        );
+      }
+      if (hasMilitaryPact) {
+        treatyPenalty += 6;
+        treatyCulturalCost += 2;
+        violationMessages.push(
+          `Military pact with ${target.name} broken. -6 attack roll, -2 Culture.`,
+        );
+      }
+      if (hasPeace) {
+        treatyPenalty += 5;
+        treatyCulturalCost += 2;
+        violationMessages.push(
+          `Peace treaty with ${target.name} broken. -5 attack roll, -2 Culture.`,
+        );
+      }
+      const treatiesToExpire = activeTreaties.map((t) => t.neighborId);
+
       // Combat math:
-      //   Attacker = Martial + d6
+      //   Attacker = Martial + d6 - treatyPenalty
       //   Defender = Martial + Defense + d6 + 1d8 per Wall (up to 3) + 1d8 per Fortify stack
       // Why bigger dice for walls/fortify? Martial scales multiplicatively
       // via traits (Strength ×2), cultural stages (Barbarism ×1.5, etc.),
@@ -503,7 +550,7 @@ export function executeAction(
 
       const wallDiceSum = wallDiceRolls.reduce((a, b) => a + b, 0);
       const fortifyDiceSum = fortifyDiceRolls.reduce((a, b) => a + b, 0);
-      const attackTotal = stats.martial + attackRoll;
+      const attackTotal = Math.max(0, stats.martial + attackRoll - treatyPenalty);
       const defendTotal = target.martial + target.defense + defendRoll + wallDiceSum + fortifyDiceSum;
       const margin = attackTotal - defendTotal;
 
@@ -517,44 +564,73 @@ export function executeAction(
         bypassedWalls: hasBypass && defenderWallCount > 0,
         attackTotal,
         defendTotal,
+        treatyPenalty,
+        treatyCulturalCost,
       };
 
       let result: ActionExecutionResult;
 
+      // Helper to splice in treaty-violation prefix messages and cultural cost
+      const applyTreatyPenalties = (
+        baseMessages: string[],
+        baseStats: Partial<GameState['civilization']['stats']>,
+      ): { messages: string[]; statChanges: Partial<GameState['civilization']['stats']> } => {
+        if (treatyPenalty === 0) {
+          return { messages: baseMessages, statChanges: baseStats };
+        }
+        const mergedStats = { ...baseStats };
+        const currentCulture =
+          mergedStats.culture !== undefined ? mergedStats.culture : stats.culture;
+        mergedStats.culture = Math.max(0, currentCulture - treatyCulturalCost);
+        return {
+          messages: [...violationMessages, ...baseMessages],
+          statChanges: mergedStats,
+        };
+      };
+
       if (margin >= 6) {
         // Decisive Victory
-        result = {
-          messages: [
+        const base = applyTreatyPenalties(
+          [
             `DECISIVE VICTORY vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
             '+3 Culture Total, looted 3 Production Pool, +1 territory!',
           ],
-          statChanges: {
+          {
             culture: stats.culture + 3,
             productionPool: stats.productionPool + 3,
           },
+        );
+        result = {
+          ...base,
           combatResult: { target: target.name, won: true, margin, effects: ['Decisive Victory'], rolls: rollDetail },
         };
       } else if (margin > 0) {
         // Victory
-        result = {
-          messages: [
+        const base = applyTreatyPenalties(
+          [
             `Victory vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
             '+2 Culture Total, looted 2 Production Pool.',
           ],
-          statChanges: {
+          {
             culture: stats.culture + 2,
             productionPool: stats.productionPool + 2,
           },
+        );
+        result = {
+          ...base,
           combatResult: { target: target.name, won: true, margin, effects: ['Victory'], rolls: rollDetail },
         };
       } else if (margin === 0) {
         // Stalemate
-        result = {
-          messages: [
+        const base = applyTreatyPenalties(
+          [
             `Stalemate vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
             'Both sides hold their ground.',
           ],
-          statChanges: {},
+          {},
+        );
+        result = {
+          ...base,
           combatResult: { target: target.name, won: false, margin: 0, effects: ['Stalemate'], rolls: rollDetail },
         };
       } else {
@@ -562,18 +638,25 @@ export function executeAction(
         // system at the start of each turn rather than retaliation here,
         // which keeps attack outcomes clean and predictable.
         const popLoss = Math.min(2, stats.population);
-        result = {
-          messages: [
+        const base = applyTreatyPenalties(
+          [
             `DEFEAT vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
             `-${popLoss} Population, -1 Martial.`,
           ],
-          statChanges: {
+          {
             population: stats.population - popLoss,
             houses: Math.max(0, stats.houses - popLoss),
             martial: Math.max(0, stats.martial - 1),
           },
+        );
+        result = {
+          ...base,
           combatResult: { target: target.name, won: false, margin, effects: ['Defeat'], rolls: rollDetail },
         };
+      }
+
+      if (treatiesToExpire.length > 0) {
+        result.brokenTreatiesWithNeighbors = treatiesToExpire;
       }
 
       return result;
@@ -653,15 +736,14 @@ export function executeAction(
     }
 
     case 'diplomacy': {
-      // DESIGN NOTE: Diplomacy has no resource cost on purpose. Like Trade,
-      // it consumes the player's strategic action for the turn — that IS the
-      // cost. The reward is a 5-turn alliance which calculateStats turns into
-      // +2 Martial per active alliance (stronger than a peace treaty's +1,
-      // because alliances require mutual commitment). We do NOT bump
-      // stats.martial here — that would double-count once the treaty bonus
-      // gets re-applied in calc each render. Backstabbing an ally via attack
-      // breaks the alliance AND takes a -8 roll penalty + 2 Culture loss
-      // (see case 'attack').
+      // Form an ALLIANCE with a specific neighbor.
+      // +2 Martial per active alliance while it lasts (5 turns). Stronger than
+      // a peace treaty (+1) because alliances require mutual commitment. We do
+      // NOT bump stats.martial here — that would double-count once the treaty
+      // bonus gets re-applied by calculateStats on next render.
+      //
+      // Backstabbing an ally via 'attack' breaks the alliance AND takes a -8
+      // attack roll penalty + 3 Culture loss (see case 'attack').
       const allyId = params?.targetId;
       const target = state.neighbors.find(n => n.id === allyId);
       if (!target) {

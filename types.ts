@@ -543,7 +543,16 @@ export interface CombatLogEntry {
     wallDice: number[];           // each wall tile contributes 1d6
     fortifyDice: number[];        // each fortify stack contributes 1d6
     bypassedWalls: boolean;       // Siege Engineering cancels wall dice
+    // Treaty-violation penalties. Only non-zero when the attacker breaks
+    // an active peace/alliance/military pact with the target.
+    treatyPenalty?: number;       // subtracted from attackTotal
+    treatyCulturalCost?: number;  // extra Culture lost as prestige hit
   };
+  // Was this attack incoming (NPC retaliation / PvP) or outgoing (player-initiated)?
+  // Default undefined = outgoing (backward-compatible with existing entries).
+  incoming?: boolean;
+  // For PvP attacks, the attacker's displayed name (otherwise "You").
+  attackerName?: string;
 }
 
 // One-shot modal that surfaces the outcome of an attack action in a clear,
