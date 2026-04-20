@@ -91,7 +91,7 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to fetch periods');
-      const data = await response.json();
+      const data = await response.json() as any;
       const rawPeriods = data.periods || data || [];
       const periodsList = rawPeriods.map((p: any) => ({
         ...p,
@@ -128,7 +128,7 @@ const TeacherDashboard: React.FC = () => {
         body: JSON.stringify({ name: newPeriodName }),
       });
       if (!response.ok) throw new Error('Failed to create period');
-      const data = await response.json();
+      const data = await response.json() as any;
       const rawPeriod = data.period || data;
       const newPeriod = {
         ...rawPeriod,
@@ -162,7 +162,7 @@ const TeacherDashboard: React.FC = () => {
         body: JSON.stringify({ periodId: activePeriod.id, maxUses: 30 }),
       });
       if (!response.ok) throw new Error('Failed to generate code');
-      const data = await response.json();
+      const data = await response.json() as any;
       const code = data.inviteCode?.code || data.code;
       const updated = { ...activePeriod, inviteCode: code };
       setActivePeriod(updated);
@@ -194,7 +194,7 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to start game');
-      const updated = await response.json();
+      const updated = await response.json() as any;
       setActivePeriod(updated);
       setActiveTab('timeline');
     } catch (err) {
@@ -213,7 +213,7 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to advance event');
-      const updated = await response.json();
+      const updated = await response.json() as any;
       setActivePeriod(updated);
       // Log event to history
       if (updated.timelineIndex < TIMELINE_EVENTS.length) {
@@ -236,7 +236,7 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to skip event');
-      const updated = await response.json();
+      const updated = await response.json() as any;
       setActivePeriod(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -255,7 +255,7 @@ const TeacherDashboard: React.FC = () => {
         body: JSON.stringify({ timerMinutes }),
       });
       if (!response.ok) throw new Error('Failed to start turn');
-      await response.json();
+      await response.json() as any;
       // Refresh period data
       await new Promise(r => setTimeout(r, 500));
       fetchPeriods();
@@ -275,7 +275,7 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to end phase');
-      await response.json();
+      await response.json() as any;
       fetchPeriods();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -293,7 +293,7 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to toggle pause');
-      await response.json();
+      await response.json() as any;
       fetchPeriods();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -358,7 +358,7 @@ const TeacherDashboard: React.FC = () => {
         body: JSON.stringify({ actionId: warId, result: 'attacker_wins' }),
       });
       if (!response.ok) throw new Error('Failed to resolve war');
-      const updated = await response.json();
+      const updated = await response.json() as any;
       setWarActions(updated);
       setDiceRolls({});
     } catch (err) {

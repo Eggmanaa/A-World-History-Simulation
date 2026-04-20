@@ -43,7 +43,7 @@ export const StudentDashboard: React.FC = () => {
         });
 
         if (!dashResponse.ok) throw new Error('Failed to fetch dashboard');
-        const dashData = await dashResponse.json();
+        const dashData = await dashResponse.json() as any;
 
         // Fetch taken civilizations from game state
         let takenCivsSet = new Set<string>();
@@ -53,7 +53,7 @@ export const StudentDashboard: React.FC = () => {
           });
 
           if (stateResponse.ok) {
-            const stateData = await stateResponse.json();
+            const stateData = await stateResponse.json() as any;
             // Extract taken civs from other students
             if (stateData.adjacentCivs) {
               takenCivsSet = new Set(stateData.adjacentCivs.map((c: any) => c.civilizationId));

@@ -42,7 +42,7 @@ const StudentJoin: React.FC = () => {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (response.ok) {
         localStorage.setItem('token', data.token);

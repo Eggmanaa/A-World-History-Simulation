@@ -65,7 +65,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
         });
 
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json() as any;
           setSyncState((prev) => ({
             ...prev,
             isOnline: true,
@@ -131,7 +131,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
         return;
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (!isUnmountingRef.current) {
         setSyncState((prev) => ({
@@ -154,7 +154,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
       );
 
       if (turnResponse.ok) {
-        const turnData = await turnResponse.json();
+        const turnData = await turnResponse.json() as any;
         if (!isUnmountingRef.current) {
           setSyncState((prev) => ({
             ...prev,
@@ -244,7 +244,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
           return null;
         }
 
-        const data = await response.json();
+        const data = await response.json() as any;
         return data.result || data;
       } catch (err) {
         console.error('Failed to sync action:', err);
@@ -297,7 +297,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
           return null;
         }
 
-        const data = await response.json();
+        const data = await response.json() as any;
         return data.result || data;
       } catch (err) {
         console.error('Failed to submit turn:', err);
