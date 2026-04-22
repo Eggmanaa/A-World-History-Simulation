@@ -853,6 +853,13 @@ gameRouter.post('/teacher/:periodId/end-phase', async (c) => {
     const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
     const expectedVersion = ((gameState as any)?.turn_state_version) || 0;
 
+    // Capture turn number BEFORE we flip state, so we know which turn
+    // to record misses against.
+    const currentTurnForMisses = await c.env.DB.prepare(
+      'SELECT turn_number FROM game_states WHERE period_id = ?'
+    ).bind(periodId).first<any>();
+    const missTurn = (currentTurnForMisses as any)?.turn_number || 0;
+
     if (turnState.phase === 'decision') {
       turnState.phase = 'resolution';
       turnState.timeRemaining = -1;
@@ -871,9 +878,45 @@ gameRouter.post('/teacher/:periodId/end-phase', async (c) => {
       return c.json({ message: 'Turn state changed in another tab. Please refresh.' }, 409);
     }
 
+    // Record 'missed' rows for every student who didn't submit this turn.
+    // Best-effort: a DB hiccup here should not fail the phase flip the
+    // teacher just performed. We only run this on a real phase flip
+    // (missTurn > 0) and skip if the migration hasn't been applied yet
+    // (catch the 'no such column: status' error silently).
+    let missedCount = 0;
+    if (missTurn > 0) {
+      try {
+        const absent = await c.env.DB.prepare(`
+          SELECT s.id AS student_id
+          FROM students s
+          WHERE s.period_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM turn_decisions td
+              WHERE td.period_id = s.period_id
+                AND td.student_id = s.id
+                AND td.turn_number = ?
+            )
+        `).bind(periodId, missTurn).all<any>();
+        const rows = (absent?.results || []) as any[];
+        for (const r of rows) {
+          await c.env.DB.prepare(`
+            INSERT OR IGNORE INTO turn_decisions
+              (period_id, student_id, turn_number, decision_data, status, created_at)
+            VALUES (?, ?, ?, '{}', 'missed', datetime('now'))
+          `).bind(periodId, r.student_id, missTurn).run();
+          missedCount++;
+        }
+      } catch (missErr) {
+        // Migration 0006 not applied yet, or transient DB error. Don't
+        // fail the phase flip; the teacher already clicked.
+        console.warn('Missed-turn recording skipped:', missErr);
+      }
+    }
+
     return c.json({
       message: 'Phase ended',
-      turnState
+      turnState,
+      missedCount,
     }, 200);
   } catch (error) {
     console.error('End phase error:', error);
@@ -924,6 +967,108 @@ gameRouter.post('/teacher/:periodId/pause', async (c) => {
     }, 200);
   } catch (error) {
     console.error('Pause error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// GET /student/:periodId/missed-turns - Turns this student needs to make up.
+//
+// Returns rows with status='missed' for the calling student in the period.
+// Empty array means no make-ups outstanding. Students without the status
+// column (migration 0006 not applied) get an empty list.
+gameRouter.get('/student/:periodId/missed-turns', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+
+    // Verify student belongs to period.
+    const student = await c.env.DB.prepare(
+      'SELECT id FROM students WHERE id = ? AND period_id = ?'
+    ).bind(user.id, periodId).first<any>();
+    if (!student) {
+      return c.json({ message: 'Student not found in this period' }, 404);
+    }
+
+    try {
+      const rows = await c.env.DB.prepare(`
+        SELECT turn_number AS turnNumber, created_at AS createdAt
+        FROM turn_decisions
+        WHERE period_id = ? AND student_id = ? AND status = 'missed'
+        ORDER BY turn_number ASC
+      `).bind(periodId, user.id).all<any>();
+      return c.json({ missedTurns: rows?.results || [] }, 200);
+    } catch (e) {
+      // Pre-migration fallback: column doesn't exist yet.
+      return c.json({ missedTurns: [] }, 200);
+    }
+  } catch (error) {
+    console.error('Missed-turns fetch error:', error);
+    return c.json({ message: 'Internal server error' }, 500);
+  }
+});
+
+// POST /student/:periodId/makeup-turn - Submit a decision for a past missed turn.
+//
+// Requires the student to have an existing turn_decisions row with
+// status='missed' for the target turnNumber. Flips it to 'made_up' and
+// writes decision_data. Separate endpoint from submit-turn because:
+//   - submit-turn requires phase === 'decision' (rejected for past turns)
+//   - make-ups happen AFTER the phase has ended, often turns later
+//   - semantics of the combat log differ (catch-up tag)
+gameRouter.post('/student/:periodId/makeup-turn', async (c) => {
+  try {
+    const user = c.get('user');
+    const periodId = c.req.param('periodId');
+    const { turnNumber, decision } = await c.req.json() as any;
+
+    if (typeof turnNumber !== 'number' || turnNumber < 1) {
+      return c.json({ message: 'Missing or invalid turnNumber' }, 400);
+    }
+
+    // Verify student belongs to period.
+    const student = await c.env.DB.prepare(
+      'SELECT id FROM students WHERE id = ? AND period_id = ?'
+    ).bind(user.id, periodId).first<any>();
+    if (!student) {
+      return c.json({ message: 'Student not found in this period' }, 404);
+    }
+
+    // Must have an outstanding 'missed' row to make up. This enforces the
+    // invariant: no retroactive submissions for turns the student already
+    // submitted on time, and no make-ups for turns they weren't absent for.
+    const missed = await c.env.DB.prepare(
+      `SELECT id, status FROM turn_decisions
+       WHERE period_id = ? AND student_id = ? AND turn_number = ?`
+    ).bind(periodId, user.id, turnNumber).first<any>();
+
+    if (!missed) {
+      return c.json({ message: 'No missed-turn record for this turn' }, 404);
+    }
+    if ((missed as any).status !== 'missed') {
+      return c.json({ message: 'Turn is not eligible for make-up' }, 409);
+    }
+
+    // Flip status to 'made_up' and write the student's decision. Keyed
+    // by row id so we update exactly the matched row.
+    const upd = await c.env.DB.prepare(`
+      UPDATE turn_decisions
+      SET status = 'made_up',
+          decision_data = ?,
+          created_at = datetime('now')
+      WHERE id = ? AND status = 'missed'
+    `).bind(JSON.stringify(decision || {}), (missed as any).id).run();
+
+    if (((upd.meta as any) || {}).changes === 0) {
+      return c.json({ message: 'Make-up raced with another write. Retry.' }, 409);
+    }
+
+    return c.json({
+      message: 'Make-up turn recorded',
+      turnNumber,
+      status: 'made_up',
+    }, 200);
+  } catch (error) {
+    console.error('Make-up turn error:', error);
     return c.json({ message: 'Internal server error' }, 500);
   }
 });
