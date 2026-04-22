@@ -499,6 +499,11 @@ export interface GameState {
   pendingTurnChoice: boolean;
   currentEventPopup: EventPopupData | null;
   warsWon: number;
+  // AGGRESSOR TAG — total number of attacks initiated across the entire
+  // game (win/lose/stalemate/defeat all count). At >= 3 the civ earns
+  // the Aggressor tag: -1 Culture per Develop, +10% NPC retaliation
+  // chance. Drives snowballing attackers toward diminishing returns.
+  totalAttacksInitiated?: number;
   religionSpread: number;
   wondersBuilt: WonderDefinition[];
   // Combat log: append-only record of every attack this civ has launched.

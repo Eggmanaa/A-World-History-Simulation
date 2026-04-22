@@ -2122,6 +2122,18 @@ const App: React.FC = () => {
       setTiles((prev) => [...prev, ...lootTiles]);
     }
 
+    // DIPLOMATIC BLOWBACK — apply the erosions returned from executeAction.
+    // Preserves any rally / conquest updates already applied above.
+    if (result.relationshipErosions && result.relationshipErosions.length > 0) {
+      const erosionMap = new Map(
+        result.relationshipErosions.map((e) => [e.neighborId, e.to]),
+      );
+      updatedNeighbors = updatedNeighbors.map((n) =>
+        erosionMap.has(n.id) ? { ...n, relationship: erosionMap.get(n.id)! } : n,
+      );
+    }
+    // AGGRESSOR COUNTER — every attack (any outcome) increments the counter.
+    const attackIncrement = actionId === 'attack' && result.combatResult ? 1 : 0;
     setGameState((prev) => ({
       ...prev,
       turnPhase: 'build_phase' as TurnPhaseV2,
@@ -2130,6 +2142,7 @@ const App: React.FC = () => {
       treaties: newTreaties,
       neighbors: updatedNeighbors,
       warsWon: (prev.warsWon || 0) + additionalWarsWon,
+      totalAttacksInitiated: (prev.totalAttacksInitiated || 0) + attackIncrement,
       conqueredTerritories: (prev.conqueredTerritories || 0) + additionalConquered,
       combatLog: combatLogEntry
         ? [...(prev.combatLog || []), combatLogEntry]

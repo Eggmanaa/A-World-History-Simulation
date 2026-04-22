@@ -5,7 +5,7 @@
  * This creates the core strategic tension of the game.
  */
 
-import type { GameState, PlayerActionType, BuildingType, TileData, TreatyType, CombatLogEntry } from './types';
+import type { GameState, PlayerActionType, BuildingType, TileData, TreatyType, CombatLogEntry, Relationship } from './types';
 import { FORTIFY_MAX } from './types';
 
 export interface ActionDefinition {
@@ -395,6 +395,15 @@ export interface ActionExecutionResult {
   // attacked neighbor's id so GameApp can update that neighbor's
   // rallyUntilTurn in the neighbors array.
   attackedNeighborId?: string;
+  // DIPLOMATIC BLOWBACK — every attack erodes non-target, non-conquered,
+  // non-treaty-protected neighbors one step (Ally -> Neutral, Neutral -> Enemy).
+  // GameApp applies these alongside the target's rally update.
+  relationshipErosions?: Array<{
+    neighborId: string;
+    from: Relationship;
+    to: Relationship;
+    name: string;
+  }>;
   wonderInvestment?: { wonderId: string; amount: number };
   foundReligion?: boolean;
 }
@@ -556,6 +565,37 @@ export function executeAction(
       }
       const treatiesToExpire = activeTreaties.map((t) => t.neighborId);
 
+      // DIPLOMATIC BLOWBACK — every attack erodes non-target neighbors one step.
+      // Skip the target (their relationship is handled by combat resolution),
+      // skip conquered neighbors (they're out of the game), and skip neighbors
+      // protected by an active peace/alliance/military treaty with US (treaties
+      // shelter diplomacy — breaking them is already punished above).
+      const erosions: Array<{ neighborId: string; from: Relationship; to: Relationship; name: string }> = [];
+      const nextRelationship = (r: Relationship): Relationship | null => {
+        if (r === 'Ally') return 'Neutral';
+        if (r === 'Neutral') return 'Enemy';
+        return null; // Enemy stays Enemy
+      };
+      const erosionViolationMessages: string[] = [];
+      for (const n of state.neighbors) {
+        if (n.id === targetId) continue;
+        if (n.isConquered) continue;
+        // Skip if a shielding treaty exists between us and this neighbor.
+        const shield = (state.treaties || []).find(
+          (t) => t.neighborId === n.id
+            && t.turnsRemaining > 0
+            && (t.type === 'peace' || t.type === 'alliance' || t.type === 'military'),
+        );
+        if (shield) continue;
+        const next = nextRelationship(n.relationship);
+        if (!next || next === n.relationship) continue;
+        erosions.push({ neighborId: n.id, from: n.relationship, to: next, name: n.name });
+      }
+      if (erosions.length > 0) {
+        const demotions = erosions.map((e) => `${e.name} (${e.from} -> ${e.to})`).join(', ');
+        erosionViolationMessages.push(`Your aggression worries neighbors: ${demotions}.`);
+      }
+
       // Combat math:
       //   Attacker = Martial + d6 - treatyPenalty
       //   Defender = Martial + Defense + d6 + 1d8 per Wall (up to 3) + 1d8 per Fortify stack
@@ -622,20 +662,22 @@ export function executeAction(
 
       let result: ActionExecutionResult;
 
-      // Helper to splice in treaty-violation prefix messages and cultural cost
+      // Helper to splice in treaty-violation prefix messages and cultural cost,
+      // and also append diplomatic-blowback messages for non-target neighbors.
       const applyTreatyPenalties = (
         baseMessages: string[],
         baseStats: Partial<GameState['civilization']['stats']>,
       ): { messages: string[]; statChanges: Partial<GameState['civilization']['stats']> } => {
+        const prefixMessages = [...violationMessages, ...erosionViolationMessages];
         if (treatyPenalty === 0) {
-          return { messages: baseMessages, statChanges: baseStats };
+          return { messages: [...prefixMessages, ...baseMessages], statChanges: baseStats };
         }
         const mergedStats = { ...baseStats };
         const currentCulture =
           mergedStats.culture !== undefined ? mergedStats.culture : stats.culture;
         mergedStats.culture = Math.max(0, currentCulture - treatyCulturalCost);
         return {
-          messages: [...violationMessages, ...baseMessages],
+          messages: [...prefixMessages, ...baseMessages],
           statChanges: mergedStats,
         };
       };
@@ -656,6 +698,7 @@ export function executeAction(
           ...base,
           combatResult: { target: target.name, won: true, margin, effects: ['Decisive Victory'], rolls: rollDetail },
           attackedNeighborId: targetId,
+          relationshipErosions: erosions.length > 0 ? erosions : undefined,
         };
       } else if (margin > 0) {
         // Victory — loot Production only; Culture comes from Develop.
@@ -673,6 +716,7 @@ export function executeAction(
           ...base,
           combatResult: { target: target.name, won: true, margin, effects: ['Victory'], rolls: rollDetail },
           attackedNeighborId: targetId,
+          relationshipErosions: erosions.length > 0 ? erosions : undefined,
         };
       } else if (margin === 0) {
         // Stalemate — still counts as an attack for rally purposes.
@@ -688,6 +732,7 @@ export function executeAction(
           ...base,
           combatResult: { target: target.name, won: false, margin: 0, effects: ['Stalemate'], rolls: rollDetail },
           attackedNeighborId: targetId,
+          relationshipErosions: erosions.length > 0 ? erosions : undefined,
         };
       } else {
         // Defeat — simple loss. Defense is exercised by the random raid
@@ -709,6 +754,7 @@ export function executeAction(
           ...base,
           combatResult: { target: target.name, won: false, margin, effects: ['Defeat'], rolls: rollDetail },
           attackedNeighborId: targetId,
+          relationshipErosions: erosions.length > 0 ? erosions : undefined,
         };
       }
 
@@ -734,12 +780,17 @@ export function executeAction(
     case 'develop': {
       // cultureYield already includes Amphitheatre tile bonuses (calculateStats
       // bumps yield by +2 per Amphitheatre). Just add yield once.
-      const culGain = stats.cultureYield;
+      // AGGRESSOR TAG — 3+ total attacks initiated eats -1 Culture per Develop
+      // (floor 1). Reputation cost of being a warmonger.
+      const isAggressor = (state.totalAttacksInitiated || 0) >= 3;
+      const rawCulGain = stats.cultureYield;
+      const culGain = isAggressor ? Math.max(1, rawCulGain - 1) : rawCulGain;
       const newCulture = stats.culture + culGain;
       const ampCount = buildings.amphitheatres || 0;
       return {
         messages: [
           `Developed! +${culGain} Culture Total (now ${newCulture}).`,
+          ...(isAggressor ? [`Aggressor reputation taxes your Culture: -1 (base was ${rawCulGain}).`] : []),
           ...(ampCount > 0
             ? [`(${ampCount} ${ampCount === 1 ? 'Amphitheatre' : 'Amphitheatres'} contributed +${ampCount * 2} of that)`]
             : []),
@@ -988,9 +1039,15 @@ export function calculateIncome(state: GameState): {
     (n) => !n.isConquered && n.relationship === 'Enemy',
   );
   const warsWon = state.warsWon || 0;
-  const hasAggression = enemyNeighbors.length > 0 || warsWon >= 2;
+  const totalAttacks = state.totalAttacksInitiated || 0;
+  const isAggressor = totalAttacks >= 3;
+  const hasAggression = enemyNeighbors.length > 0 || warsWon >= 2 || isAggressor;
   if (hasAggression && state.turnNumber >= 4) {
-    const retaliationChance = Math.min(0.5, 0.2 + warsWon * 0.05);
+    // Aggressor tag adds +10% on top of warsWon scaling. Cap raised to 60%.
+    const retaliationChance = Math.min(
+      isAggressor ? 0.6 : 0.5,
+      0.2 + warsWon * 0.05 + (isAggressor ? 0.1 : 0),
+    );
     if (Math.random() < retaliationChance) {
       // Pick attacker: strongest unconquered enemy with no blocking treaty.
       const eligibleAttackers = state.neighbors
