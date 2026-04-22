@@ -419,6 +419,11 @@ const calculateStats = (
   let fertility = civData.baseStats.fertility;
   let industry = civData.baseStats.industry + terrainIndustry;
   let populationCapacity = (civData.baseStats.capacity || 10) + buildingCapacity;
+  // PERSISTENT CAPACITY BONUS — each Grow action adds +1 to stats.capacityBonus.
+  // We re-apply it here because calculateStats rebuilds capacity from scratch
+  // every render; without this re-apply, the +1 cap from Grow would vanish on
+  // the next recompute.
+  if (civData.stats.capacityBonus) populationCapacity += civData.stats.capacityBonus;
   let productionIncome = (civData.baseStats.productionIncome ?? civData.baseStats.industry) + buildingProductionIncome;
   let scienceYield = (civData.baseStats.scienceYield ?? Math.max(1, Math.floor(civData.baseStats.industry / 3))) + buildingScienceYield;
   let cultureYield = (civData.baseStats.cultureYield ?? Math.max(1, Math.floor(civData.baseStats.faith / 3))) + buildingCultureYield;

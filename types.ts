@@ -422,6 +422,13 @@ export interface GameState {
       // stat intentionally does NOT help the civ attack — its purpose is
       // pure defense, preventing a runaway offensive snowball.
       fortifyDice: number;
+      // CAPACITY BONUS: permanent +Population Capacity granted by repeat
+      // uses of the Grow action (and future capacity-granting effects).
+      // calculateStats adds this value to the derived capacity on every
+      // render so the bonus survives recomputes (a raw stats.capacity bump
+      // would be overwritten because capacity is re-derived from baseStats
+      // + buildings + wonders each render). Optional for save-file compat.
+      capacityBonus?: number;
     };
     baseStats: { // Snapshot of base stats for recalculation
         martial: number;

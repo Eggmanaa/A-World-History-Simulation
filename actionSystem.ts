@@ -54,8 +54,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
   {
     id: 'grow',
     name: 'Grow',
-    shortDesc: '+2 Population → +Martial/+Industry',
-    fullDesc: 'Build 2 houses on your map, increasing Population up to your Capacity. Every 4 Population gives +1 Martial (citizen militia); every 5 Population gives +1 Industry (workers). If already at Capacity, gain +1 Production Pool instead.',
+    shortDesc: '+2 Population, +1 Capacity → +Martial/+Industry',
+    fullDesc: 'Place 2 houses on your map AND gain +2 Population and +1 Population Capacity (permanent). Every 4 Population gives +1 Martial (citizen militia); every 5 Population gives +1 Industry (workers). If already at Capacity, gain +1 Capacity, +1 Population, and +1 Production Pool instead.',
     icon: 'Sprout',
     category: 'growth',
     color: 'text-green-400',
@@ -262,13 +262,19 @@ export function previewAction(
   switch (actionId) {
     case 'grow': {
       if (stats.houses >= stats.capacity) {
-        return { effects: ['+1 Production Pool (already at Capacity — grow it with Farms / Hanging Gardens)'] };
+        return { effects: [
+          '+1 Population Capacity (permanent — room to grow next turn)',
+          '+1 Population',
+          '+1 Production Pool',
+        ] };
       }
       const canGrow = Math.min(2, stats.capacity - stats.houses);
-      // Forecast the Martial/Industry jump the extra pop will unlock once the
-      // houses land, so students see the real reason to Grow.
+      // Forecast the Martial/Industry jump the +2 Population will unlock.
+      // Pop gain is capped at the new cap (current + 1 bonus).
       const currentPop = stats.population || 0;
-      const nextPop = currentPop + canGrow;
+      const newCap = stats.capacity + 1;
+      const nextPop = Math.min(currentPop + 2, newCap);
+      const popGain = nextPop - currentPop;
       const martialNow = Math.floor(currentPop / 4);
       const martialNext = Math.floor(nextPop / 4);
       const industryNow = Math.floor(currentPop / 5);
@@ -280,7 +286,9 @@ export function previewAction(
       if (industryDelta > 0) bonusHints.push(`+${industryDelta} Industry threshold`);
       return {
         effects: [
-          `+${canGrow} Population (place ${canGrow} Houses on the map)`,
+          `Place ${canGrow} Houses on your map`,
+          `+${popGain} Population (now ${nextPop})`,
+          '+1 Population Capacity (permanent)',
           'Every 4 Population → +1 Martial (citizen militia)',
           'Every 5 Population → +1 Industry (workers)',
           ...(bonusHints.length > 0
@@ -396,16 +404,45 @@ export function executeAction(
 
   switch (actionId) {
     case 'grow': {
+      // +1 permanent Capacity every time Grow is used. Stored in
+      // capacityBonus so calculateStats re-applies it on every render
+      // (raw stats.capacity is overwritten each recompute).
+      const newCapacityBonus = (stats.capacityBonus || 0) + 1;
+      const newCap = stats.capacity + 1; // cached immediate cap
+
       if (stats.houses >= stats.capacity) {
+        // At-capacity escape valve: give +1 Cap (room to grow next turn),
+        // +1 Population (fills the new slot), and +1 Production Pool.
+        const newPop = Math.min(stats.population + 1, newCap);
         return {
-          messages: ['At capacity! Gained +1 Production Pool instead.'],
-          statChanges: { productionPool: stats.productionPool + 1 },
+          messages: [
+            'At capacity! +1 Population Capacity (permanent) and +1 Production Pool.',
+            `Population: ${stats.population} → ${newPop}.`,
+          ],
+          statChanges: {
+            capacity: newCap,
+            capacityBonus: newCapacityBonus,
+            population: newPop,
+            productionPool: stats.productionPool + 1,
+          },
         };
       }
+
       const canGrow = Math.min(2, stats.capacity - stats.houses);
+      // +2 Population, capped at the new capacity (which just went up by 1).
+      const newPop = Math.min(stats.population + 2, newCap);
+      const popGain = newPop - stats.population;
       return {
-        messages: [`Place ${canGrow} houses on your map.`],
-        statChanges: {},
+        messages: [
+          `Place ${canGrow} houses on your map.`,
+          `+${popGain} Population (${stats.population} → ${newPop}).`,
+          '+1 Population Capacity (permanent).',
+        ],
+        statChanges: {
+          capacity: newCap,
+          capacityBonus: newCapacityBonus,
+          population: newPop,
+        },
         enableMapPlacement: 'house',
         maxPlacements: canGrow,
       };
@@ -790,7 +827,15 @@ export function calculateIncome(state: GameState): {
 
   // 2. Population adjustment — also call out when a new Martial/Industry
   // threshold is crossed so students see the concrete reward from growing.
-  if (stats.population < stats.capacity) {
+  // TURN 1 GATE: no natural growth on Turn 1. Civs start at baseline and
+  // must pick an action (typically Grow) to begin expansion. This keeps the
+  // Turn 1 house count pinned to fertility for every civ and closes the
+  // Troy loophole where pre-action natural growth stacked with the Grow
+  // action for 3+ houses on Turn 1.
+  const turnNumber = state.turnNumber || 1;
+  if (turnNumber === 1) {
+    messages.push('Turn 1: no natural growth yet — pick Grow as your action to seed your population.');
+  } else if (stats.population < stats.capacity) {
     const newPop = stats.population + 1;
     changes.population = newPop;
     changes.houses = stats.houses + 1;
