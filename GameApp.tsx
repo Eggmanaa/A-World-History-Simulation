@@ -2641,8 +2641,12 @@ const App: React.FC = () => {
       }
 
       // 3. Check Fertility Limit (Growth per Turn)
+      // EXCEPTION 1: starter placements (pre-Turn-1 freebies).
+      // EXCEPTION 2: Grow places ON TOP of the fertility cap - fertility is the
+      // passive per-turn rate; Grow is an active surge that bypasses it.
       if (
         !gameState.isPlacingStarterHouses &&
+        gameState.selectedPlayerAction !== 'grow' &&
         civilization.stats.housesBuiltThisTurn >= civilization.stats.fertility
       ) {
         addMessage(
@@ -2720,7 +2724,11 @@ const App: React.FC = () => {
 
       if (selectedAction === BuildingType.House) {
         newHouses += 1;
-        if (!prev.isPlacingStarterHouses) newHousesBuilt += 1;
+        // Grow placements AND starter placements don't count toward the
+        // fertility cap. They're their own budget (Grow = surge; starter = founder).
+        const isBypassPlacement =
+          prev.isPlacingStarterHouses || prev.selectedPlayerAction === 'grow';
+        if (!isBypassPlacement) newHousesBuilt += 1;
       } else {
         if (!isV2BuildPhaseFlow) newIndustry -= cost;
         // STRUCTURAL building bonuses (martial, capacity, yield rates) are

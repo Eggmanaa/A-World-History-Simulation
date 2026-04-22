@@ -55,7 +55,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     id: 'grow',
     name: 'Grow',
     shortDesc: '+2 Population, +1 Capacity → +Martial/+Industry',
-    fullDesc: 'Place 2 houses on your map AND gain +2 Population and +1 Population Capacity (permanent). Every 4 Population gives +1 Martial (citizen militia); every 5 Population gives +1 Industry (workers). If already at Capacity, gain +1 Capacity, +1 Population, and +1 Production Pool instead.',
+    fullDesc: 'Place 2 houses on your map (these bypass your Fertility cap - they are a surge on TOP of your passive per-turn growth) AND gain +2 Population and +1 Population Capacity (permanent). Every 4 Population gives +1 Martial (citizen militia); every 5 Population gives +1 Industry (workers). If already at Capacity, gain +1 Capacity, +1 Population, and +1 Production Pool instead.',
     icon: 'Sprout',
     category: 'growth',
     color: 'text-green-400',
