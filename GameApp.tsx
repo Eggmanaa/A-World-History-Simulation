@@ -2012,6 +2012,16 @@ const App: React.FC = () => {
       const cr = result.combatResult;
       const decisive = cr.won && (cr.margin ?? 0) >= 6;
       if (cr.won) additionalWarsWon = 1;
+      // VICTIM'S RALLY — any attacked neighbor (not conquered) gets a
+      // defensive buff for their next turn. rallyUntilTurn is absolute,
+      // so expiration handles itself as turns advance.
+      const rallyNeighborId = result.attackedNeighborId;
+      if (rallyNeighborId && !decisive) {
+        const rallyThroughTurn = (gameState.turnNumber || 1) + 1;
+        updatedNeighbors = gameState.neighbors.map((n) =>
+          n.id === rallyNeighborId ? { ...n, rallyUntilTurn: rallyThroughTurn } : n,
+        );
+      }
       if (decisive && params?.targetId) {
         const target = gameState.neighbors.find((n) => n.id === params.targetId);
         if (target && !target.isConquered) {
@@ -2044,13 +2054,13 @@ const App: React.FC = () => {
           popupEffects.push(`BROKEN TREATY! -${rollDetail.treatyPenalty} attack, -${rollDetail.treatyCulturalCost ?? 0} Culture`);
         }
         if (outcome === 'decisive_victory') {
-          popupEffects.push('+3 Culture Total', '+3 Production Pool loot', '+1 conquered territory');
+          popupEffects.push('+3 Production Pool (loot)', '+1 conquered territory', `${cr.target} rallies next turn (+2 Martial, +1d8)`);
         } else if (outcome === 'victory') {
-          popupEffects.push('+2 Culture Total', '+2 Production Pool loot');
+          popupEffects.push('+2 Production Pool (loot)', `${cr.target} rallies next turn (+2 Martial, +1d8)`);
         } else if (outcome === 'stalemate') {
-          popupEffects.push('Both forces hold. No losses.');
+          popupEffects.push('Both forces hold. No losses.', `${cr.target} rallies next turn (+2 Martial, +1d8)`);
         } else {
-          popupEffects.push('-2 Population', '-1 Martial');
+          popupEffects.push('-2 Population', '-1 Martial', `${cr.target} rallies next turn (+2 Martial, +1d8)`);
         }
         setAttackOutcome({
           turn: gameState.turnNumber || 1,
@@ -2089,9 +2099,9 @@ const App: React.FC = () => {
           ? Math.max(0, (gameState.civilization.stats.martial || 0) - ((result.statChanges as any).martial || 0))
           : 0,
         loot: outcome === 'decisive_victory'
-          ? { culture: 3, production: 3 }
+          ? { culture: 0, production: 3 }
           : outcome === 'victory'
-            ? { culture: 2, production: 2 }
+            ? { culture: 0, production: 2 }
             : undefined,
         rolls: cr.rolls
           ? {

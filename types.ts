@@ -186,6 +186,10 @@ export interface NeighborCiv {
     isConquered: boolean;
     relationship: Relationship;
     religion?: string;
+    // VICTIM'S RALLY — absolute turn number through which this neighbor
+    // gets +2 Martial and +1 d8 on defensive rolls. Set when the player
+    // attacks them; expires automatically once turnNumber > this value.
+    rallyUntilTurn?: number;
 }
 
 // Turn System Types
@@ -429,6 +433,12 @@ export interface GameState {
       // would be overwritten because capacity is re-derived from baseStats
       // + buildings + wonders each render). Optional for save-file compat.
       capacityBonus?: number;
+      // VICTIM'S RALLY — absolute turn number through which the player
+      // gets +2 Martial and +1 d8 on defensive rolls. Set when this civ
+      // is attacked (raid lands or NPC retaliation succeeds). Expires
+      // automatically once turnNumber > this value. Absolute (not
+      // countdown) to avoid decrement bugs across the turn pipeline.
+      rallyUntilTurn?: number;
     };
     baseStats: { // Snapshot of base stats for recalculation
         martial: number;

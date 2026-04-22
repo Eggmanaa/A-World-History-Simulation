@@ -309,7 +309,7 @@ export function previewAction(
 
     case 'attack':
       return {
-        effects: [`Your Martial: ${stats.martial} + d6`, 'Decisive Victory (6+): +3 Culture, loot 3, +1 territory', 'Victory (1-5): +2 Culture, loot 2', 'Defeat: -2 Population, -1 Martial'],
+        effects: [`Your Martial: ${stats.martial} + d6`, 'Decisive Victory (6+): loot +3 Production Pool, +1 territory', 'Victory (1-5): loot +2 Production Pool', 'Defeat: -2 Population, -1 Martial', 'Victim rallies next turn (+2 Martial, +1 d8 defense)'],
       };
 
     case 'develop': {
@@ -390,6 +390,11 @@ export interface ActionExecutionResult {
   // When the 'attack' action breaks one or more treaties, list the neighbor
   // IDs whose treaties should be expired by the turn-resolution pipeline.
   brokenTreatiesWithNeighbors?: string[];
+  // VICTIM'S RALLY plumbing — when the player attacks an NPC neighbor,
+  // the neighbor earns a defensive buff for their NEXT turn. Set to the
+  // attacked neighbor's id so GameApp can update that neighbor's
+  // rallyUntilTurn in the neighbors array.
+  attackedNeighborId?: string;
   wonderInvestment?: { wonderId: string; amount: number };
   foundReligion?: boolean;
 }
@@ -585,10 +590,20 @@ export function executeAction(
         Math.floor(Math.random() * 8) + 1,
       );
 
+      // VICTIM'S RALLY for NPC defender — if this neighbor was attacked
+      // previously and their rallyUntilTurn is still active, they get
+      // +2 Martial and roll an extra d8 in their defense pool.
+      const targetRallyActive = (target.rallyUntilTurn || 0) >= (state.turnNumber || 1);
+      const targetRallyMartial = targetRallyActive ? 2 : 0;
+      const targetRallyDice = targetRallyActive
+        ? [Math.floor(Math.random() * 8) + 1]
+        : [];
+      const targetRallySum = targetRallyDice.reduce((a, b) => a + b, 0);
+
       const wallDiceSum = wallDiceRolls.reduce((a, b) => a + b, 0);
       const fortifyDiceSum = fortifyDiceRolls.reduce((a, b) => a + b, 0);
       const attackTotal = Math.max(0, stats.martial + attackRoll - treatyPenalty);
-      const defendTotal = target.martial + target.defense + defendRoll + wallDiceSum + fortifyDiceSum;
+      const defendTotal = target.martial + target.defense + targetRallyMartial + defendRoll + wallDiceSum + fortifyDiceSum + targetRallySum;
       const margin = attackTotal - defendTotal;
 
       const rollDetail = {
@@ -626,49 +641,53 @@ export function executeAction(
       };
 
       if (margin >= 6) {
-        // Decisive Victory
+        // Decisive Victory — loot Production only; Culture comes from Develop.
         const base = applyTreatyPenalties(
           [
             `DECISIVE VICTORY vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
-            '+3 Culture Total, looted 3 Production Pool, +1 territory!',
+            '+3 Production Pool (loot), +1 territory!',
+            `${target.name} rallies their survivors — they get +2 Martial & +1d8 defense next turn.`,
           ],
           {
-            culture: stats.culture + 3,
             productionPool: stats.productionPool + 3,
           },
         );
         result = {
           ...base,
           combatResult: { target: target.name, won: true, margin, effects: ['Decisive Victory'], rolls: rollDetail },
+          attackedNeighborId: targetId,
         };
       } else if (margin > 0) {
-        // Victory
+        // Victory — loot Production only; Culture comes from Develop.
         const base = applyTreatyPenalties(
           [
             `Victory vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
-            '+2 Culture Total, looted 2 Production Pool.',
+            '+2 Production Pool (loot).',
+            `${target.name} rallies their survivors — they get +2 Martial & +1d8 defense next turn.`,
           ],
           {
-            culture: stats.culture + 2,
             productionPool: stats.productionPool + 2,
           },
         );
         result = {
           ...base,
           combatResult: { target: target.name, won: true, margin, effects: ['Victory'], rolls: rollDetail },
+          attackedNeighborId: targetId,
         };
       } else if (margin === 0) {
-        // Stalemate
+        // Stalemate — still counts as an attack for rally purposes.
         const base = applyTreatyPenalties(
           [
             `Stalemate vs ${target.name}! (${attackTotal} vs ${defendTotal})`,
             'Both sides hold their ground.',
+            `${target.name} rallies their survivors — they get +2 Martial & +1d8 defense next turn.`,
           ],
           {},
         );
         result = {
           ...base,
           combatResult: { target: target.name, won: false, margin: 0, effects: ['Stalemate'], rolls: rollDetail },
+          attackedNeighborId: targetId,
         };
       } else {
         // Defeat — simple loss. Defense is exercised by the random raid
@@ -689,6 +708,7 @@ export function executeAction(
         result = {
           ...base,
           combatResult: { target: target.name, won: false, margin, effects: ['Defeat'], rolls: rollDetail },
+          attackedNeighborId: targetId,
         };
       }
 
@@ -899,13 +919,23 @@ export function calculateIncome(state: GameState): {
     const fortifyDiceRolls = Array.from({ length: fortifyStacks }, () => Math.floor(Math.random() * 8) + 1);
     const wallSum = wallDiceRolls.reduce((a, b) => a + b, 0);
     const fortifySum = fortifyDiceRolls.reduce((a, b) => a + b, 0);
-    const effectiveDef = (stats.martial || 0) + wallSum + fortifySum;
+    // VICTIM'S RALLY — if still active this turn, apply +2 Martial and
+    // roll one extra d8 for defense. Expires naturally when turnNumber
+    // passes rallyUntilTurn.
+    const raidRallyActive = (stats.rallyUntilTurn || 0) >= (state.turnNumber || 1);
+    const raidRallyMartial = raidRallyActive ? 2 : 0;
+    const raidRallyDice = raidRallyActive ? [Math.floor(Math.random() * 8) + 1] : [];
+    const raidRallySum = raidRallyDice.reduce((a, b) => a + b, 0);
+    const effectiveDef = (stats.martial || 0) + raidRallyMartial + wallSum + fortifySum + raidRallySum;
     const damage = Math.max(0, raidPower - effectiveDef);
-    const defenseBreakdown = wallCount + fortifyStacks > 0
-      ? ` (Martial ${stats.martial} + ${wallCount}d8 walls [${wallDiceRolls.join('+') || 0}] + ${fortifyStacks}d8 fortify [${fortifyDiceRolls.join('+') || 0}])`
+    const defenseBreakdown = wallCount + fortifyStacks + raidRallyDice.length > 0
+      ? ` (Martial ${stats.martial}${raidRallyActive ? ' +2 rally' : ''} + ${wallCount}d8 walls [${wallDiceRolls.join('+') || 0}] + ${fortifyStacks}d8 fortify [${fortifyDiceRolls.join('+') || 0}]${raidRallyActive ? ` + 1d8 rally [${raidRallySum}]` : ''})`
       : ` (Martial ${stats.martial})`;
     const raidPopLoss = damage > 0 ? Math.min(damage, Math.max(0, (changes.population ?? stats.population) - 1)) : 0;
     const raidProdLoss = damage > 0 ? Math.min(Math.floor(damage / 2), changes.productionPool ?? stats.productionPool ?? 0) : 0;
+    // VICTIM'S RALLY — being raided (even a repelled raid) rallies the
+    // population for the next turn: +2 Martial and +1d8 defense.
+    changes.rallyUntilTurn = (state.turnNumber || 1) + 1;
     if (damage > 0) {
       const currentPop = changes.population ?? stats.population;
       const currentHouses = changes.houses ?? stats.houses;
@@ -916,9 +946,9 @@ export function calculateIncome(state: GameState): {
       if (raidProdLoss > 0) {
         changes.productionPool = Math.max(0, (changes.productionPool ?? stats.productionPool ?? 0) - raidProdLoss);
       }
-      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs defense ${effectiveDef}${defenseBreakdown}). Lost ${raidPopLoss} Population${raidProdLoss > 0 ? ` and ${raidProdLoss} Production` : ''}.`);
+      messages.push(`⚔️ RAID! Barbarians strike (power ${raidPower} vs defense ${effectiveDef}${defenseBreakdown}). Lost ${raidPopLoss} Population${raidProdLoss > 0 ? ` and ${raidProdLoss} Production` : ''}. Your people rally — +2 Martial & +1d8 defense next turn.`);
     } else {
-      messages.push(`🛡️ A raid was beaten back — defense ${effectiveDef}${defenseBreakdown} held off raid power ${raidPower}. No losses.`);
+      messages.push(`🛡️ A raid was beaten back — defense ${effectiveDef}${defenseBreakdown} held off raid power ${raidPower}. Your people rally — +2 Martial & +1d8 defense next turn.`);
     }
 
     // Log raid as an INCOMING combat entry so the war tab shows it.
@@ -983,8 +1013,13 @@ export function calculateIncome(state: GameState): {
         const rFortifyDice = Array.from({ length: rFortify }, () => Math.floor(Math.random() * 8) + 1);
         const rWallSum = rWallDice.reduce((a, b) => a + b, 0);
         const rFortifySum = rFortifyDice.reduce((a, b) => a + b, 0);
+        // VICTIM'S RALLY — if still active, apply +2 Martial and +1d8.
+        const retalRallyActive = (stats.rallyUntilTurn || 0) >= (state.turnNumber || 1);
+        const retalRallyMartial = retalRallyActive ? 2 : 0;
+        const retalRallyDice = retalRallyActive ? [Math.floor(Math.random() * 8) + 1] : [];
+        const retalRallySum = retalRallyDice.reduce((a, b) => a + b, 0);
         const attackTotal = (attacker.martial || 0) + rRoll;
-        const defendTotal = (stats.martial || 0) + rDefRoll + rWallSum + rFortifySum;
+        const defendTotal = (stats.martial || 0) + retalRallyMartial + rDefRoll + rWallSum + rFortifySum + retalRallySum;
         const margin = attackTotal - defendTotal;
         let retPopLoss = 0;
         let retMartialLost = 0;
@@ -1036,6 +1071,8 @@ export function calculateIncome(state: GameState): {
         if (attacker.relationship !== 'Enemy') {
           neighborRelationshipChanges.push({ id: attacker.id, relationship: 'Enemy' });
         }
+        // VICTIM'S RALLY — being attacked rallies the population next turn.
+        changes.rallyUntilTurn = (state.turnNumber || 1) + 1;
       }
     }
   }
