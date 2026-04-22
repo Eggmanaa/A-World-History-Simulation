@@ -2581,6 +2581,25 @@ const App: React.FC = () => {
 
     if (!selectedAction) return;
 
+    // PHASE GUARD: Placements must happen during the Build Phase, during an
+    // active action with placements remaining (Grow, Fortify free placement),
+    // or during Wonder placement. Without this guard, players could click a
+    // building in the sidebar and drop it on a tile during turnPhase='idle'
+    // (before the first Advance Turn click, or between turns after dismissing
+    // the resolution screen). The fertility cap would count the placement,
+    // but calculateIncome resets housesBuiltThisTurn to 0 at the next turn's
+    // income phase — so the pre-turn house was effectively free. Troy
+    // (fertility 2) could end Turn 1 with 4 houses instead of the intended 3.
+    const hasActivePlacements = (gameState.actionPlacements || 0) > 0;
+    const isBuildPhase = gameState.turnPhase === 'build_phase';
+    const placementAllowed = isBuildPhase || hasActivePlacements || placingWonder;
+    if (!placementAllowed) {
+      addMessage(
+        'You can only place buildings during the Build Phase or an active action. Click Advance Turn to begin the turn first.'
+      );
+      return;
+    }
+
     const tileIndex = tiles.findIndex((t) => t.id === tileId);
     if (tileIndex === -1) return;
     const tile = tiles[tileIndex];
