@@ -4122,25 +4122,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </button>
-                <button
-                  disabled={civ.stats.industryLeft < 5}
-                  onClick={() =>
-                    setGameState((p) => ({
-                      ...p,
-                      selectedAction: BuildingType.Farm,
-                    }))
-                  }
-                  className={`w-full p-3 rounded-lg border text-left flex items-center gap-3 min-h-[48px] ${gameState.selectedAction === BuildingType.Farm ? "bg-green-900/30 border-green-500" : "bg-slate-800 border-slate-700"} ${civ.stats.industryLeft < 5 ? "opacity-50" : ""}`}
-                >
-                  <div className="p-2 bg-green-600 rounded text-white">
-                    <Sprout size={18} />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm">Farm</div>
-                    <div className="text-xs text-slate-400">Cost: 5 Prod | +1 Cap, +1 Prod Income</div>
-                  </div>
-                </button>
-                {/* PRODUCTION-COST BUILDINGS — clicking any of these is a shortcut
+{/* PRODUCTION-COST BUILDINGS — clicking any of these is a shortcut
                     for picking from the Build Phase modal. Works outside the
                     Build Phase too (e.g. from the build sidebar at any time) as
                     long as the Production Pool covers the cost. Cost is

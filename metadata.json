@@ -1,5 +1,5 @@
 {
-  "name": "Through History: A World History Simulation",
-  "description": "A 3D strategic civilization management interface featuring terrain constraints, resource management, and historical progression.",
+  "name": "Ancient World Simulation",
+  "description": "A classroom civilization simulation spanning the first settlements through the Fall of Rome (3000 BCE - 476 CE). Students make decisions as ancient civilizations across 24 turns of world history.",
   "requestFramePermissions": []
 }

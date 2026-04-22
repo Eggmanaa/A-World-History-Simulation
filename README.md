@@ -1,8 +1,9 @@
-# World History Simulation - Enhanced with Landing Page & Authentication 
+# Ancient World Simulation
 
 ## Project Overview
-- **Name**: Through History - A World History Simulation
-- **Goal**: Educational simulation game for high school students to build civilizations and navigate history
+- **Name**: Ancient World Simulation
+- **Goal**: Classroom civilization game for high school world history. Students lead an ancient civilization from the first settlements through the Fall of Rome (3000 BCE - 476 CE), making strategic and historical decisions across 24 turns.
+- **Audience**: Built for Bishop Diego High School world history classes; reusable in any 9-12 ancient/world history course
 - **New Features**: Professional landing page, dual-role authentication system, teacher/student dashboards
 
 ## 🌐 Live URLs
