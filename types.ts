@@ -483,6 +483,7 @@ export interface GameState {
   neighbors: NeighborCiv[];
   selectedAction: BuildingType | null;
   placingWonder: boolean;
+  isPlacingStarterHouses?: boolean;
   messages: string[];
   hasStarted: boolean;
   pendingTurnChoice: boolean;

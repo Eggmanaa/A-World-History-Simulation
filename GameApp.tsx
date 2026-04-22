@@ -1132,11 +1132,13 @@ const App: React.FC = () => {
       year: -8500,
       timelineIndex: 0,
       hasStarted: true,
-      selectedAction: null,
+      selectedAction: BuildingType.House,
       placingWonder: false,
+      isPlacingStarterHouses: true,
       pendingTurnChoice: false,
       currentEventPopup: null,
       messages: [
+        `Place 2 founding houses on the map to settle ${preset.name}. Then click Turn 1 to begin.`,
         `Welcome to ${preset.name}. The year is 8500 BCE.`,
         `Grow your Population: every 4 Pop = +1 Martial, every 5 Pop = +1 Industry.`,
         `Turn flow: Events → pick 1 Action → Build Phase → End Turn.`,
@@ -1167,7 +1169,7 @@ const App: React.FC = () => {
       selectedWorldChoice: null,
       selectedPlayerAction: null,
       turnResolution: null,
-      actionPlacements: 0,
+      actionPlacements: 2,
       turnNumber: 0,
       conqueredTerritories: 0,
       pendingRespawn: false,
@@ -2597,7 +2599,8 @@ const App: React.FC = () => {
     // (fertility 2) could end Turn 1 with 4 houses instead of the intended 3.
     const hasActivePlacements = (gameState.actionPlacements || 0) > 0;
     const isBuildPhase = gameState.turnPhase === 'build_phase';
-    const placementAllowed = isBuildPhase || hasActivePlacements || placingWonder;
+    const isStarterPlacement = gameState.isPlacingStarterHouses === true;
+    const placementAllowed = isBuildPhase || hasActivePlacements || placingWonder || isStarterPlacement;
     if (!placementAllowed) {
       addMessage(
         'You can only place buildings during the Build Phase or an active action. Click Advance Turn to begin the turn first.'
@@ -2639,6 +2642,7 @@ const App: React.FC = () => {
 
       // 3. Check Fertility Limit (Growth per Turn)
       if (
+        !gameState.isPlacingStarterHouses &&
         civilization.stats.housesBuiltThisTurn >= civilization.stats.fertility
       ) {
         addMessage(
@@ -2716,7 +2720,7 @@ const App: React.FC = () => {
 
       if (selectedAction === BuildingType.House) {
         newHouses += 1;
-        newHousesBuilt += 1;
+        if (!prev.isPlacingStarterHouses) newHousesBuilt += 1;
       } else {
         if (!isV2BuildPhaseFlow) newIndustry -= cost;
         // STRUCTURAL building bonuses (martial, capacity, yield rates) are
@@ -2752,6 +2756,7 @@ const App: React.FC = () => {
       const isV2Action = prev.selectedPlayerAction !== null;
       const placementsDone = isV2Action && remainingPlacements <= 0;
       const shouldReturnToBuild = placementsDone;
+      const starterPlacementDone = prev.isPlacingStarterHouses === true && remainingPlacements <= 0;
       // If this placement was a FREE grant from a world event, resume the
       // deferred phase (civ_event or action) the ref stashed earlier. That
       // overrides the default "return to build phase" behaviour so the turn
@@ -2774,9 +2779,10 @@ const App: React.FC = () => {
       return {
         ...prev,
         selectedPlayerAction: nextSelectedPlayerAction,
-        selectedAction: shouldReturnToBuild ? null : prev.selectedAction,
+        selectedAction: (shouldReturnToBuild || starterPlacementDone) ? null : prev.selectedAction,
         actionPlacements: remainingPlacements,
         turnPhase: nextTurnPhase,
+        isPlacingStarterHouses: starterPlacementDone ? false : prev.isPlacingStarterHouses,
         turnResolution: prev.turnResolution,
         civilization: {
           ...civ,
@@ -3685,9 +3691,9 @@ const App: React.FC = () => {
           )}
           <button
             onClick={initiateAdvance}
-            disabled={gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined}
+            disabled={(gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined) || gameState.isPlacingStarterHouses === true}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-lg min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap transition-colors ${
-              gameState.turnPhase === 'idle' || !gameState.turnPhase
+              (gameState.turnPhase === 'idle' || !gameState.turnPhase) && !gameState.isPlacingStarterHouses
                 ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'
                 : 'bg-slate-700 text-slate-500 cursor-not-allowed'
             }`}
