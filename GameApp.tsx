@@ -33,6 +33,7 @@ import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/Tur
 import ReflectionTurn, { type ReflectionResult } from "./components/ReflectionTurn";
 import { useGameSync } from "./hooks/useGameSync";
 import { useAutoSave } from "./hooks/useAutoSave";
+import { useTurnResolution } from "./hooks/useTurnResolution";
 import {
   generateMap,
   CIV_PRESETS,
@@ -861,7 +862,13 @@ const App: React.FC = () => {
   // re-renders with stale values if they aren't in the effect's dep array.
   const [takenRespawnIds, setTakenRespawnIds] = useState<string[]>([]);
   const [v2IncomeMessages, setV2IncomeMessages] = useState<string[]>([]);
-  const [v2TurnResolution, setV2TurnResolution] = useState<TurnResolution | null>(null);
+  // useTurnResolution owns this state. Aliases preserve existing call sites
+  // (setV2TurnResolution, v2TurnResolution) while we migrate handler logic
+  // into the hook incrementally. See INVARIANTS.md turn pipeline section.
+  const {
+    turnResolution: v2TurnResolution,
+    setTurnResolution: setV2TurnResolution,
+  } = useTurnResolution();
   const [v2StatsBefore, setV2StatsBefore] = useState<Record<string, number>>({});
   const [v2UnlockedActions, setV2UnlockedActions] = useState<typeof ACTION_DEFINITIONS>([]);
   const [showRespawnPanel, setShowRespawnPanel] = useState(false);
