@@ -212,13 +212,41 @@ For a solo dev with this codebase context:
    so there's overlap). Easy to add later — a period has `teacher_ids[]`
    instead of single owner.
 
-## Aaron — decisions needed
+## Aaron — decisions (2026-04-22)
 
-Before implementation:
+- Scope: **v1 as listed approved.**
+- Auth model: **teacher login already in place; role='teacher' JWT claim is live.** Use what's there.
+- Force-advance default: **teacher advances; absent students make up their turns later.** (New mechanic — see Make-up Turns below.)
+- Class report: **end-of-game class report.**
+- Additional requirement: **a single teacher runs multiple periods concurrently.** Already supported by schema + UI period selector — no new work needed.
 
-- Scope: is v1 as listed above the right cut? Anything to add / drop?
-- Auth model: separate teacher login, or role promotion?
-- Force-advance default: skip-turn action or freeze?
-- Class report: per-period or per-class day in v1?
+## Gap analysis (what's built vs. what's left)
 
-Answer those four and we can start step 1.
+### Already shipped
+
+- `teacherAuthMiddleware` in `api/middleware/auth.ts` enforces `role='teacher'` via JWT claim.
+- `api/routes/teacher.ts`: dashboard, period create, invite-code generation, student roster.
+- `api/routes/game.ts` teacher endpoints: `start`, `advance`, `start-turn`, `end-phase`, `pause`, `overview`, `resolve-war`.
+- `components/TeacherDashboard.tsx`: tabs for Setup, Timeline, Civs, War, Scoreboard. Period selector at top (multi-period switching) works today.
+- `periods.teacher_id` scoping in every query — multi-period by construction.
+
+### To build
+
+1. **Make-up turns mechanic.** Today `end-phase` flips `decision → resolution`; absent students silently lose the turn. Need:
+   - New column: `turn_submissions.status` — `'submitted' | 'missed' | 'made_up'`. Default `'submitted'` on insert; `end-phase` marks non-submitters as `'missed'`.
+   - Student UI: "You missed Turn N — submit now" banner if `missed` exists. Submitting records `'made_up'` and appends to `combatLog` out of order (tagged `[catch-up]`).
+   - Teacher UI: "Make-up Turns" indicator per student in the Civs tab.
+2. **End-of-game class report.** Bundle existing per-student PDFs (task #24) into a multi-page class report. One PDF with: class summary (median / mean / stddev of final stats), action histogram, wonders grid, treaty count — followed by each student's per-civ page.
+3. **Diplomacy matrix** (design-doc v1 item). New `<DiplomacyMatrix />` tab on the dashboard. N×N grid with color-coded cells; click a cell for treaty/combat detail.
+4. **Combat log feed** (design-doc v1 item). Aggregate `combatLog` across all civs, time-sorted, filterable by civ. Reuse `AttackOutcomePopup` for roll details.
+
+### Build order (revised)
+
+Most-pedagogical-value-first, since multi-period + auth is already done:
+
+1. Make-up turns mechanic (1-2 hrs, backend-heavy, highest pedagogical value — you lose kids otherwise).
+2. End-of-game class report PDF (1-2 hrs, reuses task #24 plumbing).
+3. Diplomacy matrix (2 hrs, UI only, reads existing treaty + relationship data).
+4. Combat log feed (1-2 hrs, UI only, reads existing `combatLog[]` arrays).
+
+Each ships independently behind the existing dashboard tabs.
