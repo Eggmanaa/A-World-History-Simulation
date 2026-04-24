@@ -59,6 +59,7 @@ interface StudentCiv {
   civName: string;
   civColor: string;
   stats: CivStats;
+  missedTurns?: number;
 }
 
 const TeacherDashboard: React.FC = () => {
@@ -864,10 +865,18 @@ const TeacherDashboard: React.FC = () => {
                               className="w-8 h-8 rounded-full border-2"
                               style={{ backgroundColor: civ.civColor }}
                             />
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <p className="font-bold text-white">{civ.civName}</p>
                               <p className="text-xs text-slate-400">{civ.studentName}</p>
                             </div>
+                            {civ.missedTurns && civ.missedTurns > 0 ? (
+                              <span
+                                className="shrink-0 bg-amber-500/20 border border-amber-500/60 text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded"
+                                title={`${civ.missedTurns} turn${civ.missedTurns > 1 ? 's' : ''} to make up`}
+                              >
+                                {civ.missedTurns} Make-up{civ.missedTurns > 1 ? 's' : ''}
+                              </span>
+                            ) : null}
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div className="bg-slate-700 rounded p-2">

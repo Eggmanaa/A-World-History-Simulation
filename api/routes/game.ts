@@ -209,6 +209,23 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
       ORDER BY created_at DESC
     `).bind(periodId).all<any>();
 
+    // Missed-turn counts per student. Try/catch for pre-migration DBs
+    // that don't have the status column yet.
+    const missedByStudent: Record<string, number> = {};
+    try {
+      const missedRows = await c.env.DB.prepare(`
+        SELECT student_id AS studentId, COUNT(*) AS c
+        FROM turn_decisions
+        WHERE period_id = ? AND status = 'missed'
+        GROUP BY student_id
+      `).bind(periodId).all<any>();
+      for (const r of (missedRows?.results || []) as any[]) {
+        missedByStudent[String(r.studentId)] = r.c as number;
+      }
+    } catch {
+      // migration 0006 not yet applied — everyone gets 0.
+    }
+
     const civStates = sessions.results.map((session: any) => {
       const progressData = session.progress_data ? JSON.parse(session.progress_data) : {};
       // Compute live Final Score so the teacher dashboard can show rankings
@@ -232,6 +249,7 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
         population: progressData.population || 0,
         stats: progressData.stats || {},
         finalScore,
+        missedTurns: missedByStudent[String(session.id)] || 0,
       };
     });
 

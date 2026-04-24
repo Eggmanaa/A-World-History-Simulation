@@ -33,6 +33,7 @@ import MapScene from "./components/MapScene";
 import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
 import ReflectionTurn, { type ReflectionResult } from "./components/ReflectionTurn";
 import OnboardingOverlay from "./components/OnboardingOverlay";
+import MissedTurnBanner from "./components/MissedTurnBanner";
 import { useGameSync } from "./hooks/useGameSync";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { useTurnResolution } from "./hooks/useTurnResolution";
@@ -3222,6 +3223,13 @@ const App: React.FC = () => {
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative">
       {/* First-time-player onboarding overlay. Self-gating on localStorage. */}
       <OnboardingOverlay />
+      {/* Missed-turn banner — shows when student has outstanding make-ups. */}
+      {syncState.isOnline && syncState.periodId && (
+        <MissedTurnBanner
+          periodId={syncState.periodId}
+          authToken={typeof window !== 'undefined' ? window.localStorage.getItem('token') : null}
+        />
+      )}
       {/* V2 TURN PHASE UI */}
       <TurnPhaseUI
         phase={gameState.turnPhase || 'idle'}
