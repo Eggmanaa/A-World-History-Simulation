@@ -568,8 +568,14 @@ const ActionSelectionPanel: React.FC<{
   const tradeStats = ['productionPool', 'science', 'culture', 'faith'];
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-slate-800 rounded-xl border border-indigo-500/50 max-w-4xl w-full p-6 shadow-2xl my-4">
+    // Two-column layout: dimmed backdrop (game stays visible underneath)
+    // on the left, right-anchored scrolling side panel on the right.
+    // The backdrop is not click-dismissable because picking an action is
+    // mandatory — there is no “dismiss without choosing” path here.
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/40 backdrop-blur-[1px]" aria-hidden="true" />
+      <div className="w-full sm:w-[28rem] lg:w-[34rem] h-full bg-slate-800 border-l border-indigo-500/50 shadow-2xl overflow-y-auto">
+        <div className="p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
             <Zap className="w-5 h-5 text-indigo-400" />
@@ -581,7 +587,7 @@ const ActionSelectionPanel: React.FC<{
         </div>
 
         {/* Action Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+        <div className="grid grid-cols-2 gap-2 mb-4">
           {actionStates.map(({ def, availability }) => {
             const IconComponent = ICON_MAP[def.icon] || Zap;
             const isSelected = selectedAction === def.id;
@@ -821,6 +827,7 @@ const ActionSelectionPanel: React.FC<{
         >
           Execute Action <ChevronRight className="w-4 h-4" />
         </button>
+        </div>
       </div>
     </div>
   );

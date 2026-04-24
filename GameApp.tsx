@@ -27,10 +27,12 @@ import {
   RotateCcw,
   AlertTriangle,
   Trophy,
+  Info,
 } from "lucide-react";
 import MapScene from "./components/MapScene";
 import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
 import ReflectionTurn, { type ReflectionResult } from "./components/ReflectionTurn";
+import OnboardingOverlay from "./components/OnboardingOverlay";
 import { useGameSync } from "./hooks/useGameSync";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { useTurnResolution } from "./hooks/useTurnResolution";
@@ -3218,6 +3220,8 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative">
+      {/* First-time-player onboarding overlay. Self-gating on localStorage. */}
+      <OnboardingOverlay />
       {/* V2 TURN PHASE UI */}
       <TurnPhaseUI
         phase={gameState.turnPhase || 'idle'}
@@ -3933,7 +3937,11 @@ const App: React.FC = () => {
                     >
                       <span className={`${s.color} flex items-center gap-1.5`}>
                         {s.label}
-                        <span className={`text-[9px] ${isOpen ? 'text-white' : 'text-slate-500'}`}>{isOpen ? '▼' : 'ⓘ'}</span>
+                        {isOpen ? (
+                          <span className="text-[10px] text-white">▼</span>
+                        ) : (
+                          <Info className="w-3.5 h-3.5 text-slate-400" aria-label="Click for details" />
+                        )}
                       </span>
                       <b>{s.value}</b>
                     </button>
@@ -3985,7 +3993,11 @@ const App: React.FC = () => {
             >
               <div className="text-xs text-indigo-400 uppercase font-bold mb-2 flex items-center justify-between">
                 <span>Cultural Stage</span>
-                <span className="text-[9px] text-slate-400">{expandedInfo === 'cultural_stage' ? '▼' : 'ⓘ'}</span>
+                {expandedInfo === 'cultural_stage' ? (
+                  <span className="text-[10px] text-white">▼</span>
+                ) : (
+                  <Info className="w-3.5 h-3.5 text-slate-300" aria-label="Click for details" />
+                )}
               </div>
               <div className="text-sm font-bold text-indigo-100">
                 {civ.culturalStage}
