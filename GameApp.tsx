@@ -2621,22 +2621,39 @@ const App: React.FC = () => {
 
     if (!selectedAction) return;
 
-    // PHASE GUARD: Placements must happen during the Build Phase, during an
-    // active action with placements remaining (Grow, Fortify free placement),
-    // or during Wonder placement. Without this guard, players could click a
-    // building in the sidebar and drop it on a tile during turnPhase='idle'
-    // (before the first Advance Turn click, or between turns after dismissing
-    // the resolution screen). The fertility cap would count the placement,
-    // but calculateIncome resets housesBuiltThisTurn to 0 at the next turn's
-    // income phase — so the pre-turn house was effectively free. Troy
-    // (fertility 2) could end Turn 1 with 4 houses instead of the intended 3.
+    // PHASE GUARD: Placements may happen during the Build Phase, during an
+    // active action with placements remaining (Grow, Fortify, Wonder), OR
+    // during the idle gap between turns (after Turn 1 has begun). The
+    // pre-Turn-1 idle is still gated to preserve the Troy 4-houses fix:
+    // before the first Advance Turn, only starter placements are allowed.
+    //
+    // Why idle is safe: housesBuiltThisTurn carries between resolution
+    // dismiss and the next income reset, so the fertility cap still
+    // bounds placement count across the idle gap. A student who maxed
+    // fertility in build_phase can't sneak more in during idle.
+    //
+    // Why pre-Turn-1 is NOT allowed: turnNumber === 0 means the player
+    // is in the starter-placement window. Letting them place free houses
+    // here on top of the 2 starter houses is exactly the Troy bug that
+    // task #38 fixed (Troy fertility=2, so 2 starter + 2 free + 2 build
+    // = 6 houses on Turn 1).
     const hasActivePlacements = (gameState.actionPlacements || 0) > 0;
     const isBuildPhase = gameState.turnPhase === 'build_phase';
     const isStarterPlacement = gameState.isPlacingStarterHouses === true;
-    const placementAllowed = isBuildPhase || hasActivePlacements || placingWonder || isStarterPlacement;
+    const isIdleMidGame =
+      (gameState.turnPhase === 'idle' || !gameState.turnPhase) &&
+      (gameState.turnNumber || 0) >= 1;
+    const placementAllowed =
+      isBuildPhase ||
+      hasActivePlacements ||
+      placingWonder ||
+      isStarterPlacement ||
+      isIdleMidGame;
     if (!placementAllowed) {
       addMessage(
-        'You can only place buildings during the Build Phase or an active action. Click Advance Turn to begin the turn first.'
+        (gameState.turnNumber || 0) === 0
+          ? 'Click Advance Turn to begin Turn 1 before placing more buildings.'
+          : 'A modal is open — finish your decision first, then place buildings.'
       );
       return;
     }

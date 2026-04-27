@@ -124,6 +124,13 @@ Gotchas:
   === 'grow'` during placement.
 - Starter houses (`isPlacingStarterHouses`) also bypass
   `housesBuiltThisTurn` and Grow's cap. They are a pre-turn-1 freebie.
+- Building placement is allowed in `build_phase`, during active
+  actions (Grow / Wonder / Fortify free placement), during starter
+  placement, AND during `idle` once `turnNumber >= 1`. Pre-Turn-1
+  idle is still gated to preserve the Troy 4-houses fix. The
+  fertility cap on `housesBuiltThisTurn` carries across idle (it
+  isn't reset until the next income phase), so a student can't
+  exceed their per-turn fertility by placing during the idle gap.
 - `turnNumber` increments at the END of the turn, not the start, so
   `rallyUntilTurn = currentTurn + 1` is valid for "next turn's
   defense."
