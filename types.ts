@@ -216,6 +216,12 @@ export interface TurnDecision {
   v2ActionParams?: Record<string, any> | null;
   // V2: turn-end stat snapshot so the teacher can see real numbers
   finalStats?: Record<string, number>;
+  // MP-readiness extensions (Apr 2026): server needs these to keep the
+  // class leaderboard / inter-civ state accurate without requiring a
+  // separate poll. All optional for save-compat.
+  wonderInProgress?: { wonderId: string; invested: number } | null;
+  totalAttacksInitiated?: number;
+  neighborRallies?: { id: string; rallyUntilTurn: number }[];
 }
 
 // New Event System Types

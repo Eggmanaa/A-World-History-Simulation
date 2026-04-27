@@ -410,6 +410,75 @@ diplomacyRouter.post('/student/attacks', async (c) => {
       margin,
     };
 
+    // SERVER-SIDE PERSISTENCE (MP Blocker #4).
+    // Apply computed effects to both sides' game_sessions.progress_data
+    // so a defender with a closed tab still sees the loss next time
+    // they poll. Without this, defender auto-save overwrites the
+    // server-computed outcome with stale local state.
+    const turnNum = Number(body.turnNumber || 0);
+    const safeNum = (v: any, fallback = 0) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    // Attacker deltas
+    const atkStats = (atkData.stats = atkData.stats || {});
+    if (effects.attacker.warsWon) {
+      atkStats.warsWon = safeNum(atkStats.warsWon) + effects.attacker.warsWon;
+    }
+    if (effects.attacker.culture !== undefined) {
+      atkStats.culture = Math.max(0, safeNum(atkStats.culture) + effects.attacker.culture);
+    }
+    if (effects.attacker.science !== undefined) {
+      atkStats.science = Math.max(0, safeNum(atkStats.science) + effects.attacker.science);
+    }
+    if (effects.attacker.martial !== undefined) {
+      atkStats.martial = Math.max(0, safeNum(atkStats.martial) + effects.attacker.martial);
+    }
+    if (effects.attacker.populationPct !== undefined) {
+      const popLoss = Math.floor(safeNum(atkStats.population) * Math.abs(effects.attacker.populationPct));
+      atkStats.population = Math.max(0, safeNum(atkStats.population) - popLoss);
+    }
+    atkData.totalAttacksInitiated = safeNum(atkData.totalAttacksInitiated) + 1;
+
+    // Defender deltas
+    const defStats = (defData.stats = defData.stats || {});
+    if (effects.defender.warsWon) {
+      defStats.warsWon = safeNum(defStats.warsWon) + effects.defender.warsWon;
+    }
+    if (effects.defender.culture !== undefined) {
+      defStats.culture = Math.max(0, safeNum(defStats.culture) + effects.defender.culture);
+    }
+    if (effects.defender.science !== undefined) {
+      defStats.science = Math.max(0, safeNum(defStats.science) + effects.defender.science);
+    }
+    if (effects.defender.martial !== undefined) {
+      defStats.martial = Math.max(0, safeNum(defStats.martial) + effects.defender.martial);
+    }
+    if (effects.defender.populationPct !== undefined) {
+      const popLoss = Math.floor(safeNum(defStats.population) * Math.abs(effects.defender.populationPct));
+      defStats.population = Math.max(0, safeNum(defStats.population) - popLoss);
+    }
+    // Victim's Rally: defender gets +2 Martial / +1d8 defense next turn.
+    defStats.rallyUntilTurn = Math.max(safeNum(defStats.rallyUntilTurn), turnNum + 1);
+
+    // Persist both sides. Wrapped in try/catch so one failed write
+    // doesn't strand the audit row in pvp_attacks.
+    try {
+      await c.env.DB.prepare(
+        "UPDATE game_sessions SET progress_data = ?, updated_at = datetime('now') WHERE student_id = ?"
+      ).bind(JSON.stringify(atkData), user.id).run();
+    } catch (e) {
+      console.warn('PvP atk progress_data update failed:', e);
+    }
+    try {
+      await c.env.DB.prepare(
+        "UPDATE game_sessions SET progress_data = ?, updated_at = datetime('now') WHERE student_id = ?"
+      ).bind(JSON.stringify(defData), body.defenderId).run();
+    } catch (e) {
+      console.warn('PvP def progress_data update failed:', e);
+    }
+
     const insert = await c.env.DB.prepare(
       `INSERT INTO pvp_attacks
          (period_id, attacker_id, defender_id, turn_number,
@@ -420,7 +489,7 @@ diplomacyRouter.post('/student/attacks', async (c) => {
       me.period_id,
       user.id,
       body.defenderId,
-      body.turnNumber || 0,
+      turnNum,
       attackTotal,
       defendTotal,
       margin,
@@ -435,6 +504,7 @@ diplomacyRouter.post('/student/attacks', async (c) => {
       margin,
       rolls,
       effects,
+      serverApplied: true,
     });
   } catch (e) {
     return c.json({ message: 'Failed to launch attack', error: String(e) }, 500);

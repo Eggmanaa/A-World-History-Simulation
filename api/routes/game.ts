@@ -250,6 +250,12 @@ gameRouter.get('/teacher/:periodId/overview', async (c) => {
         stats: progressData.stats || {},
         finalScore,
         missedTurns: missedByStudent[String(session.id)] || 0,
+        // MP-readiness: surface wonder progress so the dashboard can
+        // show 'X/Y on the Pyramids' badges even when the wonder isn't
+        // yet built. builtWonderId is the completed wonder id (or null).
+        wonderInProgress: progressData.wonderInProgress || null,
+        builtWonderId: progressData.builtWonderId || null,
+        totalAttacksInitiated: progressData.totalAttacksInitiated || 0,
       };
     });
 

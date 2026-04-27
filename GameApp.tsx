@@ -33,7 +33,8 @@ import MapScene from "./components/MapScene";
 import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
 import ReflectionTurn, { type ReflectionResult } from "./components/ReflectionTurn";
 import OnboardingOverlay from "./components/OnboardingOverlay";
-import MissedTurnBanner from "./components/MissedTurnBanner";
+import MissedTurnBanner, { submitMakeupTurn } from "./components/MissedTurnBanner";
+import MakeupTurnPicker from "./components/MakeupTurnPicker";
 import { useGameSync } from "./hooks/useGameSync";
 import { useAutoSave } from "./hooks/useAutoSave";
 import { useTurnResolution } from "./hooks/useTurnResolution";
@@ -820,6 +821,8 @@ const App: React.FC = () => {
 
   // Mobile responsive state
   const [showPanel, setShowPanel] = useState<"stats" | "actions" | null>(null);
+  // Make-up turn picker - set to a turnNumber to open the modal.
+  const [makeupTurn, setMakeupTurn] = useState<number | null>(null);
 
   // --- SYNC HOOKS ---
   const { syncState, submitTurn } = useGameSync(
@@ -2267,10 +2270,22 @@ const App: React.FC = () => {
         houses: gameState.civilization.stats.houses || 0,
         productionPool: gameState.civilization.stats.productionPool || 0,
       };
+      // MP Blocker #1 plumbing: include wonderInProgress, totalAttacksInitiated,
+      // and per-neighbor rally updates so the server-side teacher overview
+      // and any cross-client leaderboard sees the freshest snapshot. All
+      // fields are optional in TurnDecision so older clients/servers tolerate
+      // their absence.
+      const neighborRallies = (gameState.neighbors || [])
+        .filter((n) => (n.rallyUntilTurn || 0) > 0)
+        .map((n) => ({ id: n.id, rallyUntilTurn: n.rallyUntilTurn || 0 }));
+
       const decisionToSubmit: TurnDecision = {
         ...pendingDecision,
         finalStats,
         submitted: true,
+        wonderInProgress: gameState.civilization.wonderInProgress ?? null,
+        totalAttacksInitiated: gameState.totalAttacksInitiated || 0,
+        neighborRallies: neighborRallies.length > 0 ? neighborRallies : undefined,
       };
       // Don't await — continue local advance immediately.
       submitTurn(decisionToSubmit).catch((e) =>
@@ -2286,6 +2301,9 @@ const App: React.FC = () => {
         v2Action: null,
         v2ActionParams: null,
         finalStats: {},
+        wonderInProgress: null,
+        totalAttacksInitiated: 0,
+        neighborRallies: undefined,
       });
     }
 
@@ -3310,6 +3328,31 @@ const App: React.FC = () => {
         <MissedTurnBanner
           periodId={syncState.periodId}
           authToken={typeof window !== 'undefined' ? window.localStorage.getItem('token') : null}
+          onMakeUpClick={(turnNumber) => setMakeupTurn(turnNumber)}
+        />
+      )}
+      {makeupTurn !== null && syncState.periodId && (
+        <MakeupTurnPicker
+          turnNumber={makeupTurn}
+          onSubmit={async (action) => {
+            const tok = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
+            if (!tok || !syncState.periodId) return;
+            // Minimal decision payload: enough to record what was chosen.
+            // Server flips status='missed' -> 'made_up' and stores
+            // decision_data for the teacher's audit trail.
+            const result = await submitMakeupTurn(syncState.periodId, tok, makeupTurn, {
+              v2Action: action,
+              v2ActionParams: null,
+              submitted: true,
+              note: `made-up retroactively (Turn ${makeupTurn})`,
+            });
+            if (result.ok) {
+              addMessage(`Made up Turn ${makeupTurn} with ${action}.`);
+            } else {
+              addMessage(`Make-up failed: ${result.message || 'unknown error'}`);
+            }
+          }}
+          onClose={() => setMakeupTurn(null)}
         />
       )}
       {/* V2 TURN PHASE UI */}
