@@ -1920,10 +1920,16 @@ const App: React.FC = () => {
       const investment = Math.min(params.amount, gameState.civilization.stats.productionPool);
       if (investment <= 0) { addMessage('Invest at least 1 Production Pool.'); return; }
 
+      // Project Leadership bonus: 1.5x contribution to wonder progress.
+      // Player spends `investment` from productionPool but the wonder
+      // counts `contribution = floor(investment * 1.5)` toward its cost.
+      const contribution = Math.floor(investment * 1.5);
+      const bonusGain = contribution - investment;
+
       const prior = gameState.civilization.wonderInProgress;
       const priorInvested = prior && prior.wonderId === wonder.id ? prior.invested : 0;
       const switchedWonders = !!prior && prior.wonderId !== wonder.id;
-      const totalInvested = priorInvested + investment;
+      const totalInvested = priorInvested + contribution;
 
       if (totalInvested >= wonder.cost) {
         // Full wonder completion: apply bonuses and enable placement.
@@ -1937,8 +1943,8 @@ const App: React.FC = () => {
         if (wonder.bonus.populationCapacity) bonusChanges.capacity = (gameState.civilization.stats.capacity || 0) + wonder.bonus.populationCapacity;
 
         const completionMsg = priorInvested > 0
-          ? `Built Wonder: ${wonder.name}! (${priorInvested} prior + ${investment} this turn = ${totalInvested}/${wonder.cost}) Place it on the map.`
-          : `Built Wonder: ${wonder.name}! Place it on the map.`;
+          ? `Built Wonder: ${wonder.name}! (${priorInvested} prior + ${investment} this turn ×1.5 = ${totalInvested}/${wonder.cost}) Place it on the map.`
+          : `Built Wonder: ${wonder.name}! ${investment} Production × 1.5 = ${contribution} progress. Place it on the map.`;
 
         setGameState((prev) => ({
           ...prev,
@@ -1962,11 +1968,13 @@ const App: React.FC = () => {
       }
 
       // Partial investment: persist progress for future turns.
+      // Display includes Project Leadership bonus so students see the
+      // multiplier paying off.
       const partialMsg = switchedWonders
-        ? `Switched to ${wonder.name}, abandoning prior progress. Invested ${investment}/${wonder.cost} — carry over to next turn.`
+        ? `Switched to ${wonder.name}, abandoning prior progress. Invested ${investment} × 1.5 = ${contribution}/${wonder.cost} — carries over.`
         : priorInvested > 0
-          ? `Invested ${investment} more in ${wonder.name}. Progress: ${totalInvested}/${wonder.cost}. ${wonder.cost - totalInvested} to go.`
-          : `Invested ${investment} in ${wonder.name}. Progress: ${totalInvested}/${wonder.cost}. ${wonder.cost - totalInvested} to go.`;
+          ? `Invested ${investment} more in ${wonder.name} (Project Leadership: +${bonusGain}). Progress: ${totalInvested}/${wonder.cost}. ${wonder.cost - totalInvested} to go.`
+          : `Invested ${investment} in ${wonder.name} (Project Leadership: +${bonusGain} bonus = ${contribution} progress). ${wonder.cost - totalInvested} to go.`;
 
       // Build a minimal turn-resolution record so the player sees their
       // investment in the resolution panel. Pass through to setTurnResolution.

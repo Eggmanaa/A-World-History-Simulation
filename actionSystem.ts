@@ -329,7 +329,14 @@ export function previewAction(
     }
 
     case 'wonder':
-      return { effects: [`Invest Production Pool toward an available Wonder`, `You have ${stats.productionPool} Production Pool to invest`] };
+      return {
+        effects: [
+          `Invest Production Pool toward an available Wonder.`,
+          `Project Leadership bonus: every 1 Production = 1.5 wonder progress.`,
+          `You have ${stats.productionPool} Production Pool available.`,
+          `Partial investments carry over to next turn.`,
+        ],
+      };
 
     case 'diplomacy':
       return { effects: ['Form alliance: +2 Martial for both parties', 'Breaking alliance costs 2 Culture Total'] };
@@ -836,10 +843,21 @@ export function executeAction(
         return { messages: ['Not enough Production Pool!'], statChanges: {} };
       }
 
+      // Project Leadership: 1.5x contribution to wonder progress.
+      // The player still spends `investment` from productionPool, but the
+      // wonder receives the boosted total. Caller (GameApp) reads
+      // wonderInvestment.amount and credits it as wonder progress.
+      const bonusMultiplier = 1.5;
+      const contribution = Math.floor(investment * bonusMultiplier);
+      const bonus = contribution - investment;
+
       return {
-        messages: [`Invested ${investment} Production Pool toward Wonder.`],
+        messages: [
+          `Invested ${investment} Production Pool toward Wonder.`,
+          `Project Leadership: +${bonus} bonus contribution (${investment} × 1.5 = ${contribution} wonder progress).`,
+        ],
         statChanges: { productionPool: stats.productionPool - investment },
-        wonderInvestment: { wonderId, amount: investment },
+        wonderInvestment: { wonderId, amount: contribution },
       };
     }
 

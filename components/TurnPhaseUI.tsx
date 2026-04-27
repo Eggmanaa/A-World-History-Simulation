@@ -746,7 +746,15 @@ const ActionSelectionPanel: React.FC<{
                   const wip = gameState.civilization.wonderInProgress;
                   const invested = wip && wip.wonderId === w.id ? wip.invested : 0;
                   const remaining = Math.max(0, w.cost - invested);
-                  const sliderMax = Math.max(1, Math.min(gameState.civilization.stats.productionPool, remaining));
+                  // Slider max is bounded by player's productionPool. We don't
+                  // cap by remaining/1.5 because over-investing the last turn
+                  // is fine (excess is forgiven by the >= cost completion check).
+                  const sliderMax = Math.max(1, gameState.civilization.stats.productionPool);
+                  const amt = Math.min(actionParams.amount || 1, sliderMax);
+                  // Project Leadership bonus: 1.5x contribution.
+                  const contribution = Math.floor(amt * 1.5);
+                  const bonus = contribution - amt;
+                  const projectedTotal = invested + contribution;
                   return (
                     <div className="mt-2">
                       <p className="text-xs text-slate-400 mb-1">
@@ -756,13 +764,16 @@ const ActionSelectionPanel: React.FC<{
                         type="range"
                         min={1}
                         max={sliderMax}
-                        value={Math.min(actionParams.amount || 1, sliderMax)}
+                        value={amt}
                         onChange={(e) => setActionParams((p: any) => ({ ...p, amount: parseInt(e.target.value) }))}
                         className="w-full"
                       />
                       <p className="text-xs text-center text-indigo-300 font-bold">
-                        {actionParams.amount || 1} Production Pool
-                        {invested > 0 ? ` → ${invested + (actionParams.amount || 1)}/${w.cost} total` : ''}
+                        {amt} Production Pool → {contribution} wonder progress (+{bonus} from Project Leadership)
+                      </p>
+                      <p className="text-[10px] text-center text-amber-300 mt-0.5">
+                        After this: {Math.min(projectedTotal, w.cost)}/{w.cost}
+                        {projectedTotal >= w.cost ? ' — completes the Wonder!' : ` (${Math.max(0, w.cost - projectedTotal)} progress to go)`}
                       </p>
                     </div>
                   );
