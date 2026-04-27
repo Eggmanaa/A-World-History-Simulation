@@ -701,39 +701,72 @@ const ActionSelectionPanel: React.FC<{
                     return true;
                   }).map(w => {
                     const isSelected = actionParams.wonderId === w.id;
+                    const wip = gameState.civilization.wonderInProgress;
+                    const inProgress = wip && wip.wonderId === w.id;
+                    const invested = inProgress ? wip!.invested : 0;
+                    const remaining = Math.max(0, w.cost - invested);
                     return (
                       <button
                         key={w.id}
-                        onClick={() => setActionParams((p: any) => ({ ...p, wonderId: w.id, amount: Math.min(gameState.civilization.stats.productionPool, w.cost) }))}
+                        onClick={() => {
+                          const defaultAmt = Math.max(1, Math.min(gameState.civilization.stats.productionPool, remaining));
+                          setActionParams((p: any) => ({ ...p, wonderId: w.id, amount: defaultAmt }));
+                        }}
                         className={`w-full text-left text-xs p-2 rounded border transition-colors ${
                           isSelected
                             ? 'border-purple-500 bg-purple-500/20 text-purple-200'
-                            : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-400'
+                            : inProgress
+                              ? 'border-amber-500/60 bg-amber-500/10 text-amber-100 hover:border-amber-400'
+                              : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-400'
                         }`}
                       >
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center gap-2">
                           <span className="font-bold">{w.name}</span>
-                          <span className="text-slate-400">Cost: {w.cost} | Era: {w.era}</span>
+                          {inProgress ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/30 border border-amber-500/60 text-amber-200 px-2 py-0.5 rounded shrink-0">
+                              {invested}/{w.cost}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">Cost: {w.cost} | Era: {w.era}</span>
+                          )}
                         </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">{w.effects}</p>
+                        {inProgress && (
+                          <p className="text-[10px] text-amber-300 mt-1">
+                            In progress — {remaining} Production to complete.
+                          </p>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-                {actionParams.wonderId && (
-                  <div className="mt-2">
-                    <p className="text-xs text-slate-400 mb-1">Investment amount:</p>
-                    <input
-                      type="range"
-                      min={1}
-                      max={Math.min(gameState.civilization.stats.productionPool, WONDERS_LIST.find(w => w.id === actionParams.wonderId)?.cost || 50)}
-                      value={actionParams.amount || 1}
-                      onChange={(e) => setActionParams((p: any) => ({ ...p, amount: parseInt(e.target.value) }))}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-center text-indigo-300 font-bold">{actionParams.amount || 1} Production Pool</p>
-                  </div>
-                )}
+                {actionParams.wonderId && (() => {
+                  const w = WONDERS_LIST.find(x => x.id === actionParams.wonderId);
+                  if (!w) return null;
+                  const wip = gameState.civilization.wonderInProgress;
+                  const invested = wip && wip.wonderId === w.id ? wip.invested : 0;
+                  const remaining = Math.max(0, w.cost - invested);
+                  const sliderMax = Math.max(1, Math.min(gameState.civilization.stats.productionPool, remaining));
+                  return (
+                    <div className="mt-2">
+                      <p className="text-xs text-slate-400 mb-1">
+                        Investment amount{invested > 0 ? ` (${invested} already invested)` : ''}:
+                      </p>
+                      <input
+                        type="range"
+                        min={1}
+                        max={sliderMax}
+                        value={Math.min(actionParams.amount || 1, sliderMax)}
+                        onChange={(e) => setActionParams((p: any) => ({ ...p, amount: parseInt(e.target.value) }))}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-center text-indigo-300 font-bold">
+                        {actionParams.amount || 1} Production Pool
+                        {invested > 0 ? ` → ${invested + (actionParams.amount || 1)}/${w.cost} total` : ''}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

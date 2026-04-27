@@ -1907,14 +1907,26 @@ const App: React.FC = () => {
       return;
     }
 
-    // For wonder action: handle investment with wonderId
+    // For wonder action: handle investment with wonderId.
+    //
+    // Wonders accumulate partial investment across turns. Civilization
+    // carries wonderInProgress = { wonderId, invested } between turns
+    // until total invested >= wonder.cost, at which point we complete
+    // the wonder. Switching wonderId forfeits prior progress.
     if (actionId === 'wonder' && params?.wonderId && params?.amount) {
       const wonder = WONDERS_LIST.find(w => w.id === params.wonderId);
       if (!wonder) { addMessage('Invalid wonder.'); return; }
 
       const investment = Math.min(params.amount, gameState.civilization.stats.productionPool);
-      if (investment >= wonder.cost) {
-        // Full wonder completion: apply bonuses and enable placement
+      if (investment <= 0) { addMessage('Invest at least 1 Production Pool.'); return; }
+
+      const prior = gameState.civilization.wonderInProgress;
+      const priorInvested = prior && prior.wonderId === wonder.id ? prior.invested : 0;
+      const switchedWonders = !!prior && prior.wonderId !== wonder.id;
+      const totalInvested = priorInvested + investment;
+
+      if (totalInvested >= wonder.cost) {
+        // Full wonder completion: apply bonuses and enable placement.
         const bonusChanges: any = {};
         if (wonder.bonus.production) bonusChanges.productionIncome = (gameState.civilization.stats.productionIncome || 0) + wonder.bonus.production;
         if (wonder.bonus.science) bonusChanges.science = (gameState.civilization.stats.science || 0) + wonder.bonus.science;
@@ -1924,6 +1936,10 @@ const App: React.FC = () => {
         if (wonder.bonus.defense) bonusChanges.defense = (gameState.civilization.stats.defense || 0) + wonder.bonus.defense;
         if (wonder.bonus.populationCapacity) bonusChanges.capacity = (gameState.civilization.stats.capacity || 0) + wonder.bonus.populationCapacity;
 
+        const completionMsg = priorInvested > 0
+          ? `Built Wonder: ${wonder.name}! (${priorInvested} prior + ${investment} this turn = ${totalInvested}/${wonder.cost}) Place it on the map.`
+          : `Built Wonder: ${wonder.name}! Place it on the map.`;
+
         setGameState((prev) => ({
           ...prev,
           placingWonder: true,
@@ -1932,6 +1948,7 @@ const App: React.FC = () => {
           civilization: {
             ...prev.civilization,
             builtWonderId: wonder.id,
+            wonderInProgress: null,
             stats: {
               ...prev.civilization.stats,
               ...bonusChanges,
@@ -1939,10 +1956,50 @@ const App: React.FC = () => {
             },
           },
           wondersBuilt: [...prev.wondersBuilt, wonder],
-          messages: [`Built Wonder: ${wonder.name}! Place it on the map.`, ...prev.messages],
+          messages: [completionMsg, ...prev.messages],
         }));
         return;
       }
+
+      // Partial investment: persist progress for future turns.
+      const partialMsg = switchedWonders
+        ? `Switched to ${wonder.name}, abandoning prior progress. Invested ${investment}/${wonder.cost} — carry over to next turn.`
+        : priorInvested > 0
+          ? `Invested ${investment} more in ${wonder.name}. Progress: ${totalInvested}/${wonder.cost}. ${wonder.cost - totalInvested} to go.`
+          : `Invested ${investment} in ${wonder.name}. Progress: ${totalInvested}/${wonder.cost}. ${wonder.cost - totalInvested} to go.`;
+
+      // Build a minimal turn-resolution record so the player sees their
+      // investment in the resolution panel. Pass through to setTurnResolution.
+      setGameState((prev) => ({
+        ...prev,
+        selectedPlayerAction: actionId,
+        turnPhase: 'resolution' as TurnPhaseV2,
+        civilization: {
+          ...prev.civilization,
+          wonderInProgress: { wonderId: wonder.id, invested: totalInvested },
+          stats: {
+            ...prev.civilization.stats,
+            productionPool: prev.civilization.stats.productionPool - investment,
+          },
+        },
+        messages: [partialMsg, ...prev.messages],
+        turnResolution: {
+          turn: prev.turnNumber || 1,
+          incomeGained: prev.civilization.stats.productionIncome || 0,
+          populationChange: 0,
+          worldEventName: prev.currentWorldEvent?.name || 'None',
+          choiceMade: prev.selectedWorldChoice || 'A',
+          choiceEffects: [],
+          actionTaken: 'wonder' as PlayerActionType,
+          actionEffects: [partialMsg],
+          statsBefore: { ...prev.civilization.stats },
+          statsAfter: {
+            ...prev.civilization.stats,
+            productionPool: prev.civilization.stats.productionPool - investment,
+          },
+        },
+      }));
+      return;
     }
 
     // Recompute structural stats (especially yields) so an action like

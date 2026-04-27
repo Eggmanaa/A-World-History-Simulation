@@ -86,6 +86,11 @@ Existing members of this category:
   each render.
 - `civ.builtWonderId` — string pointer; `calculateStats` re-applies
   `wonder.bonus.*` for STRUCTURAL fields every render.
+- `civ.wonderInProgress` — `{wonderId, invested}` for an unfinished
+  wonder. Persists across turns. Consumed and cleared by the Wonder
+  action handler in GameApp when total invested >= cost (which sets
+  builtWonderId and applies bonuses). Switching to a different wonder
+  forfeits prior progress.
 
 Rules for this category:
 

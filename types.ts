@@ -471,6 +471,14 @@ export interface GameState {
       archimedes_towers: number;
     };
     builtWonderId: string | null;
+    /**
+     * In-progress Wonder investment. Persistent across turns: a student who
+     * invests less than the wonder's cost in one turn carries their progress
+     * forward. Cleared on completion (becomes builtWonderId) or abandonment.
+     * If wonderId differs from a previous investment, the old progress is
+     * discarded — you can only build one wonder at a time.
+     */
+    wonderInProgress?: { wonderId: string; invested: number } | null;
     religion: {
         name: string | null;
         tenets: string[];
