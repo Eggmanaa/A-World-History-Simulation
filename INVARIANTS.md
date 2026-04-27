@@ -18,9 +18,9 @@ from `civData.stats.*` and adds nothing derived.
 
 | Stat | Field | How it grows |
 |------|-------|--------------|
-| Culture | `stats.culture` | Develop action, one-shot +3 when Amphitheatre placed, wonder-at-build |
-| Science | `stats.science` | Research action, wonder-at-build |
-| Faith | `stats.faith` | Worship action, one-shot +2 when Temple placed, wonder-at-build, conversions |
+| Culture | `stats.culture` | Develop action, one-shot +3 when Amphitheatre placed, wonder-at-build, +1/turn passive per Amphitheatre |
+| Science | `stats.science` | Research action, wonder-at-build, +1/turn passive per Library |
+| Faith | `stats.faith` | Worship action, one-shot +2 when Temple placed, wonder-at-build, conversions, +1/turn passive per Temple |
 | Production Pool | `stats.productionPool` | Turn income + loot + event rewards; treasury spent on buildings |
 
 Rules for ACCUMULATING stats:
@@ -33,6 +33,13 @@ Rules for ACCUMULATING stats:
 - Tenets MUST NOT add to ACCUMULATING stats — they modify YIELDS only.
 - Events that grant Culture/Faith/Science write a stat change once to
   `civ.stats` and do not touch `calculateStats`.
+- `calculateIncome` adds a small passive yield trickle each turn:
+  +1 Science per Library, +1 Faith per Temple, +1 Culture per
+  Amphitheatre. This is independent of the matching action; the
+  action still contributes its full yield (which already includes
+  +2 per matching building from `calculateStats`). Combined effect:
+  matching action turn = passive +1 + action yield (action is bigger);
+  non-matching turn = passive +1 only.
 
 ## STRUCTURAL stats
 

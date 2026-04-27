@@ -301,7 +301,13 @@ export function previewAction(
     case 'research': {
       const libCount = buildings.libraries || 0;
       const totalGain = stats.scienceYield + (libCount * 2);
-      return { effects: [`+${stats.scienceYield} Science Yield (base)`, ...(libCount > 0 ? [`+${libCount * 2} from ${libCount} ${libCount === 1 ? 'Library' : 'Libraries'}`] : [`+2 per Library you own`]), `Total gain: +${totalGain} Science`, `Current Science Total: ${stats.science}`] };
+      return { effects: [
+        `+${stats.scienceYield} Science Yield (base)`,
+        ...(libCount > 0 ? [`+${libCount * 2} from ${libCount} ${libCount === 1 ? 'Library' : 'Libraries'} (action bonus)`] : [`+2 per Library you own`]),
+        `Total Research gain: +${totalGain} Science`,
+        ...(libCount > 0 ? [`Note: your Libraries also drip +${libCount} Science passively each turn even without Research.`] : []),
+        `Current Science Total: ${stats.science}`,
+      ] };
     }
 
     case 'trade':
@@ -317,15 +323,23 @@ export function previewAction(
       };
 
     case 'develop': {
-      return { effects: [`+${stats.cultureYield} Culture Yield (base)`, `+2 per Amphitheater you own`, `Current Culture Total: ${stats.culture}`] };
+      const ampCount = buildings.amphitheatres || 0;
+      return { effects: [
+        `+${stats.cultureYield} Culture Yield (base, includes Amphitheatre yields)`,
+        `+2 per Amphitheatre you own (action bonus)`,
+        ...(ampCount > 0 ? [`Note: your Amphitheatres also drip +${ampCount} Culture passively each turn.`] : []),
+        `Current Culture Total: ${stats.culture}`,
+      ] };
     }
 
     case 'worship': {
       const canFound = stats.faith >= 10 && buildings.temples > 0 && state.gameFlags.religionUnlocked && !state.civilization.religion.name;
+      const tCount = buildings.temples || 0;
       return {
         effects: [
-          `+${stats.faithYield} Faith Yield (base)`,
-          `+2 per Temple you own`,
+          `+${stats.faithYield} Faith Yield (base, includes Temple yields)`,
+          `+2 per Temple you own (action bonus)`,
+          ...(tCount > 0 ? [`Note: your Temples also drip +${tCount} Faith passively each turn.`] : []),
           `Current Faith Total: ${stats.faith}`,
           ...(canFound ? ['OR: Found a Religion (requires Faith >= 10 + Temple)'] : []),
         ],
@@ -980,6 +994,35 @@ export function calculateIncome(state: GameState): {
 
   // 4. Reset houses built this turn
   changes.housesBuiltThisTurn = 0;
+
+  // 4b. PASSIVE YIELD TRICKLE.
+  // Libraries / Temples / Amphitheatres each contribute +1 per turn to
+  // their respective stat totals, even without picking the matching
+  // action. Without this, owning the building was worthless to a
+  // student who never Researched / Worshipped / Developed — a design
+  // hole compared to Farms / Workshops / Walls / Barracks which all
+  // give passive value. The matching action still pays more (yield
+  // includes +2 per building), so Research/Worship/Develop remain
+  // the burst option; this is the steady drip.
+  const buildings = state.civilization.buildings;
+  const libCount = buildings.libraries || 0;
+  const templeCount = buildings.temples || 0;
+  const amphiCount = buildings.amphitheatres || 0;
+  if (libCount > 0) {
+    const sciBefore = changes.science ?? stats.science;
+    changes.science = sciBefore + libCount;
+    messages.push(`+${libCount} Science (passive from ${libCount} ${libCount === 1 ? 'Library' : 'Libraries'}).`);
+  }
+  if (templeCount > 0) {
+    const faithBefore = changes.faith ?? stats.faith;
+    changes.faith = faithBefore + templeCount;
+    messages.push(`+${templeCount} Faith (passive from ${templeCount} ${templeCount === 1 ? 'Temple' : 'Temples'}).`);
+  }
+  if (amphiCount > 0) {
+    const culBefore = changes.culture ?? stats.culture;
+    changes.culture = culBefore + amphiCount;
+    messages.push(`+${amphiCount} Culture (passive from ${amphiCount} ${amphiCount === 1 ? 'Amphitheatre' : 'Amphitheatres'}).`);
+  }
 
   // 5. RAID ROLL — 1-in-6 chance each turn that barbarians/raiders strike.
   // Raid power is scaled to the turn number (stronger as the game advances)
