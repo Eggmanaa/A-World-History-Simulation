@@ -305,7 +305,11 @@ export function previewAction(
     }
 
     case 'trade':
-      return { effects: ['+2 to one stat (mutual trade)', '+1 Production Pool (one-sided)'] };
+      return { effects: [
+        '+3 to one chosen stat (mutual trade with a partner)',
+        '+2 Production Pool (one-sided trade, no partner needed)',
+        'Mutual trade also opens a 3-turn Trade treaty (+2 Industry while active)',
+      ] };
 
     case 'attack':
       return {
@@ -339,7 +343,11 @@ export function previewAction(
       };
 
     case 'diplomacy':
-      return { effects: ['Form alliance: +2 Martial for both parties', 'Breaking alliance costs 2 Culture Total'] };
+      return { effects: [
+        'Form a 5-turn alliance: +2 Martial while active (both parties)',
+        '+1 Culture from cultural exchange (one-shot)',
+        'Backstabbing an ally: -8 attack roll, -3 Culture',
+      ] };
 
     case 'fortify': {
       const current = stats.fortifyDice || 0;
@@ -501,18 +509,27 @@ export function executeAction(
       const isMutual = params?.mutual ?? false;
 
       if (isMutual) {
-        const bonus = 2;
+        // Mutual trade: +3 to chosen stat (bumped from +2 in Apr 2026 parity
+        // pass). The 3-turn trade treaty also adds +2 Industry passively
+        // while active, applied via calculateStats.
+        const bonus = 3;
         const changes: any = {};
         changes[tradeStat] = (stats as any)[tradeStat] + bonus;
         return {
-          messages: [`Mutual trade! +${bonus} ${tradeStat}.`],
+          messages: [
+            `Mutual trade! +${bonus} ${tradeStat}.`,
+            tradeTarget ? `Trade treaty opened (3 turns, +2 Industry passively).` : '',
+          ].filter(Boolean),
           statChanges: changes,
           newTreaty: tradeTarget ? { neighborId: tradeTarget, type: 'trade', turnsRemaining: 3 } : undefined,
         };
       } else {
+        // One-sided trade: bumped from +1 to +2 productionPool. Still the
+        // weakest payout but no longer a near-pointless action when no
+        // partner is available.
         return {
-          messages: ['+1 Production Pool from one-sided trade.'],
-          statChanges: { productionPool: stats.productionPool + 1 },
+          messages: ['+2 Production Pool from one-sided trade.'],
+          statChanges: { productionPool: stats.productionPool + 2 },
         };
       }
     }
@@ -877,8 +894,11 @@ export function executeAction(
       }
 
       return {
-        messages: [`Alliance formed with ${target.name}! +2 Martial while active (5 turns).`],
-        statChanges: {},
+        messages: [
+          `Alliance formed with ${target.name}! +2 Martial while active (5 turns).`,
+          `+1 Culture from cultural exchange.`,
+        ],
+        statChanges: { culture: stats.culture + 1 },
         newTreaty: { neighborId: allyId, type: 'alliance', turnsRemaining: 5 },
       };
     }
