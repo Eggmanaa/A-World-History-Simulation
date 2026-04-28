@@ -831,10 +831,10 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
   let terrainColor = color;
 
   if (terrain === TerrainType.Mountain) {
-    height = 1.2;
+    height = 0.5;
     yPos = 0.35;
   } else if (terrain === TerrainType.HighMountain) {
-    height = 2.0; // Much taller
+    height = 0.75; // Much taller
     yPos = 0.75;
   } else if (terrain === TerrainType.Ocean) {
     yPos = -0.15;
@@ -924,7 +924,7 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
 
       {/* Selection Ring */}
       {isHovered && (
-         <mesh position={[0, height/2 + 0.02, 0]} rotation={[-Math.PI/2, 0, 0]}>
+         <mesh position={[0, height/2 + 0.02, 0]} rotation={[-Math.PI/2, 0, Math.P/6]}>
             <ringGeometry args={[0.85, 0.95, 6]} />
             <meshBasicMaterial color="white" toneMapped={false} />
          </mesh>
