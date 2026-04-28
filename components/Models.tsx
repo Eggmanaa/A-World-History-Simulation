@@ -924,7 +924,7 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
 
       {/* Selection Ring */}
       {isHovered && (
-         <mesh position={[0, height/2 + 0.02, 0]} rotation={[-Math.PI/2, 0, Math.P/6]}>
+         <mesh position={[0, height/2 + 0.02, 0]} rotation={[-Math.PI/2, 0, Math.PI/6]}>
             <ringGeometry args={[0.85, 0.95, 6]} />
             <meshBasicMaterial color="white" toneMapped={false} />
          </mesh>
