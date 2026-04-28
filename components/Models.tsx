@@ -6,23 +6,41 @@ import * as THREE from 'three';
 // ============================================================
 // HEX GEOMETRY — SINGLE CYLINDER WITH TRANSPARENT SIDES
 // ============================================================
-// CylinderGeometry(1,1,0.5,6) scaled to ~1.04 closes all seam gaps.
-// The flickering was caused by overlapping side faces Z-fighting.
-// Fix: make the SIDE material fully transparent so only the top cap
-// and bottom cap render.  No side faces visible = no seam artifacts.
+// HEX TILING (revised Apr 2026):
+//
 // CylinderGeometry has 3 material groups: 0=sides, 1=top, 2=bottom.
+// The mathematically perfect tiling (adjacent hex centers at sqrt(3)
+// apart with hex flat-to-flat width = sqrt(3)) leaves pixel-precision
+// seams visible on retina/iPad displays. Two-part fix here:
+//
+//   - Geometry radius bumped from 1.0 to 1.003 (0.3% overlap). Tiny
+//     enough to not visibly overlap, large enough to close anti-alias
+//     hairlines at hex edges.
+//   - Side material is now OPAQUE earth-tone instead of transparent.
+//     Where one tile is taller than its neighbor (Mountain over
+//     Plains, etc.), the exposed side now reads as a rocky cliff or
+//     earthy bank — the visible 'thickness' of each tile is exactly
+//     what makes a hex grid look like a puzzle of physical tiles
+//     fitting together.
+//
+// Earlier 1.04 overlap (4%) caused Z-fighting on overlapping side
+// faces; 0.3% is well under the depth-precision threshold and stays
+// clean. polygonOffset on the cap materials handles any residual
+// top-cap edge cases.
 //
 // Pointy-top orientation via rotateY(30°) to match the axial grid
 // math: x = sqrt(3)*(q + r/2), z = 1.5*r.
 
-const hexGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 6);
+const hexGeometry = new THREE.CylinderGeometry(1.003, 1.003, 0.5, 6);
 hexGeometry.rotateY(Math.PI / 6);
 
-// Invisible material for the cylinder side faces.
-const HEX_SIDE_MATERIAL = new THREE.MeshBasicMaterial({
-  transparent: true,
-  opacity: 0,
-  depthWrite: false,
+// Earthy dark-soil tone for the cylinder side faces. Acts as a base
+// layer when adjacent tiles have different heights and as a seam-fill
+// at pixel boundaries between coplanar caps.
+const HEX_SIDE_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#3a2a1f',
+  roughness: 0.95,
+  metalness: 0,
 });
 
 // ============================================================
@@ -884,11 +902,11 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
 
   return (
     <group position={[x, yPos, z]}>
-      {/* Single hex cylinder with transparent sides. Scale is 1.0 —
-          the ground plane at y=-0.3 hides any hair-thin seam gaps, and
-          polygonOffset on the top/bottom materials keeps adjacent tiles
-          from Z-fighting. Earlier scale=1.04 overlap created coplanar
-          top-cap collisions that the depth buffer couldn't resolve. */}
+      {/* Hex cylinder. Geometry baked at radius 1.003 (see hexGeometry
+          above) for pixel-seam closure; opaque dark-earth side material
+          fills any height-gap between tall (Mountain) and short
+          (Plains) neighbors. polygonOffset on caps handles top-cap
+          Z-fighting at edges. */}
       <mesh
         geometry={hexGeometry}
         material={materials}
