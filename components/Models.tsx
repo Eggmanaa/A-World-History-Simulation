@@ -31,8 +31,17 @@ import * as THREE from 'three';
 // Pointy-top orientation via rotateY(30°) to match the axial grid
 // math: x = sqrt(3)*(q + r/2), z = 1.5*r.
 
-const hexGeometry = new THREE.CylinderGeometry(1.015, 1.015, 0.5, 6);
-hexGeometry.rotateY(Math.PI / 6);
+// IMPORTANT: do NOT call rotateY(Math.PI/6). Three.js CylinderGeometry
+// with 6 radial segments already produces a POINTY-TOP hex (vertices at
+// +Z and -Z, flat sides facing 0/60/120/180/240/300 degrees from +X
+// in the X-Z plane). That orientation matches the pointy-top axial
+// placement formula x = sqrt(3)*(q + r/2), z = 1.5*r used in
+// constants.ts/generateMap. A 30-degree rotation here was the historical
+// cause of the diamond-shaped gaps where 3 hex corners meet — it
+// turned the geometry into flat-top while the placement still expected
+// pointy-top, so adjacent hexes were placed across each other's
+// VERTICES instead of their flat sides.
+const hexGeometry = new THREE.CylinderGeometry(1.005, 1.005, 0.5, 6);
 
 // Earthy dark-soil tone for the cylinder side faces. Acts as a base
 // layer when adjacent tiles have different heights and as a seam-fill
