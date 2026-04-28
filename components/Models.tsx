@@ -31,7 +31,7 @@ import * as THREE from 'three';
 // Pointy-top orientation via rotateY(30°) to match the axial grid
 // math: x = sqrt(3)*(q + r/2), z = 1.5*r.
 
-const hexGeometry = new THREE.CylinderGeometry(1.003, 1.003, 0.5, 6);
+const hexGeometry = new THREE.CylinderGeometry(1.015, 1.015, 0.5, 6);
 hexGeometry.rotateY(Math.PI / 6);
 
 // Earthy dark-soil tone for the cylinder side faces. Acts as a base
@@ -41,6 +41,12 @@ const HEX_SIDE_MATERIAL = new THREE.MeshStandardMaterial({
   color: '#3a2a1f',
   roughness: 0.95,
   metalness: 0,
+  // polygonOffset: side faces of adjacent hexes interpenetrate by ~1.3%
+  // at our circumradius (1.015 vs sqrt(3) row pitch). The offset biases
+  // depth so coplanar overlaps don't strobe between which side wins.
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
 });
 
 // ============================================================
@@ -994,9 +1000,12 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
         />
       )}
 
-      {/* Mountain Peaks */}
+      {/* Mountain Peaks. Group y = cone half-height (0.5) so the cone
+          BASE sits on the hex top cap (which is the parent SurfaceDetail
+          group, already at +0.01 above the cap). Was previously 0.8
+          which floated the cone 0.3 units above the tile. */}
       {terrain === TerrainType.Mountain && (
-        <group position={[0, 0.8, 0]}>
+        <group position={[0, 0.5, 0]}>
              <mesh position={[0, 0, 0]} castShadow rotation={[0, Math.PI/4, 0]}>
                 <coneGeometry args={[0.7, 1, 4]} />
                 <meshStandardMaterial color="#78716c" roughness={0.9} flatShading />
@@ -1008,9 +1017,11 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
         </group>
       )}
 
-      {/* High Mountain Peaks (Taller, purpler) */}
+      {/* High Mountain Peaks (Taller, purpler). Group y = cone
+          half-height (0.75) so cone base lands on the tile top.
+          Previously 1.2 which floated the peak 0.45 units up. */}
       {terrain === TerrainType.HighMountain && (
-        <group position={[0, 1.2, 0]}>
+        <group position={[0, 0.75, 0]}>
              <mesh position={[0, 0, 0]} castShadow rotation={[0, Math.PI/4, 0]}>
                 <coneGeometry args={[0.8, 1.5, 4]} />
                 <meshStandardMaterial color="#475569" roughness={0.9} flatShading />
