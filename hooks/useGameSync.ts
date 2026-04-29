@@ -7,6 +7,8 @@ interface SyncState {
   serverYear: number | null;
   serverTimelineIndex: number | null;
   turnState: TurnState | null; // Current turn phase and timer
+  teacherTurnNumber: number;   // Teacher's authoritative turn counter
+  gameStarted: boolean;        // Whether teacher has started the game
   lastSync: number;            // Timestamp of last successful sync
   pendingActions: any[];
   error: string | null;
@@ -28,6 +30,7 @@ interface GameSyncReturn {
  * useGameSync: Synchronizes game state with the server
  * - Checks for saved session on load
  * - Periodically polls for updates from teacher's timeline
+ * - Tracks teacher's turn number so the client can detect turn advances
  * - Provides method to send player actions to server
  */
 export function useGameSync(civId: string | null): GameSyncReturn {
@@ -37,6 +40,8 @@ export function useGameSync(civId: string | null): GameSyncReturn {
     serverYear: null,
     serverTimelineIndex: null,
     turnState: null,
+    teacherTurnNumber: 0,
+    gameStarted: false,
     lastSync: 0,
     pendingActions: [],
     error: null,
@@ -138,6 +143,7 @@ export function useGameSync(civId: string | null): GameSyncReturn {
           ...prev,
           serverYear: data.currentYear,
           serverTimelineIndex: data.timelineIndex,
+          gameStarted: !!data.gameStarted,
           lastSync: Date.now(),
           error: null,
         }));
@@ -159,6 +165,10 @@ export function useGameSync(civId: string | null): GameSyncReturn {
           setSyncState((prev) => ({
             ...prev,
             turnState: turnData,
+            // The server now includes teacherTurnNumber and gameStarted
+            // on the turn-state response as well.
+            teacherTurnNumber: turnData.teacherTurnNumber ?? prev.teacherTurnNumber,
+            gameStarted: turnData.gameStarted ?? prev.gameStarted,
           }));
         }
       }
