@@ -101,8 +101,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     icon: 'Handshake',
     category: 'diplomacy',
     color: 'text-amber-400',
-    unlockedAtTurn: 5,
-    unlockMessage: 'Bronze Age trade networks connect distant peoples.',
+    unlockedAtTurn: 2,
+    unlockMessage: 'Caravan paths and river trade emerge as settlements stabilize.',
     unlockYear: 'c. 1850 BC',
     unlockHistoricalContext: 'The Bronze Age created the world\'s first international trade networks. Bronze required tin and copper from different regions, forcing civilizations to cooperate. Merchants from Mesopotamia, Egypt, the Indus Valley, and Crete exchanged goods across thousands of miles by sea and caravan.',
   },
@@ -114,8 +114,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     icon: 'Palette',
     category: 'knowledge',
     color: 'text-purple-400',
-    unlockedAtTurn: 5,
-    unlockMessage: 'Cultural traditions take root as civilizations mature.',
+    unlockedAtTurn: 1,
+    unlockMessage: 'Even the earliest peoples shaped identity through stories, ritual, and craft.',
     unlockYear: 'c. 1800 BC',
     unlockHistoricalContext: 'The Bronze Age saw the birth of organized cultural expression. The Epic of Gilgamesh was written in Mesopotamia around 1800 BC, the earliest known work of literature. Egyptian art, Minoan frescoes, and Chinese oracle bone inscriptions all flourished as civilizations developed distinct cultural identities.',
   },
@@ -127,8 +127,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     icon: 'Landmark',
     category: 'economy',
     color: 'text-orange-400',
-    unlockedAtTurn: 7,
-    unlockMessage: 'The Age of Wonders begins! Monumental construction is now possible.',
+    unlockedAtTurn: 4,
+    unlockMessage: 'Monumental architecture: your civilization is stable enough for multi-turn wonder projects.',
     unlockYear: 'c. 1300 BC',
     unlockHistoricalContext: 'By the Late Bronze Age, powerful civilizations began constructing monumental structures to demonstrate their wealth and devotion. The Great Pyramids of Giza (built c. 2560 BC) were already ancient, but temples like Abu Simbel (1264 BC) and the expanding ziggurats of Babylon showed that wonder-building was accelerating across the ancient world.',
   },
@@ -140,8 +140,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     icon: 'Scroll',
     category: 'knowledge',
     color: 'text-violet-400',
-    unlockedAtTurn: 4,
-    unlockMessage: 'The Iron Age brings spiritual awakening. Religion can now be founded.',
+    unlockedAtTurn: 2,
+    unlockMessage: 'Faith takes form: shrines, rituals, and shared belief organize early peoples.',
     unlockYear: 'c. 1000 BC',
     unlockHistoricalContext: 'The Iron Age sparked a spiritual revolution. Around 1000 BC, the Israelites codified their monotheistic faith under King David. Zoroastrianism emerged in Persia. Vedic Hinduism developed in India. This "Axial Age" (coined by philosopher Karl Jaspers) saw humanity grapple with questions of meaning, morality, and the divine for the first time.',
   },
@@ -153,8 +153,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     icon: 'Globe',
     category: 'diplomacy',
     color: 'text-teal-400',
-    unlockedAtTurn: 9,
-    unlockMessage: 'Formal diplomacy emerges as empires learn to negotiate.',
+    unlockedAtTurn: 3,
+    unlockMessage: 'Envoys, oaths, and treaties replace sporadic raiding for civilizations that prefer cooperation.',
     unlockYear: 'c. 1000 BC',
     unlockHistoricalContext: 'The earliest known diplomatic treaty, the Egyptian-Hittite peace treaty (1259 BC), established the precedent for formal agreements between nations. By 1000 BC, empires regularly exchanged ambassadors, signed treaties, and formed alliances. The Assyrian Empire maintained a vast network of vassal states through diplomacy backed by military power.',
   },
@@ -166,8 +166,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
     icon: 'Sword',
     category: 'military',
     color: 'text-red-400',
-    unlockedAtTurn: 3,
-    unlockMessage: 'Warfare: your armies can now strike at adjacent civilizations.',
+    unlockedAtTurn: 4,
+    unlockMessage: 'Organized warfare: your civilization is large enough to mount campaigns against neighbors.',
     unlockYear: 'c. 7000 BC',
     unlockHistoricalContext: 'Even the earliest settlements clashed over land, water, and trade routes. By turn 3, your civilization has enough organization and arms (spears, clubs, early bows) to mount a raid. Conquest starts small — a border skirmish — and grows as your Martial, Barracks, and technologies advance.',
   },
@@ -933,6 +933,11 @@ export function calculateIncome(state: GameState): {
   // Per-neighbor relationship changes from NPC retaliation (if any). The
   // turn-resolution pipeline in GameApp applies these to state.neighbors.
   neighborRelationshipChanges?: { id: string; relationship: 'Neutral' | 'Ally' | 'Enemy' }[];
+  // Fertility-granted placement budget (number of houses player can place
+  // this turn). GameState.actionPlacements lives at the GameState level,
+  // not on civ.stats, so we return it as a separate field for the caller
+  // to apply.
+  actionPlacementsGrant?: number;
 } {
   const stats = state.civilization.stats;
   const messages: string[] = [];
@@ -955,13 +960,23 @@ export function calculateIncome(state: GameState): {
   // Turn 1 house count pinned to fertility for every civ and closes the
   // Troy loophole where pre-action natural growth stacked with the Grow
   // action for 3+ houses on Turn 1.
+  // FERTILITY-AS-PLACEMENT-BUDGET (Apr 2026):
+  // Each turn's income grants the player `fertility` house placements.
+  // The player chooses where to settle them on the map. This represents
+  // natural population growth: Fertile Crescent civs settle 2 houses
+  // per turn passively, while desert civs (fertility 1) grow slower.
+  // Grow action ADDS +2 more on top (handled in handleActionSelect).
+  const fertilityBudget = Math.max(0, stats.fertility || 0);
+  if (fertilityBudget > 0) {
+    messages.push(`+${fertilityBudget} House placement${fertilityBudget === 1 ? '' : 's'} (Fertility ${fertilityBudget} natural growth).`);
+  }
+
   const turnNumber = state.turnNumber || 1;
   if (turnNumber === 1) {
-    messages.push('Turn 1: no natural growth yet — pick Grow as your action to seed your population.');
+    messages.push('Turn 1: place your fertility-granted houses to settle your founding population.');
   } else if (stats.population < stats.capacity) {
     const newPop = stats.population + 1;
     changes.population = newPop;
-    changes.houses = stats.houses + 1;
     const crossedMartial = Math.floor(newPop / 4) > Math.floor(stats.population / 4);
     const crossedIndustry = Math.floor(newPop / 5) > Math.floor(stats.population / 5);
     const bonusNote = crossedMartial && crossedIndustry
@@ -1221,5 +1236,6 @@ export function calculateIncome(state: GameState): {
     statChanges: changes,
     combatLogEntries: combatLogEntries.length > 0 ? combatLogEntries : undefined,
     neighborRelationshipChanges: neighborRelationshipChanges.length > 0 ? neighborRelationshipChanges : undefined,
+    actionPlacementsGrant: fertilityBudget,
   };
 }

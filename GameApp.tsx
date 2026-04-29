@@ -1507,6 +1507,9 @@ const App: React.FC = () => {
         turnPhase: 'income' as TurnPhaseV2,
         neighbors: nextNeighbors,
         combatLog: nextLog,
+        // Fertility-granted placement budget for this turn. Grow action
+        // adds to this in handleActionSelect (additive, not set).
+        actionPlacements: incomeResult.actionPlacementsGrant ?? prev.actionPlacements ?? 0,
         civilization: {
           ...prev.civilization,
           stats: { ...prev.civilization.stats, ...incomeResult.statChanges },
@@ -2043,7 +2046,10 @@ const App: React.FC = () => {
         selectedPlayerAction: actionId,
         selectedAction: result.enableMapPlacement === 'house' ? BuildingType.House :
           result.enableMapPlacement === 'wall' ? BuildingType.Wall : null,
-        actionPlacements: result.maxPlacements || 0,
+        // ADD instead of SET so action-granted placements stack on top of
+        // the player's fertility budget (granted at income). Grow on a
+        // fertility-2 civ becomes 2 (fertility) + 2 (Grow) = 4 placements.
+        actionPlacements: (prev.actionPlacements || 0) + (result.maxPlacements || 0),
         turnPhase: 'idle' as TurnPhaseV2, // Let them interact with the map
         civilization: {
           ...prev.civilization,
