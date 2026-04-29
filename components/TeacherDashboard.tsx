@@ -739,28 +739,48 @@ const TeacherDashboard: React.FC = () => {
               <h3 className="text-xl font-bold text-cyan-400 mb-6">Turn Control</h3>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => startTurn(5)}
-                    disabled={loading}
-                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
-                  >
-                    Start (5 min)
-                  </button>
-                  <button
-                    onClick={() => startTurn(10)}
-                    disabled={loading}
-                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
-                  >
-                    Start (10 min)
-                  </button>
-                  <button
-                    onClick={() => startTurn(15)}
-                    disabled={loading}
-                    className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
-                  >
-                    Start (15 min)
-                  </button>
+                {/* PRIMARY: Advance Turn — this is the main button teachers use
+                    to let students proceed to their next turn. Students are
+                    locked in a "Waiting for Teacher" screen until this fires. */}
+                <button
+                  onClick={() => startTurn(0)}
+                  disabled={loading}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white font-bold py-4 px-6 rounded-lg transition-colors text-lg flex items-center justify-center gap-3"
+                >
+                  <Play className="w-5 h-5" />
+                  {loading ? 'Advancing...' : 'Advance Turn (Students Proceed)'}
+                </button>
+
+                <div className="bg-slate-700/50 rounded p-3 text-xs text-slate-400 text-center">
+                  Students are locked between turns until you click the button above.
+                </div>
+
+                {/* TIMED OPTIONS: Start a timed decision phase */}
+                <div className="pt-2 border-t border-slate-700">
+                  <p className="text-sm text-slate-400 mb-3">Or start a timed turn:</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      onClick={() => startTurn(5)}
+                      disabled={loading}
+                      className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
+                    >
+                      5 min
+                    </button>
+                    <button
+                      onClick={() => startTurn(10)}
+                      disabled={loading}
+                      className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
+                    >
+                      10 min
+                    </button>
+                    <button
+                      onClick={() => startTurn(15)}
+                      disabled={loading}
+                      className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg transition-colors text-sm"
+                    >
+                      15 min
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -781,8 +801,8 @@ const TeacherDashboard: React.FC = () => {
                 </div>
 
                 <div className="bg-slate-700 rounded p-4 text-sm text-slate-300">
-                  <p className="font-bold text-cyan-300 mb-2">Turn Info</p>
-                  <p>Use turn system to enable simultaneous resolution of actions during decision phases.</p>
+                  <p className="font-bold text-cyan-300 mb-2">How It Works</p>
+                  <p>Students complete their turn and then wait. Click <strong>"Advance Turn"</strong> to let all students begin their next turn simultaneously.</p>
                 </div>
               </div>
             </div>

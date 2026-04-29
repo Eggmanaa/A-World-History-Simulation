@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Trophy,
   Info,
+  Clock,
 } from "lucide-react";
 import MapScene from "./components/MapScene";
 import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
@@ -892,6 +893,26 @@ const App: React.FC = () => {
     }
   }, [syncState.serverTimelineIndex]);
 
+  // MULTIPLAYER TURN GATING — When the teacher starts a new turn (bumps
+  // teacherTurnNumber), auto-advance any student stuck in
+  // 'waiting_for_teacher'. This is the core mechanism that prevents students
+  // from advancing on their own and ensures only the teacher controls pace.
+  // We track the last teacher turn we acted on to avoid re-triggering.
+  const lastProcessedTeacherTurn = useRef(0);
+  useEffect(() => {
+    if (!syncState.isOnline || !gameState.hasStarted) return;
+    const teacherTurn = syncState.teacherTurnNumber;
+    if (teacherTurn <= 0) return;
+    // Only fire when teacher turn actually increases beyond what we've processed
+    if (teacherTurn > lastProcessedTeacherTurn.current) {
+      lastProcessedTeacherTurn.current = teacherTurn;
+      // If student is waiting for teacher, auto-advance
+      if (gameState.turnPhase === 'waiting_for_teacher') {
+        initiateAdvance();
+      }
+    }
+  }, [syncState.teacherTurnNumber, syncState.isOnline, gameState.hasStarted, gameState.turnPhase]);
+
   // --- LOCAL SAVE/LOAD (Single Player) ---
   const SAVE_KEY = 'throughhistory_save';
   const isSinglePlayer = !syncState.isOnline;
@@ -1212,8 +1233,11 @@ const App: React.FC = () => {
       tradedThisTurn: [],
       fogOfWar: true,
       pendingTreaty: null,
-      // V2 turn flow state
-      turnPhase: 'idle' as TurnPhaseV2,
+      // V2 turn flow state — In multiplayer, students start in
+      // 'waiting_for_teacher' after picking their civ. They cannot take
+      // any game actions until the teacher starts the first turn. In
+      // single-player, the player goes straight to 'idle'.
+      turnPhase: (isSinglePlayer ? 'idle' : 'waiting_for_teacher') as TurnPhaseV2,
       currentWorldEvent: null,
       currentCivEvent: null,
       selectedWorldChoice: null,
@@ -2488,11 +2512,15 @@ const App: React.FC = () => {
         setThresholdsAwarded((a) => [...a, ...newThresholds.map((t) => t.id)]);
       }
 
+      // MULTIPLAYER: after completing a turn, students enter 'waiting_for_teacher'
+      // until the teacher advances. Single-player goes straight to 'idle'.
+      const nextPhaseAfterResolution = isSinglePlayer ? 'idle' as TurnPhaseV2 : 'waiting_for_teacher' as TurnPhaseV2;
+
       setGameState((prev) => ({
         ...prev,
         year: event.year,
         timelineIndex: nextIndex,
-        turnPhase: 'idle' as TurnPhaseV2,
+        turnPhase: nextPhaseAfterResolution,
         currentWorldEvent: null,
         currentCivEvent: null,
         selectedWorldChoice: null,
@@ -3424,7 +3452,7 @@ const App: React.FC = () => {
         onPhaseRecovery={() => {
           setGameState((prev) => ({
             ...prev,
-            turnPhase: 'idle' as TurnPhaseV2,
+            turnPhase: (isSinglePlayer ? 'idle' : 'waiting_for_teacher') as TurnPhaseV2,
             currentWorldEvent: null,
             currentCivEvent: null,
           }));
@@ -3914,19 +3942,55 @@ const App: React.FC = () => {
               <span className="hidden sm:inline">Refresh</span>
             </button>
           )}
-          <button
-            onClick={initiateAdvance}
-            disabled={(gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined) || gameState.isPlacingStarterHouses === true}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-lg min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap transition-colors ${
-              (gameState.turnPhase === 'idle' || !gameState.turnPhase) && !gameState.isPlacingStarterHouses
-                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'
-                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-            }`}
-          >
-            <Play size={16} fill="currentColor" />
-            <span className="hidden sm:inline">Turn</span>{" "}
-            {(gameState.turnNumber || 0) + 1}/24
-          </button>
+          {/* TURN BUTTON: In multiplayer, students CANNOT manually advance turns.
+              Only the teacher controls turn advancement. Students see a status
+              indicator instead of an active button. In single-player, the
+              original advance button is shown. */}
+          {isSinglePlayer ? (
+            <button
+              onClick={initiateAdvance}
+              disabled={gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold shadow-lg min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap transition-colors ${
+                gameState.turnPhase === 'idle' || !gameState.turnPhase
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              <Play size={16} fill="currentColor" />
+              <span className="hidden sm:inline">Turn</span>{" "}
+              {(gameState.turnNumber || 0) + 1}/24
+            </button>
+          ) : (
+            <div
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold min-h-[40px] md:min-h-[44px] text-sm md:text-base whitespace-nowrap ${
+                gameState.turnPhase === 'waiting_for_teacher'
+                  ? 'bg-amber-600/20 border border-amber-500/50 text-amber-300'
+                  : gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined
+                    ? 'bg-indigo-600/20 border border-indigo-500/50 text-indigo-300'
+                    : 'bg-slate-700 text-slate-400'
+              }`}
+            >
+              {gameState.turnPhase === 'waiting_for_teacher' ? (
+                <>
+                  <Clock size={16} className="animate-pulse" />
+                  <span className="hidden sm:inline">Waiting...</span>
+                  <span className="sm:hidden">Wait</span>
+                </>
+              ) : gameState.turnPhase !== 'idle' && gameState.turnPhase !== undefined ? (
+                <>
+                  <Play size={16} fill="currentColor" />
+                  <span className="hidden sm:inline">Turn</span>{" "}
+                  {gameState.turnNumber || 0}/24
+                </>
+              ) : (
+                <>
+                  <Clock size={16} />
+                  <span className="hidden sm:inline">Turn</span>{" "}
+                  {gameState.turnNumber || 0}/24
+                </>
+              )}
+            </div>
+          )}
         </div>
       </header>
 

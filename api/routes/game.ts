@@ -44,8 +44,10 @@ gameRouter.post('/teacher/:periodId/start', async (c) => {
       WHERE s.period_id = ?
     `).bind(periodId).all<any>();
 
-    // Initialize game state
+    // Initialize game state — gameStarted flag signals to students that
+    // the teacher has officially started the game and the first turn can begin.
     const initialGameData = {
+      gameStarted: true,
       civStates: students.results.map((student: any) => ({
         studentId: student.id,
         studentName: student.name,
@@ -616,6 +618,11 @@ gameRouter.get('/student/:periodId/state', async (c) => {
       religionUnlocked: gameState.timeline_index >= 5 // Around year -1000
     };
 
+    // Include game_started flag and teacher's current turn_number so the
+    // client can gate student turn advancement on teacher authorization.
+    const gameStarted = !!gameData.gameStarted;
+    const teacherTurnNumber = gameState.turn_number || 0;
+
     return c.json({
       currentYear: gameState.current_year,
       timelineIndex: gameState.timeline_index,
@@ -624,7 +631,9 @@ gameRouter.get('/student/:periodId/state', async (c) => {
       civilizationId: session?.civilization_id || 'egypt',
       civState: progressData,
       adjacentCivs,
-      gameFlags
+      gameFlags,
+      gameStarted,
+      teacherTurnNumber,
     });
   } catch (error) {
     console.error('Get state error:', error);
@@ -805,7 +814,10 @@ gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
     ).bind(periodId).first<any>();
 
     const totalPlayers = (students as any).count || 1;
-    const deadline = Date.now() + (timerMinutes || 5) * 60 * 1000;
+    // timerMinutes=0 means "no timer / advance immediately". We still bump
+    // turn_number so students detect the advance via polling.
+    const effectiveTimer = (timerMinutes != null && timerMinutes > 0) ? timerMinutes : 0;
+    const deadline = effectiveTimer > 0 ? Date.now() + effectiveTimer * 60 * 1000 : 0;
 
     // Read current turn_number so we can stamp this turn correctly and so
     // turn_decisions rows key against the right turn.
@@ -818,15 +830,16 @@ gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
     const nextTurnNumber = ((current as any).turn_number || 0) + 1;
     const expectedVersion = (current as any).turn_state_version || 0;
 
-    // Create turn state
+    // Create turn state. When effectiveTimer is 0, phase is 'active' (no
+    // timer) rather than 'decision' so students aren't gated by a countdown.
     const turnState = {
       number: nextTurnNumber,
-      phase: 'decision',
-      timeRemaining: (timerMinutes || 5) * 60,
+      phase: effectiveTimer > 0 ? 'decision' : 'active',
+      timeRemaining: effectiveTimer > 0 ? effectiveTimer * 60 : -1,
       submittedCount: 0,
       totalPlayers,
       isPaused: false,
-      deadline
+      deadline: deadline || undefined,
     };
 
     // Atomic: only advance the turn if version still matches what we read.
@@ -1171,11 +1184,11 @@ gameRouter.get('/student/:periodId/turn-state', async (c) => {
   try {
     const periodId = c.req.param('periodId');
 
-    // Get current turn state + version. We need the version so the
-    // auto-transition below can be done atomically when 25 students all
-    // poll in the same second after the timer hits zero.
+    // Get current turn state + version + turn_number + game_data. We need
+    // turn_number so students can detect when the teacher advances the turn,
+    // and game_data to relay gameStarted status.
     const gameState = await c.env.DB.prepare(
-      'SELECT turn_state, turn_state_version FROM game_states WHERE period_id = ?'
+      'SELECT turn_state, turn_state_version, turn_number, game_data FROM game_states WHERE period_id = ?'
     ).bind(periodId).first<any>();
 
     const turnState = JSON.parse((gameState as any)?.turn_state || '{}');
@@ -1199,6 +1212,12 @@ gameRouter.get('/student/:periodId/turn-state', async (c) => {
         `).bind(JSON.stringify(turnState), periodId, expectedVersion).run();
       }
     }
+
+    // Attach teacher's authoritative turn_number and gameStarted so the
+    // client can gate student turn advancement on teacher authorization.
+    const gameData = JSON.parse((gameState as any)?.game_data || '{}');
+    turnState.teacherTurnNumber = (gameState as any)?.turn_number || 0;
+    turnState.gameStarted = !!gameData.gameStarted;
 
     return c.json(turnState, 200);
   } catch (error) {

@@ -278,8 +278,10 @@ export interface EventPopupData {
 // NEW EVENT & ACTION SYSTEM (v2 - Paper Game Adaptation)
 // ============================================================
 
-// Turn phase flow: INCOME → UNLOCKS → WORLD_EVENT → CIV_EVENT → BUILD_PHASE → ACTION → RESOLUTION
-export type TurnPhaseV2 = 'income' | 'unlocks' | 'world_event' | 'civ_event' | 'build_phase' | 'action' | 'resolution' | 'idle';
+// Turn phase flow: INCOME → UNLOCKS → WORLD_EVENT → CIV_EVENT → BUILD_PHASE → ACTION → RESOLUTION → WAITING_FOR_TEACHER
+// In multiplayer, after resolution the student enters 'waiting_for_teacher' until
+// the teacher advances the turn. In single-player this phase is skipped (goes to 'idle').
+export type TurnPhaseV2 = 'income' | 'unlocks' | 'world_event' | 'civ_event' | 'build_phase' | 'action' | 'resolution' | 'idle' | 'waiting_for_teacher';
 
 // The 10 action types (Build is a separate phase, not an action)
 export type PlayerActionType =

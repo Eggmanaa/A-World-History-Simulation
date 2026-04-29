@@ -987,6 +987,35 @@ const TurnPhaseUI: React.FC<TurnPhaseUIProps> = ({
 }) => {
   if (phase === 'idle') return null;
 
+  // WAITING FOR TEACHER — full-screen overlay shown when a multiplayer
+  // student has finished their turn and must wait for the teacher to
+  // advance. The student can still see the map behind the overlay.
+  if (phase === 'waiting_for_teacher') {
+    return (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div className="bg-slate-800 rounded-xl border border-amber-500/50 max-w-md w-full p-8 shadow-2xl text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-5">
+            <Clock className="w-8 h-8 text-amber-400 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-bold text-amber-400 mb-3">
+            Waiting for Teacher
+          </h2>
+          <p className="text-slate-300 mb-2">
+            You have completed Turn {gameState.turnNumber || 0}.
+          </p>
+          <p className="text-slate-400 text-sm mb-6">
+            The teacher will advance the game when all students are ready.
+            Your next turn will begin automatically.
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-amber-300/70">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>Listening for teacher signal...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Recovery modal for stuck states - shown when phase data is missing
   const RecoveryModal = () => (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
