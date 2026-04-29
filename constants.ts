@@ -513,22 +513,32 @@ export const TIMELINE_EVENTS: TimelineEvent[] = [
 // than stacking equivalent buildings, but not game-ending. Each is also
 // tuned to a distinct playstyle so no single wonder is "best".
 export const WONDERS_LIST: WonderDefinition[] = [
-    // ANCIENT ERA (available early)
+    // ANCIENT ERA — densified Apr 2026 to close the long Pyramids -> Hanging
+    // Gardens gap. Inspired by Civ V/IV's wonder roster.
     { id: 'pyramids', name: 'Great Pyramids', cost: 50, era: 'Ancient', minYear: -3000, effects: "+8 Faith, +5 Culture, +10 Industry", bonus: { faith: 8, culture: 5, production: 10 } },
+    { id: 'stonehenge', name: 'Stonehenge', cost: 35, era: 'Ancient', minYear: -3000, effects: "+5 Faith, +3 Culture, +1 Diplomacy", bonus: { faith: 5, culture: 3, diplomacy: 1 } },
+    { id: 'great_bath', name: 'Great Bath of Mohenjo-Daro', cost: 35, era: 'Ancient', minYear: -2500, effects: "+5 Capacity, +3 Faith, +2 Culture", bonus: { populationCapacity: 5, faith: 3, culture: 2 } },
+    { id: 'ziggurat', name: 'Ziggurat of Ur', cost: 40, era: 'Ancient', minYear: -2100, effects: "+8 Faith, +3 Culture, +2 Diplomacy", bonus: { faith: 8, culture: 3, diplomacy: 2 } },
+    { id: 'karnak', name: 'Karnak Temple Complex', cost: 45, era: 'Ancient', minYear: -2000, effects: "+10 Faith, +4 Culture", bonus: { faith: 10, culture: 4 } },
     { id: 'gardens', name: 'Hanging Gardens', cost: 40, era: 'Ancient', minYear: -1300, effects: "+10 Capacity, +6 Culture", bonus: { culture: 6, populationCapacity: 10 } },
     { id: 'wall', name: 'Great Wall', cost: 50, era: 'Ancient', minYear: -1300, effects: "+15 Martial, +3 Culture", bonus: { defense: 15, culture: 3 } },
     { id: 'ishtar', name: 'Gates of Ishtar', cost: 45, era: 'Ancient', minYear: -1300, effects: "+12 Martial, +4 Culture", bonus: { martial: 10, defense: 2, culture: 4 } },
     { id: 'colossus', name: 'Colossus', cost: 35, era: 'Ancient', minYear: -1300, effects: "+3 Diplomacy, +4 Culture, +2 Martial", bonus: { diplomacy: 3, culture: 4, martial: 2 } },
+    { id: 'olympic', name: 'Olympic Games', cost: 35, era: 'Ancient', minYear: -776, effects: "+5 Culture, +3 Diplomacy, +2 Martial", bonus: { culture: 5, diplomacy: 3, martial: 2 } },
 
     // CLASSICAL ERA
-    { id: 'colosseum', name: 'Colosseum', cost: 40, era: 'Classical', minYear: -300, effects: "+5 Martial, +8 Culture", bonus: { martial: 5, culture: 8 } },
-    { id: 'library', name: 'Great Library', cost: 45, era: 'Classical', minYear: -300, effects: "+15 Science, +5 Culture", bonus: { science: 15, culture: 5 } },
-    { id: 'lighthouse', name: 'Great Lighthouse', cost: 35, era: 'Classical', minYear: -300, effects: "+3 Diplomacy, +5 Culture, +2 Industry", bonus: { culture: 5, diplomacy: 3, production: 2 } },
+    { id: 'parthenon', name: 'Parthenon', cost: 45, era: 'Classical', minYear: -500, effects: "+10 Culture, +5 Diplomacy, +3 Faith", bonus: { culture: 10, diplomacy: 5, faith: 3 } },
     { id: 'zeus', name: 'Statue of Zeus', cost: 40, era: 'Classical', minYear: -500, effects: "+10 Martial, +5 Faith", bonus: { martial: 10, faith: 5 } },
     { id: 'oracle', name: 'Oracle', cost: 35, era: 'Classical', minYear: -500, effects: "+10 Culture, +3 Faith", bonus: { culture: 10, faith: 3 } },
     { id: 'artemis', name: 'Temple of Artemis', cost: 35, era: 'Classical', minYear: -500, effects: "+6 Martial, +4 Culture, +2 Faith", bonus: { martial: 4, defense: 2, culture: 4, faith: 2 } },
+    { id: 'mausoleum', name: 'Mausoleum of Halicarnassus', cost: 40, era: 'Classical', minYear: -350, effects: "+6 Culture, +3 Faith, +2 Diplomacy", bonus: { culture: 6, faith: 3, diplomacy: 2 } },
+    { id: 'colosseum', name: 'Colosseum', cost: 40, era: 'Classical', minYear: -300, effects: "+5 Martial, +8 Culture", bonus: { martial: 5, culture: 8 } },
+    { id: 'library', name: 'Great Library', cost: 45, era: 'Classical', minYear: -300, effects: "+15 Science, +5 Culture", bonus: { science: 15, culture: 5 } },
+    { id: 'lighthouse', name: 'Great Lighthouse', cost: 35, era: 'Classical', minYear: -300, effects: "+3 Diplomacy, +5 Culture, +2 Industry", bonus: { culture: 5, diplomacy: 3, production: 2 } },
+    { id: 'petra', name: 'Petra', cost: 40, era: 'Classical', minYear: -100, effects: "+8 Industry, +5 Culture, +3 Diplomacy", bonus: { production: 8, culture: 5, diplomacy: 3 } },
 
     // LATE ERA (expensive but era-defining)
+    { id: 'pantheon', name: 'Pantheon', cost: 40, era: 'Late', minYear: 125, effects: "+8 Faith, +5 Culture, +2 Science", bonus: { faith: 8, culture: 5, science: 2 } },
     { id: 'hagia', name: 'Hagia Sophia', cost: 50, era: 'Late', minYear: 44, effects: "+12 Faith, +8 Culture, +2 Diplomacy", bonus: { faith: 12, culture: 8, diplomacy: 2 } },
     { id: 'justinian', name: 'Walls of Justinian', cost: 50, era: 'Late', minYear: 44, effects: "+25 Martial, +3 Culture (impenetrable fortifications)", bonus: { defense: 25, culture: 3 } },
     { id: 'hippodrome', name: 'Hippodrome', cost: 40, era: 'Late', minYear: 44, effects: "+10 Culture, +2 Diplomacy, +3 Industry (games & trade)", bonus: { culture: 10, diplomacy: 2, production: 3 } },

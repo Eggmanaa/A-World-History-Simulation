@@ -114,9 +114,9 @@ export const AdjacentCivs: React.FC<AdjacentCivsProps> = ({
             {/* Expanded Details */}
             {isExpanded && (
               <div className="px-3 py-3 bg-slate-900/50 border-t border-slate-700 space-y-3">
-                {/* Strength Indicator */}
+                {/* Martial Indicator */}
                 <div className="space-y-1">
-                  <p className="text-xs text-slate-400 font-medium">Relative Strength</p>
+                  <p className="text-xs text-slate-400 font-medium">Relative Martial</p>
                   <div className="w-full bg-slate-700 rounded h-2">
                     <div
                       className="bg-slate-500 h-2 rounded"
@@ -170,7 +170,7 @@ export const AdjacentCivs: React.FC<AdjacentCivsProps> = ({
                   )}
                 </div>
 
-                {/* Military Strength */}
+                {/* Military Martial */}
                 <div className="flex items-center gap-2 px-3 py-2 rounded bg-slate-800/50 border border-slate-700">
                   <Shield className="w-4 h-4 text-slate-400 flex-shrink-0" />
                   <span className="text-xs text-slate-400">

@@ -96,8 +96,8 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
   {
     id: 'trade',
     name: 'Trade',
-    shortDesc: '+2 to one stat',
-    fullDesc: 'Establish trade with an adjacent civilization. Mutual trade gives +2 to one agreed stat (Production Pool, Science, Culture, or Faith). One-sided trade gives +1 Production Pool.',
+    shortDesc: '+3 to one stat',
+    fullDesc: 'Establish trade with an adjacent civilization. Mutual trade gives +3 to one agreed stat (Production Pool, Science, Culture, or Faith). One-sided trade gives +2 Production Pool.',
     icon: 'Handshake',
     category: 'diplomacy',
     color: 'text-amber-400',
@@ -514,10 +514,10 @@ export function executeAction(
       // flow, picking Trade consumes the player's single strategic action for
       // the turn — that IS the cost. Taxing Industry on top would double-
       // charge and discourage diplomatic play, which this classroom sim wants
-      // to encourage. The gain is modest (+2 to one chosen stat, or +1
+      // to encourage. The gain is modest (+3 to one chosen stat, or +2
       // production for a one-sided trade) which keeps Trade balanced against
       // Research (+science), Develop (+culture), etc.
-      // For NPC trade: +2 to chosen stat or +1 production if one-sided
+      // For NPC trade: +3 to chosen stat or +2 production if one-sided
       const tradeTarget = params?.targetId;
       const tradeStat = params?.stat || 'productionPool';
       const isMutual = params?.mutual ?? false;

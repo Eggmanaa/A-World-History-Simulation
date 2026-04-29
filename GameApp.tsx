@@ -3724,7 +3724,7 @@ const App: React.FC = () => {
                     <div>
                       <div className="font-bold text-lg">Warpath</div>
                       <div className="text-sm text-slate-300">
-                        +50% Martial Strength
+                        +50% Martial
                       </div>
                     </div>
                   </button>
@@ -5292,7 +5292,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="flex justify-between items-center text-[11px] text-slate-400">
                           <span>
-                            Strength <b className="text-red-300">{n.martial + n.defense}</b>
+                            Martial <b className="text-red-300">{n.martial + n.defense}</b>
                             <span className="mx-1 text-slate-600">·</span>
                             Faith <b className="text-amber-300">{n.faith}</b>
                           </span>

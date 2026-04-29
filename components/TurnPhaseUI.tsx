@@ -659,7 +659,7 @@ const ActionSelectionPanel: React.FC<{
                           : 'border-slate-600 bg-slate-700 text-slate-300 hover:border-slate-400'
                       }`}
                     >
-                      {target.name} (Strength: {target.martial + target.defense})
+                      {target.name} (Martial: {target.martial + target.defense})
                     </button>
                   ))}
                 </div>
