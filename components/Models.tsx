@@ -835,15 +835,15 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
   const color = resolveTerrainColor(terrain, climate);
 
   // Height variation based on terrain
-  let height = 0;
+  let height = 0.5;
   let yPos = 0;
   let terrainColor = color;
 
   if (terrain === TerrainType.Mountain) {
-    height = 0.25;
+    height = 0.5;
     yPos = 0.35;
   } else if (terrain === TerrainType.HighMountain) {
-    height = 0.35; // Much taller
+    height = 0.75; // Much taller
     yPos = 0.75;
   } else if (terrain === TerrainType.Ocean) {
     yPos = -0.15;
