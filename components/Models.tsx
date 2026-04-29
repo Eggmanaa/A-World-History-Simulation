@@ -840,11 +840,17 @@ export const HexTile3D: React.FC<HexTileProps> = ({ x, z, terrain, onClick, isHo
   let terrainColor = color;
 
   if (terrain === TerrainType.Mountain) {
-    height = 0.5;
-    yPos = 0.35;
+    // Mountain bottom plane matches Plains (-0.125) so the tile is not
+    // floating in the air. Height 1.0 (rendered 0.5) gives a +0.25 rise
+    // above Plains top. yPos = -0.125 + (height * geometry-h) / 2
+    //                       = -0.125 + (1.0 * 0.5) / 2 = 0.125
+    height = 1.0;
+    yPos = 0.125;
   } else if (terrain === TerrainType.HighMountain) {
-    height = 0.75; // Much taller
-    yPos = 0.75;
+    // HighMountain: same alignment, but rises +0.5 above Plains top.
+    // height 1.5 -> rendered 0.75 -> half 0.375 -> yPos = 0.25
+    height = 1.5;
+    yPos = 0.25;
   } else if (terrain === TerrainType.Ocean) {
     yPos = -0.15;
     height = 0.4;
