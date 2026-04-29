@@ -50,6 +50,9 @@ export interface TileData {
   z: number;
   terrain: TerrainType;
   building: BuildingType;
+  // When `building === Wonder`, this carries the WONDERS_LIST.id of
+  // the wonder placed here so MapScene can render the right model.
+  wonderId?: string;
   isHovered?: boolean;
   // Optional per-tile climate override. Normally tiles inherit the civ's
   // climate, but future map-blending could make tiles on the far edge take

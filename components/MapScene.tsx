@@ -87,7 +87,7 @@ const RenderedTile = React.memo(function RenderedTile({
       {tile.building === BuildingType.Temple && <Temple3D position={[tile.x, 0, tile.z]} />}
       {tile.building === BuildingType.Wall && <Wall3D position={[tile.x, 0, tile.z]} />}
       {tile.building === BuildingType.Amphitheatre && <Amphitheatre3D position={[tile.x, 0, tile.z]} />}
-      {tile.building === BuildingType.Wonder && <Wonder3D position={[tile.x, 0, tile.z]} />}
+      {tile.building === BuildingType.Wonder && <Wonder3D position={[tile.x, 0, tile.z]} wonderId={tile.wonderId} />}
       {tile.building === BuildingType.ArchimedesTower && <ArchimedesTower3D position={[tile.x, 0, tile.z]} />}
     </group>
   );

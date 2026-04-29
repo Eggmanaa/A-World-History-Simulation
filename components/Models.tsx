@@ -1702,39 +1702,323 @@ export const Barracks3D: React.FC<{ position: [number, number, number] }> = ({ p
     );
 };
 
-export const Wonder3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
+// ============================================================
+// WONDER VARIANTS — each wonder renders a distinct silhouette that
+// hints at the real building while keeping the low-poly board-game art
+// style. Falls back to a default ziggurat for unmapped ids.
+// ============================================================
+
+const WonderPyramid: React.FC = () => (
+    // Egyptian Great Pyramid: a single tall four-sided pyramid.
+    <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+        <mesh position={[0, 0.4, 0]} castShadow receiveShadow rotation={[0, Math.PI / 4, 0]}>
+            <coneGeometry args={[0.55, 0.85, 4]} />
+            <meshStandardMaterial color="#d6b87a" roughness={0.85} flatShading />
+        </mesh>
+        <mesh position={[0, 0.025, 0]} receiveShadow>
+            <boxGeometry args={[0.95, 0.05, 0.95]} />
+            <meshStandardMaterial color="#c8a967" roughness={0.9} flatShading />
+        </mesh>
+    </group>
+);
+
+const WonderStonehenge: React.FC = () => {
+    // Ring of upright stones with lintels. 6 standing stones in a circle.
+    const radius = 0.32;
+    const stones = Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return [Math.cos(a) * radius, 0.3, Math.sin(a) * radius] as [number, number, number];
+    });
     return (
-        <group position={position}>
-            {/* Ziggurat - stepped pyramid */}
-            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-                {/* Base step */}
-                <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-                    <boxGeometry args={[0.9, 0.15, 0.9]} />
-                    <meshStandardMaterial color="#CD853F" roughness={0.8} flatShading />
+        <group position={[0, 0.3, 0]}>
+            {stones.map((p, i) => (
+                <mesh key={i} position={p} castShadow>
+                    <boxGeometry args={[0.12, 0.45, 0.08]} />
+                    <meshStandardMaterial color="#7a7570" roughness={0.95} flatShading />
                 </mesh>
-                {/* Middle step */}
-                <mesh position={[0, 0.25, 0]} castShadow>
-                    <boxGeometry args={[0.7, 0.15, 0.7]} />
-                    <meshStandardMaterial color="#DEB887" roughness={0.8} flatShading />
-                </mesh>
-                {/* Top step */}
-                <mesh position={[0, 0.42, 0]} castShadow>
-                    <boxGeometry args={[0.5, 0.15, 0.5]} />
-                    <meshStandardMaterial color="#D2B48C" roughness={0.75} flatShading />
-                </mesh>
-                {/* Shrine on top */}
-                <mesh position={[0, 0.58, 0]} castShadow>
-                    <boxGeometry args={[0.25, 0.18, 0.25]} />
-                    <meshStandardMaterial color="#B8860B" roughness={0.4} metalness={0.3} flatShading />
-                </mesh>
-                {/* Gold ornament */}
-                <mesh position={[0, 0.72, 0]} castShadow>
-                    <sphereGeometry args={[0.08, 8, 8]} />
-                    <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.5} />
-                </mesh>
-            </group>
+            ))}
+            {/* Top lintel ring */}
+            <mesh position={[0, 0.55, 0]} castShadow>
+                <torusGeometry args={[0.32, 0.05, 6, 18]} />
+                <meshStandardMaterial color="#88837e" roughness={0.95} flatShading />
+            </mesh>
         </group>
     );
+};
+
+const WonderParthenon: React.FC = () => {
+    // Greek temple: stylobate + ring of columns + triangular pediment.
+    return (
+        <group position={[0, 0.3, 0]}>
+            {/* Stepped stylobate */}
+            <mesh position={[0, 0.05, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.9, 0.1, 0.6]} />
+                <meshStandardMaterial color="#e8e4dc" roughness={0.85} flatShading />
+            </mesh>
+            {/* Columns: 6 across the front (and back), 2 visible on each side */}
+            {[-0.32, -0.19, -0.06, 0.06, 0.19, 0.32].flatMap((x) => [-0.22, 0.22].map((z) => [x, 0.32, z] as [number, number, number])).map((p, i) => (
+                <mesh key={i} position={p} castShadow>
+                    <cylinderGeometry args={[0.04, 0.04, 0.45, 8]} />
+                    <meshStandardMaterial color="#f0ece4" roughness={0.8} flatShading />
+                </mesh>
+            ))}
+            {/* Architrave */}
+            <mesh position={[0, 0.58, 0]} castShadow>
+                <boxGeometry args={[0.85, 0.08, 0.55]} />
+                <meshStandardMaterial color="#dcd6c8" roughness={0.85} flatShading />
+            </mesh>
+            {/* Triangular pediment (front) */}
+            <mesh position={[0, 0.7, 0.275]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+                <coneGeometry args={[0.42, 0.18, 3]} />
+                <meshStandardMaterial color="#d8d2c4" roughness={0.85} flatShading />
+            </mesh>
+        </group>
+    );
+};
+
+const WonderHangingGardens: React.FC = () => {
+    // Tiered terraced gardens with trees.
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.85, 0.16, 0.85]} />
+                <meshStandardMaterial color="#9b7c4e" roughness={0.9} flatShading />
+            </mesh>
+            <mesh position={[0, 0.28, 0]} castShadow>
+                <boxGeometry args={[0.65, 0.14, 0.65]} />
+                <meshStandardMaterial color="#a8855a" roughness={0.9} flatShading />
+            </mesh>
+            <mesh position={[0, 0.45, 0]} castShadow>
+                <boxGeometry args={[0.45, 0.12, 0.45]} />
+                <meshStandardMaterial color="#b8946a" roughness={0.9} flatShading />
+            </mesh>
+            {/* Trees on each tier */}
+            {[[-0.3, 0.2, 0.3], [0.3, 0.2, -0.3], [-0.2, 0.4, 0], [0.2, 0.4, 0.2], [0, 0.55, 0]].map((p, i) => (
+                <mesh key={i} position={p as [number, number, number]} castShadow>
+                    <coneGeometry args={[0.07, 0.18, 6]} />
+                    <meshStandardMaterial color="#3f7a3a" roughness={0.9} flatShading />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+
+const WonderGreatWall: React.FC = () => {
+    // Long battlement wall with crenellations.
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.95, 0.32, 0.22]} />
+                <meshStandardMaterial color="#8a7e72" roughness={0.92} flatShading />
+            </mesh>
+            {/* Crenellations along the top */}
+            {[-0.36, -0.18, 0, 0.18, 0.36].map((x, i) => (
+                <mesh key={i} position={[x, 0.4, 0]} castShadow>
+                    <boxGeometry args={[0.1, 0.12, 0.22]} />
+                    <meshStandardMaterial color="#9a8e82" roughness={0.92} flatShading />
+                </mesh>
+            ))}
+            {/* End watchtowers */}
+            <mesh position={[-0.45, 0.32, 0]} castShadow>
+                <boxGeometry args={[0.18, 0.55, 0.28]} />
+                <meshStandardMaterial color="#7a6f64" roughness={0.92} flatShading />
+            </mesh>
+            <mesh position={[0.45, 0.32, 0]} castShadow>
+                <boxGeometry args={[0.18, 0.55, 0.28]} />
+                <meshStandardMaterial color="#7a6f64" roughness={0.92} flatShading />
+            </mesh>
+        </group>
+    );
+};
+
+const WonderColosseum: React.FC = () => {
+    // Round tiered amphitheater.
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.12, 0]} castShadow receiveShadow>
+                <cylinderGeometry args={[0.45, 0.5, 0.24, 16]} />
+                <meshStandardMaterial color="#c9a878" roughness={0.85} flatShading />
+            </mesh>
+            <mesh position={[0, 0.32, 0]} castShadow>
+                <cylinderGeometry args={[0.4, 0.45, 0.18, 16]} />
+                <meshStandardMaterial color="#d8b988" roughness={0.85} flatShading />
+            </mesh>
+            <mesh position={[0, 0.48, 0]} castShadow>
+                <cylinderGeometry args={[0.34, 0.4, 0.14, 16]} />
+                <meshStandardMaterial color="#e2c898" roughness={0.85} flatShading />
+            </mesh>
+            {/* Open center */}
+            <mesh position={[0, 0.58, 0]}>
+                <cylinderGeometry args={[0.22, 0.22, 0.05, 16]} />
+                <meshStandardMaterial color="#5a4536" roughness={0.95} flatShading />
+            </mesh>
+        </group>
+    );
+};
+
+const WonderLighthouse: React.FC = () => {
+    // Tapered tower with a flame at the top.
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.5, 0.2, 0.5]} />
+                <meshStandardMaterial color="#b8a890" roughness={0.85} flatShading />
+            </mesh>
+            <mesh position={[0, 0.42, 0]} castShadow>
+                <cylinderGeometry args={[0.16, 0.22, 0.5, 8]} />
+                <meshStandardMaterial color="#d2c2a8" roughness={0.8} flatShading />
+            </mesh>
+            <mesh position={[0, 0.78, 0]} castShadow>
+                <cylinderGeometry args={[0.13, 0.16, 0.18, 8]} />
+                <meshStandardMaterial color="#a89878" roughness={0.85} flatShading />
+            </mesh>
+            <mesh position={[0, 0.94, 0]} castShadow>
+                <coneGeometry args={[0.1, 0.18, 8]} />
+                <meshStandardMaterial color="#ff8a3a" emissive="#ff5a1a" emissiveIntensity={0.8} roughness={0.4} flatShading />
+            </mesh>
+        </group>
+    );
+};
+
+const WonderColossus: React.FC = () => {
+    // Tall standing figure on a pedestal.
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
+                <cylinderGeometry args={[0.3, 0.35, 0.2, 12]} />
+                <meshStandardMaterial color="#7c6a52" roughness={0.9} flatShading />
+            </mesh>
+            <mesh position={[0, 0.42, 0]} castShadow>
+                <boxGeometry args={[0.18, 0.45, 0.12]} />
+                <meshStandardMaterial color="#c79850" roughness={0.4} metalness={0.5} flatShading />
+            </mesh>
+            <mesh position={[0, 0.75, 0]} castShadow>
+                <sphereGeometry args={[0.1, 10, 10]} />
+                <meshStandardMaterial color="#c79850" roughness={0.4} metalness={0.5} flatShading />
+            </mesh>
+            {/* Crown spikes */}
+            <mesh position={[0, 0.88, 0]} castShadow>
+                <coneGeometry args={[0.07, 0.12, 8]} />
+                <meshStandardMaterial color="#e0b266" roughness={0.4} metalness={0.6} flatShading />
+            </mesh>
+        </group>
+    );
+};
+
+const WonderGreatLibrary: React.FC = () => {
+    // Domed scholarly building with steps.
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.06, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.85, 0.12, 0.7]} />
+                <meshStandardMaterial color="#d8c8a4" roughness={0.85} flatShading />
+            </mesh>
+            <mesh position={[0, 0.24, 0]} castShadow>
+                <boxGeometry args={[0.7, 0.24, 0.55]} />
+                <meshStandardMaterial color="#e8d8b4" roughness={0.85} flatShading />
+            </mesh>
+            {/* Dome */}
+            <mesh position={[0, 0.5, 0]} castShadow>
+                <sphereGeometry args={[0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshStandardMaterial color="#a8c8d8" roughness={0.5} flatShading />
+            </mesh>
+            {/* Front columns */}
+            {[-0.2, 0, 0.2].map((x, i) => (
+                <mesh key={i} position={[x, 0.3, 0.3]} castShadow>
+                    <cylinderGeometry args={[0.03, 0.03, 0.3, 8]} />
+                    <meshStandardMaterial color="#f0e8d4" roughness={0.85} flatShading />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+
+const WonderOracle: React.FC = () => {
+    // Round columned temple (tholos).
+    return (
+        <group position={[0, 0.3, 0]}>
+            <mesh position={[0, 0.05, 0]} castShadow receiveShadow>
+                <cylinderGeometry args={[0.4, 0.42, 0.1, 16]} />
+                <meshStandardMaterial color="#e0d8c4" roughness={0.85} flatShading />
+            </mesh>
+            {/* Ring of columns */}
+            {Array.from({ length: 8 }, (_, i) => {
+                const a = (i / 8) * Math.PI * 2;
+                const r = 0.32;
+                return (
+                    <mesh key={i} position={[Math.cos(a) * r, 0.32, Math.sin(a) * r]} castShadow>
+                        <cylinderGeometry args={[0.035, 0.035, 0.4, 8]} />
+                        <meshStandardMaterial color="#f0ece0" roughness={0.85} flatShading />
+                    </mesh>
+                );
+            })}
+            {/* Conical roof */}
+            <mesh position={[0, 0.66, 0]} castShadow>
+                <coneGeometry args={[0.4, 0.22, 16]} />
+                <meshStandardMaterial color="#b89878" roughness={0.85} flatShading />
+            </mesh>
+        </group>
+    );
+};
+
+const WonderZiggurat: React.FC = () => (
+    // Original ziggurat — used for ziggurat-of-ur and as default fallback.
+    <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+        <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.9, 0.15, 0.9]} />
+            <meshStandardMaterial color="#CD853F" roughness={0.8} flatShading />
+        </mesh>
+        <mesh position={[0, 0.25, 0]} castShadow>
+            <boxGeometry args={[0.7, 0.15, 0.7]} />
+            <meshStandardMaterial color="#DEB887" roughness={0.8} flatShading />
+        </mesh>
+        <mesh position={[0, 0.42, 0]} castShadow>
+            <boxGeometry args={[0.5, 0.15, 0.5]} />
+            <meshStandardMaterial color="#D2B48C" roughness={0.75} flatShading />
+        </mesh>
+        <mesh position={[0, 0.58, 0]} castShadow>
+            <boxGeometry args={[0.25, 0.18, 0.25]} />
+            <meshStandardMaterial color="#B8860B" roughness={0.4} metalness={0.3} flatShading />
+        </mesh>
+        <mesh position={[0, 0.72, 0]} castShadow>
+            <sphereGeometry args={[0.08, 8, 8]} />
+            <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.5} />
+        </mesh>
+    </group>
+);
+
+export const Wonder3D: React.FC<{
+    position: [number, number, number];
+    wonderId?: string;
+}> = ({ position, wonderId }) => {
+    let inner: React.ReactNode;
+    switch (wonderId) {
+        case 'pyramids':       inner = <WonderPyramid />;       break;
+        case 'stonehenge':     inner = <WonderStonehenge />;    break;
+        case 'parthenon':      inner = <WonderParthenon />;     break;
+        case 'gardens':        inner = <WonderHangingGardens />; break;
+        case 'wall':           inner = <WonderGreatWall />;     break;
+        case 'colosseum':      inner = <WonderColosseum />;     break;
+        case 'lighthouse':     inner = <WonderLighthouse />;    break;
+        case 'colossus':       inner = <WonderColossus />;      break;
+        case 'library':        inner = <WonderGreatLibrary />;  break;
+        case 'oracle':         inner = <WonderOracle />;        break;
+        case 'artemis':        inner = <WonderParthenon />;     break;  // Greek temple
+        case 'mausoleum':      inner = <WonderParthenon />;     break;  // Tomb-temple
+        case 'pantheon':       inner = <WonderGreatLibrary />;  break;  // Domed
+        case 'hagia':          inner = <WonderGreatLibrary />;  break;  // Domed
+        case 'olympic':        inner = <WonderColosseum />;     break;  // Stadium
+        case 'hippodrome':     inner = <WonderColosseum />;     break;  // Stadium
+        case 'karnak':         inner = <WonderParthenon />;     break;  // Columns
+        case 'great_bath':     inner = <WonderHangingGardens />; break;  // Tiered
+        case 'petra':          inner = <WonderParthenon />;     break;  // Carved temple
+        case 'zeus':           inner = <WonderColossus />;      break;  // Statue
+        case 'ishtar':         inner = <WonderGreatWall />;     break;  // Gate
+        case 'justinian':      inner = <WonderGreatWall />;     break;  // Walls
+        case 'ziggurat':
+        default:               inner = <WonderZiggurat />;      break;
+    }
+    return <group position={position}>{inner}</group>;
 };
 
 export const ArchimedesTower3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {

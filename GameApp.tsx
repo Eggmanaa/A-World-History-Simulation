@@ -29,6 +29,8 @@ import {
   Trophy,
   Info,
   Clock,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import MapScene from "./components/MapScene";
 import TurnPhaseUI, { ConquestRewardPanel, RespawnPanel } from "./components/TurnPhaseUI";
@@ -858,6 +860,10 @@ const App: React.FC = () => {
   const [showPanel, setShowPanel] = useState<"stats" | "actions" | null>(null);
   // Make-up turn picker - set to a turnNumber to open the modal.
   const [makeupTurn, setMakeupTurn] = useState<number | null>(null);
+  // Collapsible side panels (#5). Default expanded; user can collapse
+  // to give the map more room, especially on smaller screens.
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
 
   // --- SYNC HOOKS ---
   const { syncState, submitTurn } = useGameSync(
@@ -2741,7 +2747,12 @@ const App: React.FC = () => {
       // In single-player, apply immediately. Return to build_phase so the
       // player can continue building or click End Turn to resolve.
       const newTiles = [...tiles];
-      newTiles[tileIndex] = { ...tile, building: BuildingType.Wonder };
+      newTiles[tileIndex] = {
+        ...tile,
+        building: BuildingType.Wonder,
+        // Stash the wonder id so MapScene can render the right model (#89).
+        wonderId: civilization.builtWonderId || undefined,
+      };
       setTiles(newTiles);
       setGameState((prev) => {
         // Stash a resolution snapshot for when End Turn fires.
@@ -4041,8 +4052,17 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 flex overflow-hidden pb-[56px] md:pb-0">
-        {/* LEFT STATS - Hidden on mobile */}
-        <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 flex-col z-10 shadow-xl">
+        {/* LEFT STATS - Hidden on mobile. Collapsible (#5). */}
+        <aside className={`hidden md:flex bg-slate-900 border-r border-slate-800 flex-col z-10 shadow-xl transition-all duration-200 ${leftPanelCollapsed ? "w-10" : "w-64"}`}>
+          <button
+            onClick={() => setLeftPanelCollapsed(v => !v)}
+            className="self-end mr-1 mt-1 p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
+            title={leftPanelCollapsed ? "Expand stats panel" : "Collapse stats panel"}
+            aria-label={leftPanelCollapsed ? "Expand stats panel" : "Collapse stats panel"}
+          >
+            {leftPanelCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+          {!leftPanelCollapsed && <>
           <div className="p-4 border-b border-slate-800 space-y-4">
             <div>
               <button
@@ -4382,6 +4402,7 @@ const App: React.FC = () => {
               })()}
             </div>
           </div>
+          </>}
         </aside>
 
         {/* MAP */}
@@ -4415,8 +4436,17 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        {/* RIGHT TABBED PANEL - Hidden on mobile */}
-        <aside className="hidden md:flex w-80 bg-slate-900 border-l border-slate-800 flex-col z-10 shadow-xl">
+        {/* RIGHT TABBED PANEL - Hidden on mobile. Collapsible (#5). */}
+        <aside className={`hidden md:flex bg-slate-900 border-l border-slate-800 flex-col z-10 shadow-xl transition-all duration-200 ${rightPanelCollapsed ? "w-10" : "w-80"}`}>
+          <button
+            onClick={() => setRightPanelCollapsed(v => !v)}
+            className="self-start ml-1 mt-1 p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
+            title={rightPanelCollapsed ? "Expand action panel" : "Collapse action panel"}
+            aria-label={rightPanelCollapsed ? "Expand action panel" : "Collapse action panel"}
+          >
+            {rightPanelCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
+          {!rightPanelCollapsed && <>
           <div className="flex border-b border-slate-800">
             {["build", "science", "culture", "world", "wonders", "religion", "war", "diplomacy", "scoreboard"].map((tab) => (
               <button
@@ -5559,6 +5589,7 @@ const App: React.FC = () => {
               </div>
             ))}
           </div>
+          </>}
         </aside>
 
         {/* MOBILE BOTTOM BAR - visible only on small screens */}
