@@ -138,13 +138,13 @@ const checkSavingThrow = (
 // civ-selection grid and any future trait-info surfaces.
 const TRAIT_DESCRIPTIONS: Record<string, string> = {
   Strength: 'Martial × 2. Doubles your unified combat stat for both attack rolls and defense rolls.',
-  Industrious: 'Industry × 2 and Production Income × 2. Workshops, farms, and per-turn production all flow twice as fast.',
+  Industrious: 'Production Income × 2. Twice the per-turn fill on your Production Pool, so buildings come online faster.',
   Intelligence: 'Science Yield × 2 (minimum 2). Each Research action contributes twice the science.',
   Wisdom: 'Faith Yield × 2 (minimum 2). Each Worship action contributes twice the faith.',
   Creativity: 'Culture Yield × 2 (minimum 2). Each Develop action contributes twice the culture.',
-  Health: '+3 Fertility (faster house placement per turn) and +3 Population Capacity. Demographic powerhouse.',
-  Beauty: '+2 Diplomacy and +1 Culture Yield. Soft power: easier to form alliances, steady cultural drip.',
-  Faith: '+2 Faith Yield (stacks with Wisdom) and +1 Diplomacy. Devotion-coded civs lean into religion as soft power.',
+  Health: '+1 Fertility (one extra placement per turn) and +5 Population Capacity. Demographic powerhouse with a bigger ceiling.',
+  Beauty: '+2 Diplomacy and +2 Culture Yield. Soft power: alliances easier to form, steady cultural drip.',
+  Faith: '+3 Faith Yield (stacks with Wisdom) and +1 Diplomacy. Devotion-coded civs lean into religion as soft power.',
 };
 
 // Rich stat explanations used by the left-sidebar click-to-expand info panels.
@@ -554,7 +554,12 @@ const calculateStats = (
   // running totals.
   if (civData.traits.includes("Strength")) martial *= 2;
   if (civData.traits.includes("Industrious")) {
-    industry *= 2;
+    // Apr 2026 balance pass: dropped the Industry *2 multiplier here
+    // (was double-stacking with Production Income *2 making this trait
+    // strictly stronger than every other A-tier doubler). Industry's
+    // primary role in V2 is as a fallback when productionIncome is
+    // missing, so doubling productionIncome alone preserves the
+    // 'Industrious civ produces twice as much' feel.
     productionIncome *= 2;
   }
   if (civData.traits.includes("Intelligence")) {
@@ -567,19 +572,25 @@ const calculateStats = (
     cultureYield = Math.max(2, cultureYield * 2);
   }
   if (civData.traits.includes("Health")) {
-    fertility += 3;        // growth specialists
-    populationCapacity += 3; // healthier civs can house more
+    // Apr 2026 balance pass: nerfed Fertility +3 -> +1 because under
+    // the new fertility-as-placement-budget mechanic, +3 Fertility
+    // meant +3 free house placements EVERY TURN (5 vs base 2 = 2.5x).
+    // Health civs were placing 50+ extra houses by mid-game. Bumped
+    // Capacity from +3 -> +5 so the trait still reads as 'demographic
+    // powerhouse' — they can house bigger populations long-term.
+    fertility += 1;          // modest growth advantage
+    populationCapacity += 5; // bigger demographic ceiling
   }
   if (civData.traits.includes("Beauty")) {
     diplomacy += 2;
-    cultureYield += 1;     // fashion/art radiate soft power per turn
+    cultureYield += 2;     // bumped from +1 in Apr 2026 parity pass
   }
   if (civData.traits.includes("Faith")) {
     // Faith trait: devotion-coded civs get a passive Faith Yield bump
     // (additive on top of Wisdom's multiplier) plus +1 Diplomacy from
-    // religious soft power. Earlier the trait was dead code — Israel
-    // and Aksum carry it but it had no effect.
-    faithYield += 2;
+    // religious soft power. Bumped from +2 to +3 in Apr 2026 to match
+    // the A-tier baseline of the yield-doubler traits.
+    faithYield += 3;
     diplomacy += 1;
   }
 

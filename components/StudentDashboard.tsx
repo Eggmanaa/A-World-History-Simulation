@@ -8,13 +8,13 @@ import type { CivPreset } from '../types';
 // pills throughout the student dashboard. Mirrors GameApp's lookup.
 const TRAIT_DESCRIPTIONS: Record<string, string> = {
   Strength: 'Martial × 2. Doubles your unified combat stat for both attack rolls and defense rolls.',
-  Industrious: 'Industry × 2 and Production Income × 2.',
+  Industrious: 'Production Income × 2. Twice the per-turn Production Pool fill.',
   Intelligence: 'Science Yield × 2 (minimum 2). Each Research action contributes twice the science.',
   Wisdom: 'Faith Yield × 2 (minimum 2). Each Worship action contributes twice the faith.',
   Creativity: 'Culture Yield × 2 (minimum 2). Each Develop action contributes twice the culture.',
-  Health: '+3 Fertility (faster house placement per turn) and +3 Population Capacity.',
-  Beauty: '+2 Diplomacy and +1 Culture Yield. Soft-power civilization.',
-  Faith: '+2 Faith Yield (stacks with Wisdom) and +1 Diplomacy. Religious soft power.',
+  Health: '+1 Fertility, +5 Population Capacity. Demographic powerhouse.',
+  Beauty: '+2 Diplomacy and +2 Culture Yield. Soft-power civilization.',
+  Faith: '+3 Faith Yield (stacks with Wisdom) and +1 Diplomacy. Religious soft power.',
 };
 
 interface StudentInfo {
