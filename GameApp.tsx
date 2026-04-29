@@ -1147,14 +1147,17 @@ const App: React.FC = () => {
       hasStarted: true,
       selectedAction: BuildingType.House,
       placingWonder: false,
-      isPlacingStarterHouses: true,
+      // No pre-Turn-1 starter placement. Civs begin with 0 houses; the
+      // first turn's Grow action (+2 placements / +2 Pop / +1 Cap) is
+      // how a player founds their settlements on Turn 1 itself.
+      isPlacingStarterHouses: false,
       pendingTurnChoice: false,
       currentEventPopup: null,
       messages: [
-        `Place 2 founding houses on the map to settle ${preset.name}. Then click Turn 1 to begin.`,
         `Welcome to ${preset.name}. The year is 8500 BCE.`,
+        `Click “Advance Turn” to start Turn 1. Pick “Grow” as your first action to place 2 founding houses, +2 Population, +1 Capacity.`,
         `Grow your Population: every 4 Pop = +1 Martial, every 5 Pop = +1 Industry.`,
-        `Turn flow: Events → pick 1 Action → Build Phase → End Turn.`,
+        `Turn flow: Income → Events → pick 1 Action → Build Phase → End Turn.`,
       ],
       // Neighbors are now real adjacent civilizations pulled from the
       // adjacency map + civ presets. Attacking "Mesopotamia" means fighting
@@ -1182,7 +1185,9 @@ const App: React.FC = () => {
       selectedWorldChoice: null,
       selectedPlayerAction: null,
       turnResolution: null,
-      actionPlacements: 2,
+      // 0 placements at game start — the player gets placements only
+      // when an action that grants them (Grow, Wonder, build_phase) fires.
+      actionPlacements: 0,
       turnNumber: 0,
       conqueredTerritories: 0,
       pendingRespawn: false,
