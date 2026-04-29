@@ -3398,7 +3398,18 @@ const App: React.FC = () => {
   const { civilization: civ } = gameState;
 
   return (
-    <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative">
+    <div
+      // Mobile fix (Apr 2026): use dvh (dynamic viewport height) instead of
+      // h-screen so iOS Safari URL-bar show/hide doesn't clip the header.
+      // Safe-area top padding handles iOS notches. Keep overflow-hidden so
+      // the 3D map and side panels don't accidentally cause body scroll.
+      className="w-full bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-200 relative"
+      style={{
+        height: '100dvh',
+        minHeight: '100dvh',
+        paddingTop: 'env(safe-area-inset-top, 0)',
+      }}
+    >
       {/* First-time-player onboarding overlay. Self-gating on localStorage. */}
       <OnboardingOverlay />
       {/* Missed-turn banner — shows when student has outstanding make-ups. */}
@@ -3958,7 +3969,7 @@ const App: React.FC = () => {
             >
               <Play size={16} fill="currentColor" />
               <span className="hidden sm:inline">Turn</span>{" "}
-              {(gameState.turnNumber || 0) + 1}/24
+              {Math.max(1, gameState.turnNumber || 1)}/24
             </button>
           ) : (
             <div
@@ -3980,13 +3991,13 @@ const App: React.FC = () => {
                 <>
                   <Play size={16} fill="currentColor" />
                   <span className="hidden sm:inline">Turn</span>{" "}
-                  {gameState.turnNumber || 0}/24
+                  {Math.max(1, gameState.turnNumber || 1)}/24
                 </>
               ) : (
                 <>
                   <Clock size={16} />
                   <span className="hidden sm:inline">Turn</span>{" "}
-                  {gameState.turnNumber || 0}/24
+                  {Math.max(1, gameState.turnNumber || 1)}/24
                 </>
               )}
             </div>

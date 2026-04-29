@@ -1039,16 +1039,18 @@ export function calculateIncome(state: GameState): {
     messages.push(`+${amphiCount} Culture (passive from ${amphiCount} ${amphiCount === 1 ? 'Amphitheatre' : 'Amphitheatres'}).`);
   }
 
-  // 5. RAID ROLL — 1-in-6 chance each turn that barbarians/raiders strike.
-  // Raid power is scaled to the turn number (stronger as the game advances)
-  // so early-game civs aren't obliterated but late-game civs still feel
-  // threatened. Defense mitigates losses; a high-Defense civ can shrug off
-  // the raid entirely. This is what makes Defense a live stat: walls,
-  // Fortify, Cultural Prestige, Masonry tech all matter here.
-  if (Math.floor(Math.random() * 6) === 0) {
-    const turnScale = Math.max(1, Math.min(10, state.turnNumber || 1));
+  // 5. RAID ROLL — 1-in-5 chance each turn that barbarians/raiders strike.
+  // Apr 2026 tuning pass: bumped frequency 1/6 -> 1/5 and base power
+  // (added +2 floor) so peaceful civs that ignore Martial actually feel
+  // pressure. Raid power scales to turn number so early-game civs aren't
+  // obliterated but late-game civs without defense lose serious pop.
+  // Defense (walls + fortify + martial) still mitigates, but won't shrug
+  // off raids automatically anymore.
+  if (Math.floor(Math.random() * 5) === 0) {
+    const turnScale = Math.max(1, Math.min(15, state.turnNumber || 1));
     const raidRoll = Math.floor(Math.random() * 6) + 1;
-    const raidPower = Math.floor(turnScale * 0.8) + raidRoll; // ~2-14 by late game
+    // Base 2 floor + 1.0 * turnScale + d6: T1 = 4-9, T10 = 13-18, T20 = 18-23
+    const raidPower = 2 + Math.floor(turnScale * 1.0) + raidRoll;
     // Wall dice + Fortify dice make the raid check meaningful: each Wall
     // tile (up to 3) adds a d8, and each Fortify stack adds a d8. These are
     // the levers students have for "I'm a peaceful civ but I want to
