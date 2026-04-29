@@ -3261,20 +3261,24 @@ const App: React.FC = () => {
 
   if (!gameState.hasStarted) {
     return (
-      <div className="h-screen w-full bg-slate-900 flex items-center justify-center p-10 font-sans">
-        <div className="max-w-5xl w-full bg-slate-800 rounded-2xl shadow-2xl p-8 border border-slate-700 flex flex-col max-h-full overflow-hidden">
-          <h1 className="text-4xl font-bold text-orange-500 mb-2 flex items-center gap-3">
+      // Use min-h-screen + overflow-y-auto on the BODY so the panel can
+      // grow vertically and the page scrolls. The previous max-h-full
+      // overflow-hidden clipped every card's bottom line on mid-size
+      // screens.
+      <div className="min-h-screen w-full bg-slate-900 flex items-start sm:items-center justify-center p-4 sm:p-6 lg:p-10 font-sans overflow-y-auto">
+        <div className="max-w-6xl w-full bg-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 lg:p-8 border border-slate-700 flex flex-col">
+          <h1 className="text-3xl sm:text-4xl font-bold text-orange-500 mb-2 flex items-center gap-3">
             <History size={40} /> Ancient World Simulation
           </h1>
-          <p className="text-slate-400 mb-8">
+          <p className="text-slate-400 mb-6 sm:mb-8">
             Choose a civilization to lead from the first settlements through the Fall of Rome.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {CIV_PRESETS.map((civ) => (
               <button
                 key={civ.id}
                 onClick={() => startGame(civ)}
-                className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600 hover:border-orange-500/50 rounded-xl text-left transition-all overflow-hidden flex flex-col"
+                className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600 hover:border-orange-500/50 rounded-xl text-left transition-all flex flex-col min-h-[180px]"
               >
                 <div
                   className="h-1 w-full"
