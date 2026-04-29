@@ -3519,6 +3519,12 @@ const App: React.FC = () => {
         <ThresholdModal
           popup={thresholdQueue[0]}
           onClose={() => setThresholdQueue((q) => q.slice(1))}
+          onAction={(kind) => {
+            // Route milestone CTAs to the right modal opener (#9).
+            if (kind === 'science') setShowTechTree(true);
+            else if (kind === 'faith') setShowReligionTree(true);
+            else if (kind === 'culture') setShowCultureTree(true);
+          }}
         />
       )}
 

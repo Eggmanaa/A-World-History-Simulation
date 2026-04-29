@@ -190,7 +190,12 @@ export const AttackOutcomeModal: React.FC<{
 export const ThresholdModal: React.FC<{
   popup: ThresholdPopup;
   onClose: () => void;
-}> = ({ popup, onClose }) => {
+  // Apr 2026: optional action handler invoked when the user clicks the
+  // CTA button. Lets the parent route 'Open Tech Tree' / 'Open Religion
+  // Tree' / 'Claim cultural bonus' to the right modal opener instead of
+  // just dismissing.
+  onAction?: (kind: ThresholdPopup['kind']) => void;
+}> = ({ popup, onClose, onAction }) => {
   const tintByKind: Record<ThresholdPopup['kind'], string> = {
     science: 'from-cyan-900/40 to-cyan-950/40 border-cyan-500/50',
     culture: 'from-purple-900/40 to-purple-950/40 border-purple-500/50',
@@ -230,7 +235,13 @@ export const ThresholdModal: React.FC<{
         )}
 
         <button
-          onClick={onClose}
+          onClick={() => {
+            // Route the click to parent's onAction so CTAs like
+            // 'Open Tech Tree' / 'Open Religion Tree' / 'Claim cultural
+            // bonus' actually open the right modal. Always close after.
+            onAction?.(popup.kind);
+            onClose();
+          }}
           className="w-full py-3 bg-slate-100 hover:bg-white text-slate-900 font-bold rounded-lg transition-colors"
         >
           {popup.cta || 'Acknowledge'}
