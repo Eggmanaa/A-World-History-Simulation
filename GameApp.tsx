@@ -132,6 +132,21 @@ const checkSavingThrow = (
   return false;
 };
 
+// Trait descriptions used as native title-attribute tooltips on the civ-
+// selection grid. Each entry pairs the trait name with a one-liner
+// describing exactly what mechanical effect it grants. Drives both the
+// civ-selection grid and any future trait-info surfaces.
+const TRAIT_DESCRIPTIONS: Record<string, string> = {
+  Strength: 'Martial × 2. Doubles your unified combat stat for both attack rolls and defense rolls.',
+  Industrious: 'Industry × 2 and Production Income × 2. Workshops, farms, and per-turn production all flow twice as fast.',
+  Intelligence: 'Science Yield × 2 (minimum 2). Each Research action contributes twice the science.',
+  Wisdom: 'Faith Yield × 2 (minimum 2). Each Worship action contributes twice the faith.',
+  Creativity: 'Culture Yield × 2 (minimum 2). Each Develop action contributes twice the culture.',
+  Health: '+3 Fertility (faster house placement per turn) and +3 Population Capacity. Demographic powerhouse.',
+  Beauty: '+2 Diplomacy and +1 Culture Yield. Soft power: easier to form alliances, steady cultural drip.',
+  Faith: '+2 Faith Yield (stacks with Wisdom) and +1 Diplomacy. Devotion-coded civs lean into religion as soft power.',
+};
+
 // Rich stat explanations used by the left-sidebar click-to-expand info panels.
 // Each entry is keyed by the info ID and supplies a title, detailed body, and
 // optional list of "how to raise it" bullets. Kept as data (not JSX) so it's
@@ -558,6 +573,14 @@ const calculateStats = (
   if (civData.traits.includes("Beauty")) {
     diplomacy += 2;
     cultureYield += 1;     // fashion/art radiate soft power per turn
+  }
+  if (civData.traits.includes("Faith")) {
+    // Faith trait: devotion-coded civs get a passive Faith Yield bump
+    // (additive on top of Wisdom's multiplier) plus +1 Diplomacy from
+    // religious soft power. Earlier the trait was dead code — Israel
+    // and Aksum carry it but it had no effect.
+    faithYield += 2;
+    diplomacy += 1;
   }
 
   // Apply Tech Tree Branch Picks — STRUCTURAL stats only.
@@ -3299,7 +3322,8 @@ const App: React.FC = () => {
                     {civ.traits.map((t) => (
                       <span
                         key={t}
-                        className="text-xs font-mono bg-slate-800 text-orange-300 px-2 py-1 rounded border border-slate-600"
+                        title={TRAIT_DESCRIPTIONS[t] || t}
+                        className="text-xs font-mono bg-slate-800 text-orange-300 px-2 py-1 rounded border border-slate-600 cursor-help"
                       >
                         {t}
                       </span>

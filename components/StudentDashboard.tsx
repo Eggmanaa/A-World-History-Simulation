@@ -4,6 +4,19 @@ import { Play, Lock, Loader } from 'lucide-react';
 import { CIV_PRESETS } from '../constants';
 import type { CivPreset } from '../types';
 
+// Trait descriptions used as native title-attribute tooltips on trait
+// pills throughout the student dashboard. Mirrors GameApp's lookup.
+const TRAIT_DESCRIPTIONS: Record<string, string> = {
+  Strength: 'Martial × 2. Doubles your unified combat stat for both attack rolls and defense rolls.',
+  Industrious: 'Industry × 2 and Production Income × 2.',
+  Intelligence: 'Science Yield × 2 (minimum 2). Each Research action contributes twice the science.',
+  Wisdom: 'Faith Yield × 2 (minimum 2). Each Worship action contributes twice the faith.',
+  Creativity: 'Culture Yield × 2 (minimum 2). Each Develop action contributes twice the culture.',
+  Health: '+3 Fertility (faster house placement per turn) and +3 Population Capacity.',
+  Beauty: '+2 Diplomacy and +1 Culture Yield. Soft-power civilization.',
+  Faith: '+2 Faith Yield (stacks with Wisdom) and +1 Diplomacy. Religious soft power.',
+};
+
 interface StudentInfo {
   id: string;
   name: string;
@@ -209,7 +222,8 @@ export const StudentDashboard: React.FC = () => {
                         {selectedCiv.traits.map((trait) => (
                           <span
                             key={trait}
-                            className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-200"
+                            title={TRAIT_DESCRIPTIONS[trait] || trait}
+                            className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-200 cursor-help"
                           >
                             {trait}
                           </span>
@@ -337,7 +351,8 @@ export const StudentDashboard: React.FC = () => {
                         {civ.traits.map((trait) => (
                           <span
                             key={trait}
-                            className="text-xs px-2 py-1 rounded"
+                            title={TRAIT_DESCRIPTIONS[trait] || trait}
+                            className="text-xs px-2 py-1 rounded cursor-help"
                             style={{
                               backgroundColor: `${civ.colors.base}30`,
                               color: civ.colors.base,
