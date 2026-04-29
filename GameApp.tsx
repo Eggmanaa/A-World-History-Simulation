@@ -3468,6 +3468,17 @@ const App: React.FC = () => {
         onCivEventAcknowledge={handleCivEventAck}
         onBuildPhaseSelect={handleBuildPhaseSelect}
         onBuildPhaseSkip={handleBuildPhaseSkip}
+        onBuildPhaseCloseToMap={() => {
+          // Close build modal so player can click on map tiles for house placement.
+          // Place them in 'idle' so the existing handleTileClick gate accepts placement
+          // (idle + actionPlacements > 0 + turnNumber >= 1).
+          setGameState((prev) => ({ ...prev, turnPhase: 'idle' as TurnPhaseV2 }));
+        }}
+        onBuildPhaseWonderInvest={(wonderId, amount) => {
+          // Reuse the wonder action handler so investment + Project Leadership
+          // bonus + completion path all work identically.
+          handleActionSelect('wonder' as PlayerActionType, { wonderId, amount });
+        }}
         onActionSelect={handleActionSelect}
         onResolutionDismiss={handleResolutionDismiss}
         turnResolution={v2TurnResolution}

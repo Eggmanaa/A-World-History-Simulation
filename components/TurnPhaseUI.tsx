@@ -10,7 +10,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Coins, Globe, MapPin, Zap, ChevronRight, Check, X, Sword, Shield,
   ShieldPlus, FlaskConical, Palette, Scroll, Sprout, Hammer, Handshake,
-  Landmark, Clock, Star, Crown, TrendingUp, AlertTriangle, BookOpen, Quote,
+  Landmark, Clock, Star, Crown, TrendingUp, AlertTriangle, BookOpen, Quote, Home,
 } from 'lucide-react';
 import type {
   GameState, WorldEvent, CivSpecificEvent, PlayerActionType,
@@ -42,6 +42,9 @@ interface TurnPhaseUIProps {
   onCivEventAcknowledge: () => void;
   onBuildPhaseSelect: (buildingType: string) => void;
   onBuildPhaseSkip: () => void;
+  // #3: build menu Houses/Wonders tabs.
+  onBuildPhaseCloseToMap?: () => void;
+  onBuildPhaseWonderInvest?: (wonderId: string, amount: number) => void;
   onActionSelect: (action: PlayerActionType, params?: any) => void;
   onResolutionDismiss: () => void;
   turnResolution: TurnResolution | null;
@@ -453,9 +456,32 @@ const BuildPhasePanel: React.FC<{
   gameState: GameState;
   onBuildSelect: (buildingType: string) => void;
   onSkip: () => void;
-}> = ({ gameState, onBuildSelect, onSkip }) => {
+  // Apr 2026 (#3): allow Houses and Wonders sub-flows directly from the
+  // build phase. onCloseToMap dismisses this modal so the player can
+  // click on map tiles to place houses (placement budget already lives
+  // on gameState.actionPlacements). onWonderInvest spends production
+  // pool toward a chosen wonder; mirrors the Wonder action's payload.
+  onCloseToMap?: () => void;
+  onWonderInvest?: (wonderId: string, amount: number) => void;
+}> = ({ gameState, onBuildSelect, onSkip, onCloseToMap, onWonderInvest }) => {
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
+  // #3: tabbed build menu — Buildings (existing) / Houses / Wonders.
+  const [buildTab, setBuildTab] = useState<'buildings' | 'houses' | 'wonders'>('buildings');
+  // Wonders sub-state.
+  const [pickedWonder, setPickedWonder] = useState<string | null>(null);
+  const [wonderInvest, setWonderInvest] = useState<number>(0);
+
   const pool = gameState.civilization.stats.productionPool || 0;
+  const housePlacements = gameState.actionPlacements || 0;
+  const fertility = gameState.civilization.stats.fertility || 0;
+  const housesBuiltThisTurn = gameState.civilization.stats.housesBuiltThisTurn || 0;
+  const wip = gameState.civilization.wonderInProgress;
+  const builtId = gameState.civilization.builtWonderId;
+  const availableWonders = WONDERS_LIST.filter((w) => {
+    if (builtId === w.id) return false;
+    if ((gameState.year || 0) < w.minYear) return false;
+    return true;
+  });
 
   const buildings = [
     { type: 'Farm', cost: 5, effect: '+1 Capacity, +1 Production Income', icon: Sprout, color: 'text-green-400' },
@@ -484,34 +510,204 @@ const BuildPhasePanel: React.FC<{
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-          {buildings.map(b => {
-            const canAfford = pool >= b.cost;
-            const isSelected = selectedBuilding === b.type;
-            const IconComp = b.icon;
-            return (
-              <button
-                key={b.type}
-                onClick={() => canAfford && setSelectedBuilding(b.type)}
-                disabled={!canAfford}
-                className={`text-left rounded-lg p-3 border-2 transition-all ${
-                  isSelected
-                    ? 'border-yellow-500 bg-yellow-500/15 ring-2 ring-yellow-500/30'
-                    : canAfford
-                      ? 'border-slate-600 bg-slate-700/30 hover:border-slate-400 hover:bg-slate-700/50'
-                      : 'border-slate-700 bg-slate-800/50 opacity-40 cursor-not-allowed'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <IconComp className={`w-5 h-5 ${isSelected ? 'text-yellow-400' : b.color}`} />
-                  <span className={`text-sm font-bold ${isSelected ? 'text-yellow-300' : 'text-white'}`}>{b.type}</span>
-                </div>
-                <p className="text-[10px] text-slate-400">{b.effect}</p>
-                <p className={`text-xs font-bold mt-1 ${canAfford ? 'text-yellow-400' : 'text-slate-600'}`}>{b.cost} Prod</p>
-              </button>
-            );
-          })}
+        {/* Tab strip: Buildings / Houses / Wonders */}
+        <div className="flex gap-1 mb-4 border-b border-slate-700">
+          {([
+            { id: 'buildings' as const, label: 'Buildings', icon: Hammer },
+            { id: 'houses' as const, label: 'Houses', icon: Home },
+            { id: 'wonders' as const, label: 'Wonders', icon: Landmark },
+          ]).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setBuildTab(id)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${
+                buildTab === id
+                  ? 'bg-slate-700 text-yellow-300 border-b-2 border-yellow-500'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
         </div>
+
+        {buildTab === 'buildings' && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              {buildings.map(b => {
+                const canAfford = pool >= b.cost;
+                const isSelected = selectedBuilding === b.type;
+                const IconComp = b.icon;
+                return (
+                  <button
+                    key={b.type}
+                    onClick={() => canAfford && setSelectedBuilding(b.type)}
+                    disabled={!canAfford}
+                    className={`text-left rounded-lg p-3 border-2 transition-all ${
+                      isSelected
+                        ? 'border-yellow-500 bg-yellow-500/15 ring-2 ring-yellow-500/30'
+                        : canAfford
+                          ? 'border-slate-600 bg-slate-700/30 hover:border-slate-400 hover:bg-slate-700/50'
+                          : 'border-slate-700 bg-slate-800/50 opacity-40 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <IconComp className={`w-5 h-5 ${isSelected ? 'text-yellow-400' : b.color}`} />
+                      <span className={`text-sm font-bold ${isSelected ? 'text-yellow-300' : 'text-white'}`}>{b.type}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">{b.effect}</p>
+                    <p className={`text-xs font-bold mt-1 ${canAfford ? 'text-yellow-400' : 'text-slate-600'}`}>{b.cost} Prod</p>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {buildTab === 'houses' && (
+          <div className="bg-slate-700/40 rounded-lg p-4 mb-4 border border-slate-600">
+            <div className="flex items-center gap-3 mb-3">
+              <Home className="w-6 h-6 text-orange-400" />
+              <div>
+                <h3 className="text-base font-bold text-orange-300">Place Houses</h3>
+                <p className="text-xs text-slate-400">
+                  Houses are placed on the map directly, not built from the Production Pool.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+              <div className="bg-slate-800 rounded p-2">
+                <span className="text-slate-400">Placements remaining:</span>{' '}
+                <b className="text-white">{housePlacements}</b>
+              </div>
+              <div className="bg-slate-800 rounded p-2">
+                <span className="text-slate-400">Fertility cap this turn:</span>{' '}
+                <b className="text-white">{housesBuiltThisTurn} / {fertility}</b>
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              Each turn your civ gets <b>{fertility}</b> placements from natural growth (Fertility).
+              Pick the <b>Grow</b> action for +2 more. Click any open land tile on the map to place a house.
+            </p>
+            <button
+              onClick={onCloseToMap}
+              disabled={housePlacements <= 0}
+              className={`w-full py-3 rounded-lg font-semibold text-sm transition-colors ${
+                housePlacements > 0
+                  ? 'bg-orange-600 hover:bg-orange-500 text-white'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              {housePlacements > 0 ? 'Close menu to place on map' : 'No placements available'}
+            </button>
+          </div>
+        )}
+
+        {buildTab === 'wonders' && (
+          <div className="mb-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Landmark className="w-6 h-6 text-amber-400" />
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-amber-300">Invest in a Wonder</h3>
+                <p className="text-xs text-slate-400">
+                  Spend Production Pool. Project Leadership: every 1 Production = 1.5 wonder progress.
+                </p>
+              </div>
+              <div className="bg-slate-700 px-3 py-1 rounded text-xs">
+                Pool <b className="text-yellow-400 ml-1">{pool}</b>
+              </div>
+            </div>
+
+            {availableWonders.length === 0 ? (
+              <p className="text-sm text-slate-400 italic p-3 bg-slate-800 rounded">
+                No wonders available yet. Wonders unlock by year (e.g. Pyramids 3000 BCE).
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {availableWonders.map((w) => {
+                  const inProgress = wip && wip.wonderId === w.id;
+                  const invested = inProgress ? wip!.invested : 0;
+                  const remaining = Math.max(0, w.cost - invested);
+                  const isPicked = pickedWonder === w.id;
+                  return (
+                    <button
+                      key={w.id}
+                      onClick={() => {
+                        setPickedWonder(w.id);
+                        const defaultAmt = Math.max(1, Math.min(pool, remaining));
+                        setWonderInvest(defaultAmt);
+                      }}
+                      className={`w-full text-left text-xs p-2 rounded border transition-colors ${
+                        isPicked
+                          ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                          : inProgress
+                            ? 'border-amber-500/40 bg-amber-500/5 text-amber-100 hover:border-amber-400'
+                            : 'border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-400'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="font-bold">{w.name}</span>
+                        {inProgress ? (
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/30 border border-amber-500/60 text-amber-200 px-2 py-0.5 rounded shrink-0">
+                            {invested}/{w.cost}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Cost: {w.cost} | Era: {w.era}</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{w.effects}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {pickedWonder && (() => {
+              const w = WONDERS_LIST.find((x) => x.id === pickedWonder);
+              if (!w) return null;
+              const invested = wip && wip.wonderId === w.id ? wip.invested : 0;
+              const sliderMax = Math.max(1, pool);
+              const amt = Math.min(wonderInvest || 1, sliderMax);
+              const contribution = Math.floor(amt * 1.5);
+              const projectedTotal = invested + contribution;
+              return (
+                <div className="mt-3 bg-slate-700/60 rounded-lg p-3 border border-amber-500/30">
+                  <p className="text-xs text-slate-300 mb-2">
+                    Investing in <b className="text-amber-300">{w.name}</b>{invested > 0 ? ` (${invested}/${w.cost} so far)` : ''}.
+                  </p>
+                  <input
+                    type="range"
+                    min={1}
+                    max={sliderMax}
+                    value={amt}
+                    onChange={(e) => setWonderInvest(parseInt(e.target.value))}
+                    className="w-full mb-2"
+                  />
+                  <p className="text-xs text-center text-amber-200 font-semibold">
+                    {amt} Production → {contribution} progress (+{contribution - amt} Project Leadership)
+                  </p>
+                  <p className="text-[10px] text-center text-slate-400 mb-2">
+                    After this: {Math.min(projectedTotal, w.cost)}/{w.cost}
+                    {projectedTotal >= w.cost ? ' — completes!' : ''}
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (onWonderInvest && pickedWonder) {
+                        onWonderInvest(pickedWonder, amt);
+                        setPickedWonder(null);
+                        setWonderInvest(0);
+                      }
+                    }}
+                    className="w-full py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold rounded text-sm transition-colors"
+                  >
+                    Invest {amt} Production
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button
@@ -520,17 +716,19 @@ const BuildPhasePanel: React.FC<{
           >
             End Turn <ChevronRight className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => selectedBuilding && onBuildSelect(selectedBuilding)}
-            disabled={!selectedBuilding}
-            className={`flex-1 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 text-sm ${
-              selectedBuilding
-                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-            }`}
-          >
-            Build {selectedBuilding || '...'} <ChevronRight className="w-4 h-4" />
-          </button>
+          {buildTab === 'buildings' && (
+            <button
+              onClick={() => selectedBuilding && onBuildSelect(selectedBuilding)}
+              disabled={!selectedBuilding}
+              className={`flex-1 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 text-sm ${
+                selectedBuilding
+                  ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              Build {selectedBuilding || '...'} <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -980,6 +1178,8 @@ const TurnPhaseUI: React.FC<TurnPhaseUIProps> = ({
   onCivEventAcknowledge,
   onBuildPhaseSelect,
   onBuildPhaseSkip,
+  onBuildPhaseCloseToMap,
+  onBuildPhaseWonderInvest,
   onActionSelect,
   onResolutionDismiss,
   turnResolution,
@@ -1081,6 +1281,8 @@ const TurnPhaseUI: React.FC<TurnPhaseUIProps> = ({
           gameState={gameState}
           onBuildSelect={onBuildPhaseSelect}
           onSkip={onBuildPhaseSkip}
+          onCloseToMap={onBuildPhaseCloseToMap}
+          onWonderInvest={onBuildPhaseWonderInvest}
         />
       );
 
