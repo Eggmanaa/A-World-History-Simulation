@@ -38,16 +38,39 @@ export const StudentDashboard: React.FC = () => {
   const [selectedCivForGame, setSelectedCivForGame] = useState<string | null>(null);
   const [takenCivs, setTakenCivs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  // MP fix: surface dashboard / civ-selection failures so silent bugs
+  // stop hiding behind a blank screen.
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
         const token = localStorage.getItem('token');
-        const periodId = localStorage.getItem('periodId');
+        let periodId = localStorage.getItem('periodId');
 
         if (!token) {
           navigate('/student/login');
           return;
+        }
+
+        // MP fix: if periodId is missing from localStorage (e.g. tab was
+        // restored after the join page), recover it from /me/session.
+        if (!periodId) {
+          try {
+            const meRes = await fetch('/api/game/student/me/session', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (meRes.ok) {
+              const meData = await meRes.json() as any;
+              const pid = meData.periodId ?? meData.period_id;
+              if (pid !== undefined && pid !== null) {
+                periodId = String(pid);
+                localStorage.setItem('periodId', periodId);
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to recover periodId from /me/session:', e);
+          }
         }
 
         // Fetch student dashboard data
@@ -55,7 +78,10 @@ export const StudentDashboard: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!dashResponse.ok) throw new Error('Failed to fetch dashboard');
+        if (!dashResponse.ok) {
+          const errBody = await dashResponse.json().catch(() => ({})) as any;
+          throw new Error(errBody.message || `Dashboard fetch failed (HTTP ${dashResponse.status})`);
+        }
         const dashData = await dashResponse.json() as any;
 
         // Fetch taken civilizations from game state
@@ -89,6 +115,7 @@ export const StudentDashboard: React.FC = () => {
         setTakenCivs(takenCivsSet);
       } catch (error) {
         console.error('Failed to fetch dashboard:', error);
+        setErrorMsg(error instanceof Error ? error.message : 'Failed to load dashboard');
       } finally {
         setLoading(false);
       }
@@ -113,7 +140,13 @@ export const StudentDashboard: React.FC = () => {
         body: JSON.stringify({ civilizationId: civId }),
       });
 
-      if (!response.ok) throw new Error('Failed to select civilization');
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({})) as any;
+        const msg = errBody.message || `Civ selection failed (HTTP ${response.status})`;
+        setErrorMsg(msg);
+        throw new Error(msg);
+      }
+
 
       setSelectedCivForGame(civId);
       setStudentInfo((prev) =>
@@ -143,14 +176,45 @@ export const StudentDashboard: React.FC = () => {
 
   if (!studentInfo) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="text-center">
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
           <h2 className="text-2xl font-bold text-red-400 mb-2">Unable to load dashboard</h2>
-          <p className="text-slate-400">Please try logging in again.</p>
+          {errorMsg && (
+            <p className="text-amber-300 text-sm bg-amber-900/30 border border-amber-500/40 rounded p-3 mb-3">
+              {errorMsg}
+            </p>
+          )}
+          <p className="text-slate-400 mb-4">Please try logging in again.</p>
+          <button
+            onClick={() => {
+              localStorage.removeItem('token');
+              localStorage.removeItem('periodId');
+              localStorage.removeItem('user_role');
+              navigate('/student/login');
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded font-semibold"
+          >
+            Back to Login
+          </button>
         </div>
       </div>
     );
   }
+
+  // Show inline error banner if civ selection failed but dashboard loaded.
+  const errorBanner = errorMsg ? (
+    <div className="max-w-4xl mx-auto mb-4">
+      <div className="bg-red-900/30 border border-red-500/40 text-red-200 rounded p-3 flex items-start justify-between gap-3">
+        <span className="text-sm">{errorMsg}</span>
+        <button
+          onClick={() => setErrorMsg(null)}
+          className="text-xs text-red-300 hover:text-white"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   const selectedCiv = studentInfo.selectedCivId
     ? CIV_PRESETS.find((c) => c.id === studentInfo.selectedCivId)

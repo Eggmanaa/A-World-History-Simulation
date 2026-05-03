@@ -189,15 +189,28 @@ authRouter.post('/student/join', async (c) => {
     
     // Insert student
     const result = await c.env.DB.prepare(`
-      INSERT INTO students (name, username, password_hash, teacher_id, period_id) 
+      INSERT INTO students (name, username, password_hash, teacher_id, period_id)
       VALUES (?, ?, ?, ?, ?)
     `).bind(name, username, hashedPassword, invite.teacher_id, invite.period_id).run();
-    
-    // Decrement invite code uses
+
+    // MP fix #2: seed an empty game_sessions row so the student's first
+    // civ-selection POST UPDATEs an existing row instead of expecting one.
+    // Without this row the dashboard silently fails on civ pick.
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO game_sessions (student_id, civilization_id, progress_data)
+        VALUES (?, ?, ?)
+      `).bind(result.meta.last_row_id, '', '{}').run();
+    } catch (e) {
+      console.warn('game_sessions seed insert failed (non-fatal):', e);
+    }
+
+    // Decrement invite code uses (atomic-ish: re-check uses_remaining > 0
+    // so a race between two concurrent joins can't push it negative).
     await c.env.DB.prepare(
-      'UPDATE invite_codes SET uses_remaining = uses_remaining - 1 WHERE id = ?'
+      'UPDATE invite_codes SET uses_remaining = uses_remaining - 1 WHERE id = ? AND uses_remaining > 0'
     ).bind(invite.id).run();
-    
+
     // Generate token
     const token = await generateToken({
       id: result.meta.last_row_id,
@@ -205,14 +218,18 @@ authRouter.post('/student/join', async (c) => {
       role: 'student',
       periodId: invite.period_id
     }, getJWTSecret(c.env));
-    
+
+    // MP fix #1: include periodId at the response root so the client can
+    // localStorage.setItem('periodId', data.periodId) without digging
+    // into data.user.periodId.
     return c.json({
       message: 'Successfully joined!',
       token,
-      user: { 
-        id: result.meta.last_row_id, 
-        name, 
-        username, 
+      periodId: invite.period_id,
+      user: {
+        id: result.meta.last_row_id,
+        name,
+        username,
         role: 'student',
         periodId: invite.period_id
       }

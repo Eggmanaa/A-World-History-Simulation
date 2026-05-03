@@ -35,10 +35,13 @@ const StudentJoin: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: formData.username,
-          name: formData.name,
+          username: formData.username.trim(),
+          name: formData.name.trim(),
           password: formData.password,
-          inviteCode: formData.inviteCode
+          // MP fix #3: normalize invite code (trim + uppercase) so a code
+          // typed with stray spaces or mixed case still matches the
+          // server's uppercase lookup.
+          inviteCode: formData.inviteCode.trim().toUpperCase()
         })
       });
 
@@ -47,8 +50,12 @@ const StudentJoin: React.FC = () => {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user_role', 'student');
-        if (data.periodId) {
-          localStorage.setItem('periodId', data.periodId);
+        // MP fix #1 (client side): server now returns periodId at the root
+        // of the response. Coerce to string for localStorage so the
+        // string/number boundary doesn't trip up later API calls.
+        const pid = data.periodId ?? data.user?.periodId;
+        if (pid !== undefined && pid !== null) {
+          localStorage.setItem('periodId', String(pid));
         }
         navigate('/student/dashboard');
       } else {
