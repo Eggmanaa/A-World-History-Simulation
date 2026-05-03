@@ -20,24 +20,51 @@ teacherRouter.get('/dashboard', async (c) => {
     
     // Get periods
     const periods = await c.env.DB.prepare(`
-      SELECT id, name, start_year, end_year, current_year, created_at 
-      FROM periods 
-      WHERE teacher_id = ? 
+      SELECT id, name, start_year, end_year, current_year, created_at
+      FROM periods
+      WHERE teacher_id = ?
       ORDER BY created_at DESC
     `).bind(user.id).all();
-    
-    // Get student count per period
-    const studentCounts = await c.env.DB.prepare(`
-      SELECT period_id, COUNT(*) as count 
-      FROM students 
-      WHERE teacher_id = ? 
-      GROUP BY period_id
-    `).bind(user.id).all();
-    
+
+    // Apr 2026 MP fix: pull each student row + their selected civilization
+    // (via game_sessions) so the client can render the period roster
+    // and gate Start Game on actual roster size. Without this the
+    // /dashboard endpoint returned only group-by counts which the
+    // TeacherDashboard client wasn't reading, so 'Joined Students (0)'
+    // showed even when students had successfully joined.
+    const allStudents = await c.env.DB.prepare(`
+      SELECT s.id, s.name, s.period_id, gs.civilization_id
+      FROM students s
+      LEFT JOIN game_sessions gs ON gs.student_id = s.id
+      WHERE s.teacher_id = ?
+      ORDER BY s.id ASC
+    `).bind(user.id).all<any>();
+
+    const studentsByPeriod: Record<string, any[]> = {};
+    for (const row of (allStudents?.results || [])) {
+      const pid = String(row.period_id);
+      if (!studentsByPeriod[pid]) studentsByPeriod[pid] = [];
+      studentsByPeriod[pid].push({
+        id: row.id,
+        name: row.name,
+        civId: row.civilization_id || '',
+      });
+    }
+
+    // Augment each period with its joinedStudents roster + isActive flag.
+    const periodsList = (periods.results || []).map((p: any) => ({
+      ...p,
+      joinedStudents: studentsByPeriod[String(p.id)] || [],
+      isActive: false,
+    }));
+
     return c.json({
       teacher,
-      periods: periods.results,
-      studentCounts: studentCounts.results
+      periods: periodsList,
+      studentCounts: Object.entries(studentsByPeriod).map(([pid, list]) => ({
+        period_id: Number(pid),
+        count: list.length,
+      })),
     });
     
   } catch (error) {

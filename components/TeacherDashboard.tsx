@@ -186,8 +186,8 @@ const TeacherDashboard: React.FC = () => {
   };
 
   const startGame = async () => {
-    if (!activePeriod || (activePeriod.joinedStudents || []).length < 2) {
-      setError('At least 2 students must have joined');
+    if (!activePeriod || (activePeriod.joinedStudents || []).length < 1) {
+      setError('At least 1 student must have joined');
       return;
     }
     setLoading(true);
@@ -634,7 +634,7 @@ const TeacherDashboard: React.FC = () => {
                   disabled={loading || (activePeriod.joinedStudents || []).length < 2}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:bg-slate-600 disabled:text-slate-400 text-white font-bold py-4 px-6 rounded-lg transition-colors text-lg"
                 >
-                  {loading ? 'Starting...' : `Start Game (${(activePeriod.joinedStudents || []).length}/2+ Students)`}
+                  {loading ? 'Starting...' : `Start Game (${(activePeriod.joinedStudents || []).length}/1+ Students)`}
                 </button>
               </div>
             )}
