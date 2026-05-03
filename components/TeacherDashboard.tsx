@@ -11,7 +11,9 @@ import {
   ChevronDown,
   ChevronUp,
   Dice6,
+  Download,
 } from 'lucide-react';
+import { exportClassReportPdf } from '../endgamePdf';
 import { CIV_PRESETS, TIMELINE_EVENTS } from '../constants';
 import type { CivPreset, TimelineEvent } from '../types';
 
@@ -1079,9 +1081,9 @@ const TeacherDashboard: React.FC = () => {
         {/* Panel 5: Scoreboard */}
         {activeTab === 'scoreboard' && activePeriod && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <h2 className="text-2xl font-bold text-amber-400">Scoreboard</h2>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-center">
                 {(['composite', 'military', 'culture', 'population'] as const).map((view) => (
                   <button
                     key={view}
@@ -1095,6 +1097,38 @@ const TeacherDashboard: React.FC = () => {
                     {view === 'composite' ? 'Overall' : view}
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    if (!activePeriod) return;
+                    if (studentCivs.length === 0) {
+                      setError('No civilizations to include in the report.');
+                      return;
+                    }
+                    const ok = exportClassReportPdf({
+                      periodName: activePeriod.name,
+                      currentYear: activePeriod.currentYear,
+                      students: studentCivs.map((c: any) => ({
+                        studentName: c.studentName,
+                        civName: c.civName,
+                        civColor: c.civColor,
+                        traits: c.traits,
+                        stats: c.stats,
+                        wondersBuilt: c.wondersBuilt,
+                        builtWonderId: c.builtWonderId,
+                        missedTurns: c.missedTurns,
+                        totalAttacksInitiated: c.totalAttacksInitiated,
+                      })),
+                    });
+                    if (!ok) {
+                      setError('Pop-up blocked. Allow pop-ups for this site to print the class report.');
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                  title="Open a printable class report (use 'Save as PDF' from the print dialog)."
+                >
+                  <Download size={16} />
+                  Class Report
+                </button>
               </div>
             </div>
 

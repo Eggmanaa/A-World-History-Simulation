@@ -222,3 +222,207 @@ export function exportEndgameSummaryPdf(input: EndgamePdfInput): boolean {
   }, 300);
   return true;
 }
+
+// ============================================================
+// CLASS REPORT (#48) - multi-student bundle
+// ============================================================
+// Same browser-print philosophy as the per-student summary, but lays out
+// a class roster as a printable document. Cover page shows class summary
+// stats (median / mean of final stats, top performers per category),
+// followed by a row per student with their civ, traits, final stats,
+// wonders, and any flags (missed turns, conquered, etc.).
+
+export interface ClassReportStudent {
+  studentName: string;
+  civName: string;
+  civColor?: string;
+  traits?: string[];
+  stats?: {
+    martial?: number;
+    faith?: number;
+    industry?: number;
+    science?: number;
+    culture?: number;
+    population?: number;
+  };
+  wondersBuilt?: { id: string; name: string }[];
+  builtWonderId?: string | null;
+  missedTurns?: number;
+  totalAttacksInitiated?: number;
+  finalScoreTotal?: number;
+}
+
+export interface ClassReportInput {
+  periodName: string;
+  teacherName?: string;
+  currentYear?: number;
+  students: ClassReportStudent[];
+}
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function meanOf(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  return nums.reduce((s, n) => s + n, 0) / nums.length;
+}
+
+function buildClassHtml(input: ClassReportInput): string {
+  const { periodName, teacherName, currentYear, students } = input;
+  const completedLocal = new Date().toLocaleString();
+
+  const martials = students.map((s) => s.stats?.martial ?? 0);
+  const sciences = students.map((s) => s.stats?.science ?? 0);
+  const cultures = students.map((s) => s.stats?.culture ?? 0);
+  const faiths = students.map((s) => s.stats?.faith ?? 0);
+  const pops = students.map((s) => s.stats?.population ?? 0);
+
+  const champion = (key: 'martial' | 'science' | 'culture' | 'faith' | 'population') => {
+    if (students.length === 0) return null;
+    let best = students[0];
+    for (const s of students) {
+      if ((s.stats?.[key] ?? 0) > (best.stats?.[key] ?? 0)) best = s;
+    }
+    return { name: best.studentName, civ: best.civName, score: best.stats?.[key] ?? 0 };
+  };
+
+  const champions = {
+    martial: champion('martial'),
+    science: champion('science'),
+    culture: champion('culture'),
+    faith: champion('faith'),
+    population: champion('population'),
+  };
+
+  const yearDisplay = typeof currentYear === 'number'
+    ? (currentYear < 0 ? `${Math.abs(currentYear)} BCE` : `${currentYear} CE`)
+    : '-';
+
+  const champRow = (label: string, c: { name: string; civ: string; score: number } | null) => c
+    ? `<tr><td>${esc(label)}</td><td>${esc(c.name)} (${esc(c.civ)})</td><td class="num">${c.score}</td></tr>`
+    : '';
+
+  const studentRows = students.map((s, idx) => {
+    const traits = (s.traits || []).map(esc).join(', ') || '-';
+    const wonders = (s.wondersBuilt || []).map((w) => esc(w.name || w.id)).join(', ') || '-';
+    const flags: string[] = [];
+    if (s.missedTurns && s.missedTurns > 0) flags.push(`${s.missedTurns} missed turn${s.missedTurns > 1 ? 's' : ''}`);
+    if (s.totalAttacksInitiated && s.totalAttacksInitiated >= 3) flags.push(`Aggressor (${s.totalAttacksInitiated} attacks)`);
+    return `
+      <tr>
+        <td class="num">${idx + 1}</td>
+        <td>${esc(s.studentName)}</td>
+        <td>${esc(s.civName)}</td>
+        <td>${traits}</td>
+        <td class="num">${s.stats?.martial ?? 0}</td>
+        <td class="num">${s.stats?.science ?? 0}</td>
+        <td class="num">${s.stats?.culture ?? 0}</td>
+        <td class="num">${s.stats?.faith ?? 0}</td>
+        <td class="num">${s.stats?.population ?? 0}</td>
+        <td>${wonders}</td>
+        <td class="muted">${flags.join('; ') || '-'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Class Report - ${esc(periodName)}</title>
+<style>
+  @page { size: letter; margin: 0.6in; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #111; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 0.2em 0; color: #1e293b; }
+  h2 { font-size: 14pt; margin: 1.2em 0 0.4em; color: #334155; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+  .meta { color: #64748b; font-size: 10pt; margin-bottom: 1em; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 0.4em 0; }
+  th { background: #f1f5f9; text-align: left; padding: 6px 8px; border-bottom: 2px solid #cbd5e1; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .muted { color: #94a3b8; font-style: italic; }
+  .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin: 6px 4px; display: inline-block; min-width: 140px; }
+  .summary-card .label { font-size: 8.5pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .summary-card .value { font-size: 18pt; font-weight: 700; color: #0f172a; }
+  .grid { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 -4px; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+  <h1>Class Report - ${esc(periodName)}</h1>
+  <p class="meta">
+    ${teacherName ? `Teacher: ${esc(teacherName)} | ` : ''}
+    Year: ${esc(yearDisplay)} |
+    ${students.length} student${students.length === 1 ? '' : 's'} |
+    Generated ${esc(completedLocal)}
+  </p>
+
+  <h2>Class Summary</h2>
+  <div class="grid">
+    <div class="summary-card"><div class="label">Median Martial</div><div class="value">${median(martials).toFixed(1)}</div></div>
+    <div class="summary-card"><div class="label">Median Science</div><div class="value">${median(sciences).toFixed(1)}</div></div>
+    <div class="summary-card"><div class="label">Median Culture</div><div class="value">${median(cultures).toFixed(1)}</div></div>
+    <div class="summary-card"><div class="label">Median Faith</div><div class="value">${median(faiths).toFixed(1)}</div></div>
+    <div class="summary-card"><div class="label">Median Population</div><div class="value">${median(pops).toFixed(1)}</div></div>
+  </div>
+  <p class="meta">Mean Martial ${meanOf(martials).toFixed(1)} | Mean Science ${meanOf(sciences).toFixed(1)} | Mean Culture ${meanOf(cultures).toFixed(1)} | Mean Faith ${meanOf(faiths).toFixed(1)} | Mean Population ${meanOf(pops).toFixed(1)}</p>
+
+  <h2>Track Champions</h2>
+  <table>
+    <thead><tr><th>Track</th><th>Student (Civ)</th><th>Score</th></tr></thead>
+    <tbody>
+      ${champRow('Martial Champion', champions.martial)}
+      ${champRow('Science Champion', champions.science)}
+      ${champRow('Culture Champion', champions.culture)}
+      ${champRow('Faith Champion', champions.faith)}
+      ${champRow('Population Champion', champions.population)}
+    </tbody>
+  </table>
+
+  <h2>Civilization Roster</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Student</th>
+        <th>Civilization</th>
+        <th>Traits</th>
+        <th>Mar.</th>
+        <th>Sci.</th>
+        <th>Cul.</th>
+        <th>Fai.</th>
+        <th>Pop.</th>
+        <th>Wonders</th>
+        <th>Flags</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${studentRows}
+    </tbody>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Class report - opens in a new tab, auto-invokes print dialog. Teachers
+ * pick "Save as PDF" from the OS print sheet.
+ *
+ * Returns true if a window was opened, false if the popup was blocked.
+ */
+export function exportClassReportPdf(input: ClassReportInput): boolean {
+  const html = buildClassHtml(input);
+  const win = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+  if (!win) return false;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => {
+    try { win.focus(); win.print(); } catch { /* user can press print button */ }
+  }, 300);
+  return true;
+}
