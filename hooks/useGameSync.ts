@@ -67,8 +67,15 @@ export function useGameSync(civId: string | null): GameSyncReturn {
     const token = localStorage.getItem('token');
     const savedPeriodId = localStorage.getItem('periodId');
     const role = localStorage.getItem('user_role');
+    const playMode = localStorage.getItem('play_mode');
 
-    if (!token || !savedPeriodId || role !== 'student') {
+    // SINGLE-PLAYER INDEPENDENCE: an explicit single-player session is
+    // NEVER captured by class sync, even when student credentials exist
+    // in this browser. A student can play a personal game at home
+    // without teacher gating; their class game is untouched (separate
+    // save key). The landing page sets play_mode=single; the student
+    // dashboard sets play_mode=multi.
+    if (playMode === 'single' || !token || !savedPeriodId || role !== 'student') {
       // Not a student multiplayer session - stays offline (singleplayer).
       return () => {
         isUnmountingRef.current = true;

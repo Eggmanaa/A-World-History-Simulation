@@ -17,6 +17,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -8500,
     yearLabel: '8500 BC',
     name: 'First Settlements',
+    historicalNote: "Permanent villages like Jericho predate farming itself. Settling near reliable water let humans store food, and stored food made government, trade, and war possible.",
     era: 'Ancient',
     description: 'Humanity takes its first steps toward civilization. Small bands of hunter-gatherers begin to settle near water sources, planting the seeds of empires yet to come.',
     globalEffects: [
@@ -67,6 +68,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -4500,
     yearLabel: '4500 BC',
     name: 'Agricultural Revolution',
+    historicalNote: "Farming was domesticated independently in the Fertile Crescent, China, and the Americas. Early farmers were actually shorter and sicker than hunter-gatherers, but their villages could feed far more people.",
     era: 'Ancient',
     description: 'The discovery of farming transforms human society. Permanent settlements grow as people learn to cultivate crops and domesticate animals.',
     globalEffects: [
@@ -115,6 +117,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -2750,
     yearLabel: '2750 BC',
     name: 'Age of Walls',
+    historicalNote: "Jericho raised stone walls around 8000 BC, millennia before armies existed. Walls prove surplus: a town must feed workers who spend all day stacking stone instead of growing food.",
     era: 'Ancient',
     description: 'As settlements grow wealthy, so does the need to protect them. Fortification techniques spread across the ancient world.',
     globalEffects: [
@@ -162,6 +165,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -2250,
     yearLabel: '2250 BC',
     name: 'The Great Flood',
+    historicalNote: "Nearly every river civilization tells a great flood story, from Gilgamesh to Genesis. Real river floods destroyed towns AND renewed the soil, which is why people kept rebuilding in the flood plain.",
     era: 'Ancient',
     description: 'Catastrophic flooding strikes river civilizations. Ancient texts across cultures record a devastating deluge that reshapes the world.',
     globalEffects: [],
@@ -210,6 +214,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -1850,
     yearLabel: '1850 BC',
     name: 'Bronze Age Dawns',
+    historicalNote: "Bronze needs copper AND tin, which rarely occur together, so the Bronze Age forced the first long-distance trade networks. Control of tin routes made kings rich and made isolation deadly.",
     era: 'Bronze',
     description: 'The mastery of bronze transforms warfare and trade. New weapons and tools reshape the balance of power across the ancient world.',
     globalEffects: [
@@ -261,6 +266,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -1600,
     yearLabel: '1600 BC',
     name: 'Eruption of Thera',
+    historicalNote: "Thera's eruption (~1600 BC) buried the town of Akrotiri and crippled Minoan sea power. Historians still debate whether the tsunami or the trade collapse mattered more; either way, Mycenaean Greece filled the vacuum.",
     era: 'Bronze',
     description: 'The volcanic island of Thera erupts with catastrophic force, sending tsunamis across the Mediterranean and plunging the region into volcanic winter.',
     globalEffects: [],
@@ -304,6 +310,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -1300,
     yearLabel: '1300 BC',
     name: 'Age of Wonders',
+    historicalNote: "The Great Pyramid was already 1,000 years old when this era began. Archaeology shows it was built by rotating crews of paid, well-fed laborers, not slaves; monuments were how states proved they could organize people.",
     era: 'Bronze',
     description: 'Ancient civilizations reach new heights of ambition. Monumental construction projects begin across the known world, each a testament to human ingenuity.',
     globalEffects: [
@@ -351,6 +358,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -1200,
     yearLabel: '1200 BC',
     name: 'Bronze Age Collapse',
+    historicalNote: "Around 1177 BC nearly every Mediterranean power collapsed within a generation: drought, famine, the mysterious Sea Peoples, and broken trade all hit at once. Greece even forgot how to write for 400 years.",
     era: 'Bronze',
     description: 'A cascade of disasters strikes: drought, famine, and invasions by "Sea Peoples." Trade networks shatter. Great empires fall. The ancient world enters a dark age.',
     globalEffects: [
@@ -402,6 +410,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -1000,
     yearLabel: '1000 BC',
     name: 'Iron Age & Religions',
+    historicalNote: "Iron ore is common where tin is rare, so iron weapons ended the bronze monopoly of wealthy kings. In the same era, lasting faiths and philosophies emerged from Israel to India to Persia, an age historians call the Axial Age.",
     era: 'Iron',
     description: 'Iron replaces bronze, democratizing warfare. Meanwhile, new religious traditions emerge that will shape human civilization for millennia.',
     globalEffects: [
@@ -450,6 +459,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -825,
     yearLabel: '825 BC',
     name: 'Empires Rise',
+    historicalNote: "Assyria built the first true empire machine: standing armies, provincial governors, royal roads, and mass deportations. It was feared, efficient, and so hated that when Nineveh fell, no one rebuilt it.",
     era: 'Iron',
     description: 'Great empires consolidate power across the known world. Borders harden, armies grow, and diplomacy becomes a tool of survival.',
     globalEffects: [
@@ -498,6 +508,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -670,
     yearLabel: '670 BC',
     name: 'Age of Conquest',
+    historicalNote: "Assyrian siege engineering (ramps, rams, sappers) made walls beatable for the first time. Their palace carvings advertised atrocities deliberately, an ancient form of psychological warfare.",
     era: 'Iron',
     description: 'The era of peaceful coexistence ends. Warfare between civilizations becomes a grim reality. Armies march, and borders are drawn in blood.',
     globalEffects: [
@@ -545,6 +556,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -560,
     yearLabel: '560 BC',
     name: 'Power Shifts',
+    historicalNote: "Babylon rose, then fell to Cyrus of Persia, who ruled differently: conquered peoples kept their gods, languages, and laws. The Cyrus Cylinder recording this policy is sometimes called the first charter of tolerance.",
     era: 'Iron',
     description: 'Ancient empires crumble as new powers rise. The wheel of history turns, and those who cannot adapt are swept aside.',
     globalEffects: [
@@ -592,6 +604,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -480,
     yearLabel: '480 BC',
     name: 'The Persian Wars',
+    historicalNote: "A few hundred Greek city-states beat the largest empire on Earth at Marathon, Salamis, and Plataea. Victory convinced Greeks their citizen-run polis was worth defending, an idea that still shapes government today.",
     era: 'Classical',
     description: 'The Persian Empire launches a massive invasion of Greece. The fate of Western civilization hangs in the balance as outnumbered Greeks make their stand.',
     globalEffects: [
@@ -641,6 +654,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -375,
     yearLabel: '375 BC',
     name: 'Hellenism Spreads',
+    historicalNote: "Athens spent its empire's silver on the Parthenon, drama festivals, and philosophy. One brilliant century (Socrates, Herodotus, Sophocles) has influenced law, science, and art for 2,400 years since.",
     era: 'Classical',
     description: 'Greek culture radiates outward, transforming art, philosophy, and governance across the ancient world. To adopt or resist becomes each civilization\'s choice.',
     globalEffects: [],
@@ -688,6 +702,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -325,
     yearLabel: '325 BC',
     name: 'Alexander the Great',
+    historicalNote: "Alexander conquered from Egypt to India in eleven years and died at 32 without naming an heir. His real legacy was cultural: Greek became the common language of trade and scholarship across three continents.",
     era: 'Classical',
     description: 'A young Macedonian king leads the largest military campaign the world has ever seen, shattering the Persian Empire and spreading Greek culture to India.',
     globalEffects: [],
@@ -732,6 +747,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -301,
     yearLabel: '301 BC',
     name: 'Successor Wars',
+    historicalNote: "Alexander's generals carved up his empire within a generation: Ptolemies in Egypt, Seleucids in Asia. Ptolemaic Alexandria built the ancient world's greatest library and lighthouse.",
     era: 'Classical',
     description: 'Alexander dies without an heir. His generals tear the empire apart, each claiming a piece. The Hellenistic world fractures into warring successor states.',
     globalEffects: [],
@@ -784,6 +800,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -270,
     yearLabel: '270 BC',
     name: 'Punic Wars Begin',
+    historicalNote: "Rome and Carthage fought three wars over 118 years. Hannibal crossed the Alps with war elephants and crushed Rome at Cannae, yet Rome refused to surrender, rebuilt its armies, and ultimately razed Carthage.",
     era: 'Imperial',
     description: 'Rome and Carthage, the two greatest powers of the western Mediterranean, clash in a series of devastating wars that will determine the fate of an empire.',
     globalEffects: [],
@@ -829,6 +846,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -220,
     yearLabel: '220 BC',
     name: 'Roman Expansion',
+    historicalNote: "Conquest made Rome rich and unequal: slave-worked estates displaced citizen farmers, and the Gracchus brothers were killed for proposing land reform. Expansion abroad quietly broke the Republic at home.",
     era: 'Imperial',
     description: 'Rome\'s power grows relentlessly. Roman roads, law, and military engineering spread across the Mediterranean, transforming every land they touch.',
     globalEffects: [
@@ -874,6 +892,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -145,
     yearLabel: '145 BC',
     name: 'Imperial Consolidation',
+    historicalNote: "Augustus ended a century of civil war by keeping republican titles while holding real power himself. The Pax Romana that followed brought two centuries of relative peace, roads, and trade to 60 million people.",
     era: 'Imperial',
     description: 'The great empires solidify their control. The strong grow stronger while the weak struggle to survive in an increasingly dangerous world.',
     globalEffects: [],
@@ -922,6 +941,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -74,
     yearLabel: '74 BC',
     name: 'Age of Heroes',
+    historicalNote: "The Colosseum opened in 80 AD with 100 days of games. Emperors used 'bread and circuses' deliberately: free grain and spectacle kept a million Romans fed and distracted.",
     era: 'Imperial',
     description: 'Great leaders emerge across the world. Name a historical leader for your civilization and receive their blessing as late-era Wonders become available.',
     globalEffects: [
@@ -972,6 +992,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: -44,
     yearLabel: '44 BC',
     name: 'Civil War',
+    historicalNote: "In the third century Rome nearly died: 26 emperors in 50 years, most murdered by their own troops. Diocletian stabilized the empire only by splitting it in two, east and west.",
     era: 'Late',
     description: 'Internal strife tears empires apart. The most powerful civilization faces a devastating civil war as ambition clashes with tradition.',
     globalEffects: [],
@@ -1014,6 +1035,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: 14,
     yearLabel: '14 AD',
     name: 'Imperial Zenith & Christianity',
+    historicalNote: "Constantine legalized Christianity in 313 after his victory at the Milvian Bridge, and within 80 years it became the state religion. A faith once persecuted in the arena now crowned emperors.",
     era: 'Late',
     description: 'Empires reach their greatest extent. Meanwhile, a new faith emerges from the Levant that will transform the world: Christianity spreads rapidly across trade routes.',
     globalEffects: [
@@ -1063,6 +1085,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: 138,
     yearLabel: '138 AD',
     name: 'Plague and Crisis',
+    historicalNote: "The Antonine Plague (likely smallpox) killed perhaps 5 to 10 million Romans, including an emperor. Epidemics, inflation, and constant frontier war drained the empire faster than any single enemy.",
     era: 'Late',
     description: 'A devastating plague spreads along trade routes, killing millions. The more connected a civilization, the more it suffers. The ancient world begins to unravel.',
     globalEffects: [
@@ -1108,6 +1131,7 @@ export const WORLD_EVENTS: WorldEvent[] = [
     year: 362,
     yearLabel: '362 AD',
     name: 'The Fall',
+    historicalNote: "In 476 the last western emperor, a teenager, was quietly retired by the general Odoacer. Rome did not so much fall as transform: the eastern half endured as Byzantium for another thousand years.",
     era: 'Late',
     description: 'Barbarian hordes sweep across the known world. Every civilization faces an existential threat. How you respond to this final crisis determines your legacy.',
     globalEffects: [

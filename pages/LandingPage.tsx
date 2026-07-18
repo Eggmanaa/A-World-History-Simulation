@@ -47,7 +47,12 @@ const LandingPage: React.FC = () => {
           {/* Single Player Button */}
           <div className="max-w-md mx-auto mb-4">
             <button
-              onClick={() => navigate('/game')}
+              onClick={() => {
+                // Explicit single-player session: never subject to teacher
+                // gating even if student credentials exist in this browser.
+                try { localStorage.setItem('play_mode', 'single'); } catch { /* ignore */ }
+                navigate('/game');
+              }}
               className="block w-full bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 hover:from-orange-600 hover:via-amber-600 hover:to-yellow-600 text-white font-bold py-5 px-8 rounded-2xl text-center transition-all shadow-2xl hover:shadow-orange-500/50 transform hover:scale-105 text-xl relative overflow-hidden group"
             >
               <span className="relative z-10 flex items-center justify-center gap-3">

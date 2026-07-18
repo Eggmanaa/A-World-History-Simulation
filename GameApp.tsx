@@ -970,7 +970,22 @@ const App: React.FC = () => {
   ]);
 
   // --- LOCAL SAVE/LOAD (Single Player) ---
-  const SAVE_KEY = 'throughhistory_save';
+  // MODE-AWARE SAVE KEY (Apr 2026): single-player and each class period
+  // save under different keys so a student's home game and class game
+  // never overwrite each other. Computed once from localStorage (stable
+  // for the lifetime of the mount - mode is set BEFORE navigating here).
+  const SAVE_KEY = (() => {
+    try {
+      const mode = localStorage.getItem('play_mode');
+      const role = localStorage.getItem('user_role');
+      const pid = localStorage.getItem('periodId');
+      const tok = localStorage.getItem('token');
+      if (mode !== 'single' && role === 'student' && tok && pid) {
+        return `throughhistory_save_p${pid}`;
+      }
+    } catch { /* ignore */ }
+    return 'throughhistory_save';
+  })();
   const isSinglePlayer = !syncState.isOnline;
   // Catch-up mode: online student whose local turn trails the class turn.
   // Drives the header chip and disables PvP attacks (server enforces too).
@@ -1137,10 +1152,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Auto-save to localStorage every 10 seconds and on beforeunload (single player).
-  // Saves all turn-phase scratch state so a mid-turn reload restores correctly.
+  // Auto-save to localStorage every 10 seconds and on beforeunload - BOTH
+  // modes (Apr 2026). Multiplayer previously skipped local saves, so a
+  // student refresh lost the entire game (tiles, buildings, turn state);
+  // the server only mirrors summary stats, not the full map. The
+  // mode-aware SAVE_KEY keeps class and home games separate.
   useEffect(() => {
-    if (!gameState.hasStarted || !isSinglePlayer) return;
+    if (!gameState.hasStarted) return;
 
     const saveToLocal = () => {
       try {
@@ -1802,8 +1820,12 @@ const App: React.FC = () => {
       }
     });
 
-    // Apply choice effects
-    const choiceMessages: string[] = [];
+    // Apply choice effects. EDUCATIONAL (Apr 2026): lead with the
+    // 'what really happened' note so every event closes the loop between
+    // the student's decision and real history.
+    const choiceMessages: string[] = event.historicalNote
+      ? [`📜 What really happened: ${event.historicalNote}`]
+      : [];
     const choiceChanges: Partial<GameState['civilization']['stats']> = {};
 
     // Track any free building grants from the choice so we can force the

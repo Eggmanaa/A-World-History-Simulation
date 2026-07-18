@@ -159,6 +159,9 @@ export const StudentDashboard: React.FC = () => {
 
   const handleStartGame = () => {
     if (studentInfo?.selectedCivId) {
+      // Entering the CLASS game: mark multiplayer mode so useGameSync
+      // engages teacher gating and the class-specific save key is used.
+      try { localStorage.setItem('play_mode', 'multi'); } catch { /* ignore */ }
       navigate('/game', { state: { civId: studentInfo.selectedCivId } });
     }
   };

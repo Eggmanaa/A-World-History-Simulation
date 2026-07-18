@@ -348,6 +348,9 @@ export interface CivSpecificEvent {
 }
 
 export interface WorldEvent {
+  // EDUCATIONAL (Apr 2026): 1-2 sentences on what actually happened in
+  // history, shown after the student commits a choice.
+  historicalNote?: string;
   turn: number;
   year: number;
   yearLabel: string; // e.g., "8500 BC"
