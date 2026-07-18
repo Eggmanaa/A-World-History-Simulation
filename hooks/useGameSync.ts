@@ -50,46 +50,63 @@ export function useGameSync(civId: string | null): GameSyncReturn {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isUnmountingRef = useRef(false);
 
-  // Check for saved session on mount
+  // Check for saved session on mount.
+  //
+  // FAIL-CLOSED (Apr 2026 MP gating fix): if localStorage says this is a
+  // student session (token + periodId + role), we mark isOnline TRUE
+  // SYNCHRONOUSLY - before any network round-trip. GameApp derives
+  // isSinglePlayer from !isOnline, and game initialization can run on the
+  // very first render; the old async check meant a multiplayer student
+  // raced into singleplayer mode (manual Advance Turn button, no teacher
+  // gating) whenever init won the race. Background validation only kicks
+  // the student out on a REAL auth failure (401/403). Transient network
+  // errors keep the session online: for a classroom sim, wrongly-offline
+  // (student escapes teacher control) is worse than wrongly-online
+  // (student sees a waiting screen until the next successful poll).
   useEffect(() => {
-    const initializeSession = async () => {
+    const token = localStorage.getItem('token');
+    const savedPeriodId = localStorage.getItem('periodId');
+    const role = localStorage.getItem('user_role');
+
+    if (!token || !savedPeriodId || role !== 'student') {
+      // Not a student multiplayer session - stays offline (singleplayer).
+      return () => {
+        isUnmountingRef.current = true;
+      };
+    }
+
+    // Synchronous: multiplayer mode is ON from the first render.
+    setSyncState((prev) => ({
+      ...prev,
+      isOnline: true,
+      periodId: savedPeriodId,
+      lastSync: Date.now(),
+      error: null,
+    }));
+
+    // Background validation - only 401/403 (bad token) takes us offline.
+    const validate = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const savedPeriodId = localStorage.getItem('periodId');
-
-        if (!token || !savedPeriodId) {
-          // No saved session
-          return;
-        }
-
-        // Verify session is valid
         const response = await fetch('/api/student/game-session', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          headers: { 'Authorization': `Bearer ${token}` },
         });
-
-        if (response.ok) {
-          const data = await response.json() as any;
-          setSyncState((prev) => ({
-            ...prev,
-            isOnline: true,
-            periodId: savedPeriodId,
-            lastSync: Date.now(),
-            error: null,
-          }));
-        } else {
-          // Invalid token
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('periodId');
+          if (!isUnmountingRef.current) {
+            setSyncState((prev) => ({
+              ...prev,
+              isOnline: false,
+              error: 'Session expired',
+            }));
+          }
         }
       } catch (err) {
-        console.warn('Failed to initialize session:', err);
-        // Silently fail - student can play offline
+        // Network hiccup: stay online, next poll retries.
+        console.warn('Session validation deferred (network):', err);
       }
     };
-
-    initializeSession();
+    validate();
 
     return () => {
       isUnmountingRef.current = true;

@@ -582,7 +582,23 @@ gameRouter.get('/student/:periodId/state', async (c) => {
     ).bind(periodId).first<any>();
 
     if (!gameState) {
-      return c.json({ message: 'Game not started' }, 400);
+      // Apr 2026 MP gating fix: pre-start is a NORMAL state, not an error.
+      // Return 200 with gameStarted:false so the student client keeps
+      // polling and holds the student at 'waiting for teacher' until the
+      // teacher clicks Start Game. The old 400 broke the poll loop and
+      // left gameStarted undefined on the client.
+      return c.json({
+        currentYear: null,
+        timelineIndex: 0,
+        event: null,
+        studentId: user.id,
+        civilizationId: null,
+        civState: {},
+        adjacentCivs: [],
+        gameFlags: { warUnlocked: false, religionUnlocked: false },
+        gameStarted: false,
+        teacherTurnNumber: 0,
+      });
     }
 
     // Get student's game session

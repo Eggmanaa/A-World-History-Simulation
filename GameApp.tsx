@@ -909,15 +909,56 @@ const App: React.FC = () => {
     if (!syncState.isOnline || !gameState.hasStarted) return;
     const teacherTurn = syncState.teacherTurnNumber;
     if (teacherTurn <= 0) return;
-    // Only fire when teacher turn actually increases beyond what we've processed
-    if (teacherTurn > lastProcessedTeacherTurn.current) {
+    // Only fire when teacher turn increases beyond what we've processed
+    // AND beyond what the student has already played locally. Without the
+    // second check, a resumed session (ref reset to 0) would replay the
+    // current turn on every reload.
+    if (
+      teacherTurn > lastProcessedTeacherTurn.current &&
+      teacherTurn > (gameState.turnNumber || 0)
+    ) {
       lastProcessedTeacherTurn.current = teacherTurn;
       // If student is waiting for teacher, auto-advance
       if (gameState.turnPhase === 'waiting_for_teacher') {
         initiateAdvance();
       }
     }
-  }, [syncState.teacherTurnNumber, syncState.isOnline, gameState.hasStarted, gameState.turnPhase]);
+  }, [syncState.teacherTurnNumber, syncState.isOnline, gameState.hasStarted, gameState.turnPhase, gameState.turnNumber]);
+
+  // MULTIPLAYER CORRECTIVE GATE (Apr 2026) - the fail-closed counterpart
+  // to the auto-advance above. If an online student somehow escaped the
+  // waiting room (the old isOnline race, a stale save, or the game not
+  // being started yet), push them back:
+  //   - Teacher hasn't started the game -> ALWAYS wait, whatever phase.
+  //   - Between turns (idle) with local turn >= teacher turn -> wait; the
+  //     student has played every turn the teacher has authorized.
+  // Mid-turn phases (income/action/build/resolution) for an authorized
+  // turn are left alone so we never interrupt legitimate play.
+  useEffect(() => {
+    if (!syncState.isOnline || !gameState.hasStarted) return;
+    if (gameState.turnPhase === 'waiting_for_teacher') return;
+
+    const mustWait =
+      !syncState.gameStarted ||
+      (
+        (gameState.turnPhase === 'idle' || !gameState.turnPhase) &&
+        (gameState.turnNumber || 0) >= syncState.teacherTurnNumber
+      );
+
+    if (mustWait) {
+      setGameState((prev) => ({
+        ...prev,
+        turnPhase: 'waiting_for_teacher' as TurnPhaseV2,
+      }));
+    }
+  }, [
+    syncState.isOnline,
+    syncState.gameStarted,
+    syncState.teacherTurnNumber,
+    gameState.hasStarted,
+    gameState.turnPhase,
+    gameState.turnNumber,
+  ]);
 
   // --- LOCAL SAVE/LOAD (Single Player) ---
   const SAVE_KEY = 'throughhistory_save';
@@ -1541,6 +1582,28 @@ const App: React.FC = () => {
 
   // Triggered by clicking "Advance Turn"
   const initiateAdvance = () => {
+    // MULTIPLAYER GUARD (Apr 2026): online students may only advance when
+    // the teacher has authorized a turn beyond what they've played. This
+    // is defense in depth - the UI already hides the Advance button in
+    // multiplayer - but any stray code path (keyboard shortcut, stale
+    // handler, future refactor) hits this wall instead of free-playing.
+    if (syncState.isOnline) {
+      const authorized =
+        syncState.gameStarted &&
+        syncState.teacherTurnNumber > (gameState.turnNumber || 0);
+      if (!authorized) {
+        setGameState((prev) => ({
+          ...prev,
+          turnPhase: 'waiting_for_teacher' as TurnPhaseV2,
+          messages: [
+            'Waiting for your teacher to start the next turn.',
+            ...prev.messages.slice(0, 4),
+          ],
+        }));
+        return;
+      }
+    }
+
     // Snapshot stats before turn
     const before: Record<string, number> = {};
     Object.entries(gameState.civilization.stats).forEach(([k, v]) => {
