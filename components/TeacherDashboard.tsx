@@ -100,7 +100,7 @@ const TeacherDashboard: React.FC = () => {
         ...p,
         joinedStudents: p.joinedStudents || [],
         inviteCode: p.inviteCode || '',
-        currentYear: p.currentYear ?? p.start_year ?? -50000,
+        currentYear: p.currentYear ?? p.current_year ?? p.start_year ?? -50000,
         timelineIndex: p.timelineIndex ?? 0,
         isActive: p.isActive ?? false,
       }));
@@ -196,9 +196,23 @@ const TeacherDashboard: React.FC = () => {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      if (!response.ok) throw new Error('Failed to start game');
-      const updated = await response.json() as any;
-      setActivePeriod(updated);
+      // Idempotent from the teacher's perspective: 'already started' means
+      // we can proceed straight to the Timeline tab. Any other failure is a
+      // real error.
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as any;
+        const alreadyStarted = response.status === 400 &&
+          String(body.message || '').toLowerCase().includes('already started');
+        if (!alreadyStarted) {
+          throw new Error(body.message || 'Failed to start game');
+        }
+      }
+      // CRITICAL: keep the period object's identity (id, name, roster).
+      // The old code replaced activePeriod with the API response - which
+      // has no id - so every later call went to /api/game/teacher/undefined/.
+      const activated = { ...activePeriod, isActive: true };
+      setActivePeriod(activated);
+      setPeriods(periods.map((p) => (p.id === activePeriod.id ? activated : p)));
       setActiveTab('timeline');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

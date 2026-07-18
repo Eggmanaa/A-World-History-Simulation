@@ -636,8 +636,10 @@ gameRouter.get('/student/:periodId/state', async (c) => {
 
     // Include game_started flag and teacher's current turn_number so the
     // client can gate student turn advancement on teacher authorization.
-    const gameStarted = !!gameData.gameStarted;
+    // Fallback: a period whose game_data predates the gameStarted flag is
+    // de-facto started once the teacher has advanced any turn.
     const teacherTurnNumber = gameState.turn_number || 0;
+    const gameStarted = !!gameData.gameStarted || teacherTurnNumber > 0;
 
     return c.json({
       currentYear: gameState.current_year,
@@ -1155,8 +1157,13 @@ gameRouter.post('/student/:periodId/submit-turn', async (c) => {
     const turnNumber = (gameState as any).turn_number || 0;
     const turnState = JSON.parse((gameState as any).turn_state || '{}');
 
-    if (turnNumber === 0 || turnState.phase !== 'decision') {
-      return c.json({ message: 'Not in decision phase' }, 409);
+    // Accept submissions during 'decision' (timed turns) AND 'active'
+    // (untimed teacher-paced turns from 'Advance Turn (Students Proceed)',
+    // timerMinutes=0). Rejecting 'active' silently discarded every
+    // submission in the primary classroom flow.
+    const submittablePhases = ['decision', 'active'];
+    if (turnNumber === 0 || !submittablePhases.includes(turnState.phase)) {
+      return c.json({ message: 'Turn is not open for submissions' }, 409);
     }
 
     // Idempotent upsert keyed on (period, student, turn). UNIQUE + REPLACE
@@ -1233,7 +1240,7 @@ gameRouter.get('/student/:periodId/turn-state', async (c) => {
     // client can gate student turn advancement on teacher authorization.
     const gameData = JSON.parse((gameState as any)?.game_data || '{}');
     turnState.teacherTurnNumber = (gameState as any)?.turn_number || 0;
-    turnState.gameStarted = !!gameData.gameStarted;
+    turnState.gameStarted = !!gameData.gameStarted || turnState.teacherTurnNumber > 0;
 
     return c.json(turnState, 200);
   } catch (error) {

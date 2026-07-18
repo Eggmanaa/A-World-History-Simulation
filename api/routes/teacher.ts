@@ -51,11 +51,42 @@ teacherRouter.get('/dashboard', async (c) => {
       });
     }
 
-    // Augment each period with its joinedStudents roster + isActive flag.
+    // isActive: a period is active once its game_states row exists (the
+    // teacher clicked Start Game). Previously hardcoded false, which
+    // stranded teachers on the Setup tab after any page refresh - Start
+    // Game 400'd ('already started') and the Advance Turn button was
+    // unreachable, stalling the whole class.
+    const activeRows = await c.env.DB.prepare(`
+      SELECT gs.period_id
+      FROM game_states gs
+      JOIN periods p ON p.id = gs.period_id
+      WHERE p.teacher_id = ?
+    `).bind(user.id).all<any>();
+    const activePeriodIds = new Set(
+      (activeRows?.results || []).map((r: any) => String(r.period_id))
+    );
+
+    // Latest invite code per period so the teacher can re-show it after a
+    // refresh instead of generating a fresh one every time.
+    const codeRows = await c.env.DB.prepare(`
+      SELECT ic.period_id, ic.code
+      FROM invite_codes ic
+      JOIN periods p ON p.id = ic.period_id
+      WHERE p.teacher_id = ? AND ic.uses_remaining > 0
+      ORDER BY ic.id ASC
+    `).bind(user.id).all<any>();
+    const codeByPeriod: Record<string, string> = {};
+    for (const r of (codeRows?.results || [])) {
+      // ASC iteration means the LAST write per period wins = newest code.
+      codeByPeriod[String(r.period_id)] = r.code;
+    }
+
+    // Augment each period with roster + isActive + latest invite code.
     const periodsList = (periods.results || []).map((p: any) => ({
       ...p,
       joinedStudents: studentsByPeriod[String(p.id)] || [],
-      isActive: false,
+      isActive: activePeriodIds.has(String(p.id)),
+      inviteCode: codeByPeriod[String(p.id)] || '',
     }));
 
     return c.json({
