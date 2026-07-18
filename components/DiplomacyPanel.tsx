@@ -335,12 +335,17 @@ export function DiplomacyPanel({ periodId, currentTurn, disableAttacks, onOfferA
   };
 
   const setRelation = async (classmateId: number, relation: DiplomacyRelation['relation_type']) => {
+    // NOTE: treaty/alliance are proposals until the classmate confirms
+    // (server enforces two-phase consent); the response message tells
+    // the student their proposal is pending.
     try {
       const r = await authedFetch(`/api/diplomacy/student/relations/${classmateId}`, {
         method: 'POST',
         body: JSON.stringify({ relation, turnNumber: currentTurn }),
       });
       if (!r.ok) throw new Error('Failed to update relation');
+      const j = await r.json().catch(() => ({})) as any;
+      if (j.pending && j.message) setFlash(j.message);
       await loadAll();
     } catch (e: any) {
       setFlash(e?.message || 'Could not change relation');
@@ -349,7 +354,21 @@ export function DiplomacyPanel({ periodId, currentTurn, disableAttacks, onOfferA
 
   const relationFor = (classmateId: number): DiplomacyRelation['relation_type'] => {
     const rel = relations.find((r) => r.other_id === classmateId);
-    return (rel?.relation_type as DiplomacyRelation['relation_type']) || 'neutral';
+    const raw = String(rel?.relation_type || 'neutral');
+    // Two-phase consent: '<type>_pending_<id>' proposals behave as neutral
+    // for every gameplay check (attack blocking, badges) until confirmed.
+    if (raw.includes('_pending_')) return 'neutral';
+    return (raw as DiplomacyRelation['relation_type']) || 'neutral';
+  };
+
+  // Raw pending marker for UI hints: returns 'treaty'/'alliance' if there is
+  // an unconfirmed proposal on this pair, plus whether I was the proposer.
+  const pendingFor = (classmateId: number): { type: string; mine: boolean } | null => {
+    const rel = relations.find((r) => r.other_id === classmateId);
+    const raw = String(rel?.relation_type || '');
+    const m = raw.match(/^(treaty|alliance)_pending_(\d+)$/);
+    if (!m) return null;
+    return { type: m[1], mine: false };
   };
 
   const launchAttack = async () => {

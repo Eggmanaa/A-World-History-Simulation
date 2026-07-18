@@ -117,10 +117,32 @@ diplomacyRouter.post('/student/offers', async (c) => {
       return c.json({ message: 'Recipient not in your class period' }, 403);
     }
 
+    // Sanitize both sides of the trade. Only the four soft currencies are
+    // tradable; values are positive integers clamped to 20 per resource.
+    // Without this, a crafted payload with negative or huge values acts
+    // as theft / economy corruption when clients apply the deltas.
+    const TRADABLE = ['production', 'science', 'culture', 'faith'];
+    const sanitizeSide = (side: Record<string, number> | undefined): Record<string, number> => {
+      const clean: Record<string, number> = {};
+      if (!side || typeof side !== 'object') return clean;
+      for (const key of TRADABLE) {
+        const v = Math.floor(Number((side as any)[key]));
+        if (Number.isFinite(v) && v >= 1) {
+          clean[key] = Math.min(20, v);
+        }
+      }
+      return clean;
+    };
+    const cleanOffer = sanitizeSide(body.offer);
+    const cleanRequest = sanitizeSide(body.request);
+    if (Object.keys(cleanOffer).length === 0 && Object.keys(cleanRequest).length === 0) {
+      return c.json({ message: 'Trade must include at least one resource (1-20 per resource)' }, 400);
+    }
+
     const offerData = JSON.stringify({
-      offer: body.offer || {},
-      request: body.request || {},
-      note: body.note || '',
+      offer: cleanOffer,
+      request: cleanRequest,
+      note: String(body.note || '').slice(0, 200),
     });
 
     const result = await c.env.DB.prepare(
@@ -254,6 +276,28 @@ diplomacyRouter.post('/student/relations/:classmateId', async (c) => {
     const a = Math.min(myId, classmateId);
     const b = Math.max(myId, classmateId);
 
+    // TWO-PHASE CONSENT (Apr 2026 exploit fix): treaty/alliance protect a
+    // student from PvP attacks, so they must be MUTUAL. A one-sided
+    // upgrade is stored as '<type>_pending_<proposerId>' - which does NOT
+    // block attacks - and finalizes only when the other student requests
+    // the same type. Neutral/hostile stay unilateral and clear proposals.
+    let storedRelation = body.relation as string;
+    let pending = false;
+    if (body.relation === 'treaty' || body.relation === 'alliance') {
+      const existing = await c.env.DB.prepare(
+        `SELECT relation_type FROM diplomacy_relations
+          WHERE period_id = ? AND student_a_id = ? AND student_b_id = ?`
+      ).bind(me.period_id, a, b).first<any>();
+      const existingType = String(existing?.relation_type || '');
+      const otherProposed = existingType === `${body.relation}_pending_${classmateId}`;
+      if (otherProposed || existingType === body.relation) {
+        storedRelation = body.relation; // both sides agree - finalize
+      } else {
+        storedRelation = `${body.relation}_pending_${myId}`;
+        pending = true;
+      }
+    }
+
     await c.env.DB.prepare(
       `INSERT INTO diplomacy_relations
          (period_id, student_a_id, student_b_id, relation_type, established_turn, updated_at)
@@ -262,9 +306,16 @@ diplomacyRouter.post('/student/relations/:classmateId', async (c) => {
        DO UPDATE SET relation_type = excluded.relation_type,
                      established_turn = excluded.established_turn,
                      updated_at = CURRENT_TIMESTAMP`
-    ).bind(me.period_id, a, b, body.relation, body.turnNumber || 1).run();
+    ).bind(me.period_id, a, b, storedRelation, body.turnNumber || 1).run();
 
-    return c.json({ ok: true, relation: body.relation });
+    return c.json({
+      ok: true,
+      relation: storedRelation,
+      pending,
+      message: pending
+        ? 'Proposal sent - your classmate must choose the same relation to confirm it.'
+        : undefined,
+    });
   } catch (e) {
     return c.json({ message: 'Failed to set relation', error: String(e) }, 500);
   }
@@ -395,27 +446,33 @@ diplomacyRouter.post('/student/attacks', async (c) => {
     // Effect deltas — client applies these locally
     // Attacker gains: warsWon, culture, science (on win); nothing or small loss on loss
     // Defender loses: population %, culture (on loss); small gain on successful defense
+    // Rebalanced Apr 2026: the old values (+100 Science, -80 Culture on a
+    // decisive) were tuned for the V1 100-point stat scale and would max
+    // the tech tree / zero a defender's Culture in one battle on today's
+    // economy. New scale: a decisive win is worth roughly one strong
+    // action (Research ~+5-11); losses are recoverable in 1-2 turns.
+    // Population stays %-based so it scales with civ size.
     const effects: any = { attacker: {}, defender: {} };
     switch (outcome) {
       case 'attacker_decisive':
-        effects.attacker = { warsWon: 1, culture: 20, science: 100 };
-        effects.defender = { populationPct: -0.12, culture: -80, martial: -1 };
+        effects.attacker = { warsWon: 1, culture: 4, science: 5 };
+        effects.defender = { populationPct: -0.10, culture: -3, martial: -1 };
         break;
       case 'attacker_victory':
-        effects.attacker = { warsWon: 1, culture: 10, science: 50 };
-        effects.defender = { populationPct: -0.06, culture: -40 };
+        effects.attacker = { warsWon: 1, culture: 2, science: 3 };
+        effects.defender = { populationPct: -0.05, culture: -2 };
         break;
       case 'stalemate':
-        effects.attacker = { culture: -5 };
-        effects.defender = { culture: 5 };
+        effects.attacker = { culture: -1 };
+        effects.defender = { culture: 1 };
         break;
       case 'defender_victory':
-        effects.attacker = { culture: -20, martial: -1 };
-        effects.defender = { warsWon: 1, culture: 20, science: 30 };
+        effects.attacker = { culture: -2, martial: -1 };
+        effects.defender = { warsWon: 1, culture: 2, science: 2 };
         break;
       case 'defender_decisive':
-        effects.attacker = { culture: -50, populationPct: -0.05, martial: -2 };
-        effects.defender = { warsWon: 1, culture: 40, science: 60 };
+        effects.attacker = { culture: -4, populationPct: -0.05, martial: -2 };
+        effects.defender = { warsWon: 1, culture: 4, science: 3 };
         break;
     }
 
