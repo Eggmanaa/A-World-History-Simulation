@@ -225,6 +225,9 @@ export interface TurnDecision {
   wonderInProgress?: { wonderId: string; invested: number } | null;
   totalAttacksInitiated?: number;
   neighborRallies?: { id: string; rallyUntilTurn: number }[];
+  // Which local turn this decision belongs to. Lets catch-up students
+  // stamp replayed turns correctly (server clamps to <= teacher turn).
+  turnNumber?: number;
 }
 
 // New Event System Types

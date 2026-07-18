@@ -130,6 +130,9 @@ const RESOURCE_KEYS: ResourceKey[] = ['productionPool', 'science', 'culture', 'f
 interface Props {
   periodId: string | null;
   currentTurn: number;
+  // Catch-up lockout: while a student replays missed turns, PvP attacks
+  // are disabled (the server enforces the same rule with a 403).
+  disableAttacks?: boolean;
   // Optional — lets the parent reflect trade effects into live game state.
   onOfferAccepted?: (offer: DecodedOffer, fromStudentId: number) => void;
   // Optional — parent applies PvP combat deltas (wars/culture/science/pop)
@@ -183,7 +186,7 @@ const RELATION_STYLES: Record<DiplomacyRelation['relation_type'], { icon: React.
   hostile:  { icon: <Swords size={12} />,     label: 'Hostile',  cls: 'bg-rose-900/40 text-rose-200 border-rose-700' },
 };
 
-export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted, onAttackResolved }: Props) {
+export function DiplomacyPanel({ periodId, currentTurn, disableAttacks, onOfferAccepted, onAttackResolved }: Props) {
   const [classmates, setClassmates] = useState<Classmate[]>([]);
   const [incoming, setIncoming] = useState<TradeOffer[]>([]);
   const [outgoing, setOutgoing] = useState<TradeOffer[]>([]);
@@ -350,6 +353,10 @@ export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted, onAttac
   };
 
   const launchAttack = async () => {
+    if (disableAttacks) {
+      setFlash('Attacks are locked while you catch up on missed turns. They unlock when you reach the class turn.');
+      return;
+    }
     if (!attackTargetId) { setFlash('Pick a target.'); return; }
     // Hard-block alliance/treaty clients side — server also blocks.
     const rel = relationFor(attackTargetId as number);
@@ -715,11 +722,12 @@ export function DiplomacyPanel({ periodId, currentTurn, onOfferAccepted, onAttac
             </select>
             <button
               onClick={launchAttack}
-              disabled={launching || !attackTargetId}
+              disabled={launching || !attackTargetId || !!disableAttacks}
+              title={disableAttacks ? 'Locked until you catch up to the class turn' : undefined}
               className="w-full bg-rose-700 hover:bg-rose-600 disabled:bg-slate-700 text-white text-xs font-bold py-1.5 rounded flex items-center justify-center gap-1"
             >
               <Swords size={12} />
-              {launching ? 'Rolling dice…' : 'Attack'}
+              {disableAttacks ? 'Locked during catch-up' : launching ? 'Rolling dice…' : 'Attack'}
             </button>
           </div>
 

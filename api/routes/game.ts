@@ -875,6 +875,37 @@ gameRouter.post('/teacher/:periodId/start-turn', async (c) => {
       return c.json({ message: 'Turn state changed in another tab. Please refresh.' }, 409);
     }
 
+    // AUTO MISSED-MARKING: when the teacher advances, any student without a
+    // turn_decisions row for the turn just closed gets a 'missed' record.
+    // This powers the catch-up bookkeeping (teacher dashboard badges,
+    // MissedTurnBanner) with zero extra teacher clicks. Best-effort: a DB
+    // hiccup here must not block the advance the teacher just performed.
+    const closingTurn = (current as any).turn_number || 0;
+    if (closingTurn >= 1) {
+      try {
+        const absent = await c.env.DB.prepare(`
+          SELECT s.id AS student_id
+          FROM students s
+          WHERE s.period_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM turn_decisions td
+              WHERE td.period_id = s.period_id
+                AND td.student_id = s.id
+                AND td.turn_number = ?
+            )
+        `).bind(periodId, closingTurn).all<any>();
+        for (const r of ((absent?.results || []) as any[])) {
+          await c.env.DB.prepare(`
+            INSERT OR IGNORE INTO turn_decisions
+              (period_id, student_id, turn_number, decision_data, status, created_at)
+            VALUES (?, ?, ?, '{}', 'missed', datetime('now'))
+          `).bind(periodId, r.student_id, closingTurn).run();
+        }
+      } catch (missErr) {
+        console.warn('Missed-turn auto-marking skipped:', missErr);
+      }
+    }
+
     return c.json({
       message: 'Turn started',
       turnState
@@ -1166,13 +1197,24 @@ gameRouter.post('/student/:periodId/submit-turn', async (c) => {
       return c.json({ message: 'Turn is not open for submissions' }, 409);
     }
 
+    // CATCH-UP STAMPING: honor the client's claimed turn when it's a
+    // legitimate past-or-current turn. A catch-up student replaying turn 3
+    // while the class is on turn 6 records turn 3 (clearing its 'missed'
+    // row via REPLACE); nobody can submit a FUTURE turn.
+    const claimedTurn = Number((decision as any)?.turnNumber);
+    const stampTurn =
+      Number.isFinite(claimedTurn) && claimedTurn >= 1 && claimedTurn <= turnNumber
+        ? claimedTurn
+        : turnNumber;
+
     // Idempotent upsert keyed on (period, student, turn). UNIQUE + REPLACE
     // means a double-clicked submit never inflates the count; it just
-    // overwrites the prior row for the same turn.
+    // overwrites the prior row for the same turn (including flipping a
+    // 'missed' row back to the default 'submitted').
     await c.env.DB.prepare(`
       INSERT OR REPLACE INTO turn_decisions (period_id, student_id, turn_number, decision_data, created_at)
       VALUES (?, ?, ?, ?, datetime('now'))
-    `).bind(periodId, user.id, turnNumber, JSON.stringify(decision)).run();
+    `).bind(periodId, user.id, stampTurn, JSON.stringify(decision)).run();
 
     // Count for *this* turn from truth, not from a drifty JSON counter.
     const submissions = await c.env.DB.prepare(

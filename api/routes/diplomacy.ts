@@ -325,6 +325,27 @@ diplomacyRouter.post('/student/attacks', async (c) => {
       return c.json({ message: 'Defender not in your class period' }, 403);
     }
 
+    // CATCH-UP LOCKOUT: a student replaying missed turns sends the turn
+    // they're on. If that trails the class's authoritative turn, they may
+    // not attack other players - catch-up is for catching up, not for
+    // sniping classmates from the past. (Client hides the button too;
+    // this is the authoritative check.)
+    const gsRow = await c.env.DB.prepare(
+      'SELECT turn_number FROM game_states WHERE period_id = ?'
+    ).bind(me.period_id).first<any>();
+    const classTurn = Number(gsRow?.turn_number || 0);
+    const claimedAtkTurn = Number(body.turnNumber);
+    if (
+      classTurn > 0 &&
+      Number.isFinite(claimedAtkTurn) &&
+      claimedAtkTurn > 0 &&
+      claimedAtkTurn < classTurn
+    ) {
+      return c.json({
+        message: 'Attacks are locked while catching up on missed turns. Reach the class turn first.',
+      }, 403);
+    }
+
     // Treaty check — alliance or treaty blocks PvP
     const myId = Number(user.id);
     const defId = Number(body.defenderId);

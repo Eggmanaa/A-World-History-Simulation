@@ -327,7 +327,32 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to fetch civilizations');
-      setStudentCivs(await response.json());
+      // /overview returns an OBJECT ({ civilizations, pendingActions, ... });
+      // the old code set the whole object where an array was expected and
+      // the Civilizations/Scoreboard tabs crashed on .map. Map the server
+      // civ shape into what this component renders.
+      const overview = await response.json() as any;
+      const civs = (overview.civilizations || []).map((cv: any) => {
+        const preset = CIV_PRESETS.find((pr) => pr.id === cv.civilizationId);
+        return {
+          id: String(cv.studentId),
+          studentId: String(cv.studentId),
+          studentName: cv.studentName || 'Student',
+          civId: cv.civilizationId || '',
+          civName: preset?.name || cv.civilizationId || 'Unknown',
+          civColor: preset?.colors?.base || '#f59e0b',
+          stats: {
+            martial: cv.stats?.martial ?? 0,
+            faith: cv.stats?.faith ?? 0,
+            industry: cv.stats?.industry ?? 0,
+            science: cv.stats?.science ?? 0,
+            culture: cv.stats?.culture ?? 0,
+            population: cv.stats?.population ?? cv.population ?? 0,
+          },
+          missedTurns: cv.missedTurns || 0,
+        };
+      });
+      setStudentCivs(civs);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -343,7 +368,27 @@ const TeacherDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error('Failed to fetch wars');
-      setWarActions(await response.json());
+      // Same object-vs-array bug as fetchStudentCivs. PvP attacks resolve
+      // automatically server-side now, so the legacy teacher-resolved war
+      // queue only carries declare_war pending_actions (usually empty).
+      const overview = await response.json() as any;
+      const wars = (overview.pendingActions || [])
+        .filter((pa: any) => pa.action_type === 'declare_war')
+        .map((pa: any) => {
+          let parsed: any = {};
+          try { parsed = JSON.parse(pa.action_data || '{}'); } catch { /* ignore */ }
+          return {
+            id: String(pa.id),
+            attackerId: String(pa.student_id),
+            attackerName: parsed.attackerName || `Student ${pa.student_id}`,
+            defenderId: String(parsed.defenderId || ''),
+            defenderName: parsed.defenderName || 'Unknown',
+            attackerStats: parsed.attackerStats || {},
+            defenderStats: parsed.defenderStats || {},
+            status: 'pending' as const,
+          };
+        });
+      setWarActions(wars);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {

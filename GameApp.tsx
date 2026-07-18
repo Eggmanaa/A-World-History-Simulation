@@ -904,26 +904,35 @@ const App: React.FC = () => {
   // 'waiting_for_teacher'. This is the core mechanism that prevents students
   // from advancing on their own and ensures only the teacher controls pace.
   // We track the last teacher turn we acted on to avoid re-triggering.
-  const lastProcessedTeacherTurn = useRef(0);
+  // CATCH-UP CHAIN (Apr 2026): whenever the student is parked in
+  // 'waiting_for_teacher' and the teacher's turn is ahead of their local
+  // turn, start the next turn. Because the condition re-evaluates after
+  // every completed turn (resolution -> waiting_for_teacher), an absent
+  // student or late joiner chains through ALL missed turns back-to-back
+  // and stops exactly when localTurn === teacherTurn. On-pace students
+  // advance once per teacher click - same rule, no special case.
+  const advancingToTurnRef = useRef(0);
   useEffect(() => {
     if (!syncState.isOnline || !gameState.hasStarted) return;
-    const teacherTurn = syncState.teacherTurnNumber;
-    if (teacherTurn <= 0) return;
-    // Only fire when teacher turn increases beyond what we've processed
-    // AND beyond what the student has already played locally. Without the
-    // second check, a resumed session (ref reset to 0) would replay the
-    // current turn on every reload.
-    if (
-      teacherTurn > lastProcessedTeacherTurn.current &&
-      teacherTurn > (gameState.turnNumber || 0)
-    ) {
-      lastProcessedTeacherTurn.current = teacherTurn;
-      // If student is waiting for teacher, auto-advance
-      if (gameState.turnPhase === 'waiting_for_teacher') {
-        initiateAdvance();
-      }
-    }
-  }, [syncState.teacherTurnNumber, syncState.isOnline, gameState.hasStarted, gameState.turnPhase, gameState.turnNumber]);
+    if (!syncState.gameStarted) return;
+    if (gameState.turnPhase !== 'waiting_for_teacher') return;
+    const localTurn = gameState.turnNumber || 0;
+    const teacherTurn = syncState.teacherTurnNumber || 0;
+    if (teacherTurn <= localTurn) return;
+    const target = localTurn + 1;
+    // In-flight guard: strict-mode double effects or rapid re-renders
+    // must not double-start the same turn.
+    if (advancingToTurnRef.current === target) return;
+    advancingToTurnRef.current = target;
+    initiateAdvance();
+  }, [
+    syncState.teacherTurnNumber,
+    syncState.isOnline,
+    syncState.gameStarted,
+    gameState.hasStarted,
+    gameState.turnPhase,
+    gameState.turnNumber,
+  ]);
 
   // MULTIPLAYER CORRECTIVE GATE (Apr 2026) - the fail-closed counterpart
   // to the auto-advance above. If an online student somehow escaped the
@@ -963,6 +972,12 @@ const App: React.FC = () => {
   // --- LOCAL SAVE/LOAD (Single Player) ---
   const SAVE_KEY = 'throughhistory_save';
   const isSinglePlayer = !syncState.isOnline;
+  // Catch-up mode: online student whose local turn trails the class turn.
+  // Drives the header chip and disables PvP attacks (server enforces too).
+  const isCatchingUp =
+    syncState.isOnline &&
+    syncState.gameStarted &&
+    (gameState.turnNumber || 0) < (syncState.teacherTurnNumber || 0);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // NOTE: these useState hooks are declared here (earlier than their siblings
   // below) because the save/load useEffects reference them. Declaring them
@@ -1592,14 +1607,23 @@ const App: React.FC = () => {
         syncState.gameStarted &&
         syncState.teacherTurnNumber > (gameState.turnNumber || 0);
       if (!authorized) {
-        setGameState((prev) => ({
-          ...prev,
-          turnPhase: 'waiting_for_teacher' as TurnPhaseV2,
-          messages: [
-            'Waiting for your teacher to start the next turn.',
-            ...prev.messages.slice(0, 4),
-          ],
-        }));
+        // Only park the student in the waiting room if they're BETWEEN
+        // turns. If some stray caller (legacy timeline effect, etc.) hits
+        // this mid-turn, ignore it - never interrupt an in-progress turn.
+        const betweenTurns =
+          gameState.turnPhase === 'idle' ||
+          gameState.turnPhase === 'waiting_for_teacher' ||
+          !gameState.turnPhase;
+        if (betweenTurns) {
+          setGameState((prev) => ({
+            ...prev,
+            turnPhase: 'waiting_for_teacher' as TurnPhaseV2,
+            messages: [
+              'Waiting for your teacher to start the next turn.',
+              ...prev.messages.slice(0, 4),
+            ],
+          }));
+        }
         return;
       }
     }
@@ -2424,6 +2448,10 @@ const App: React.FC = () => {
         wonderInProgress: gameState.civilization.wonderInProgress ?? null,
         totalAttacksInitiated: gameState.totalAttacksInitiated || 0,
         neighborRallies: neighborRallies.length > 0 ? neighborRallies : undefined,
+        // Catch-up stamping: tell the server WHICH turn this decision is
+        // for, so a replayed turn 3 doesn't get recorded as the class's
+        // current turn 6 (and its 'missed' record clears correctly).
+        turnNumber: gameState.turnNumber || 0,
       };
       // Don't await — continue local advance immediately.
       submitTurn(decisionToSubmit).catch((e) =>
@@ -4083,6 +4111,11 @@ const App: React.FC = () => {
                   <Play size={16} fill="currentColor" />
                   <span className="hidden sm:inline">Turn</span>{" "}
                   {Math.max(1, gameState.turnNumber || 1)}/24
+                  {isCatchingUp && (
+                    <span className="ml-1 text-[10px] bg-amber-500/30 border border-amber-500/60 text-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                      Catch-up → T{syncState.teacherTurnNumber}
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
@@ -5503,6 +5536,7 @@ const App: React.FC = () => {
                 <DiplomacyPanel
                   periodId={syncState.periodId}
                   currentTurn={gameState.turnNumber || 1}
+                  disableAttacks={isCatchingUp}
                   onAttackResolved={(r) => {
                     // Apply PvP combat deltas to local civ state.
                     // Effects shape: { warsWon?, culture?, science?, martial?, populationPct? }
