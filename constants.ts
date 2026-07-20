@@ -797,7 +797,7 @@ export const TECHNOLOGIES: Technology[] = [
 //   -> Enlightenment (100) -> Modern (200)
 // Decline is special: it's entered only via penalty events, not by threshold.
 export const CULTURAL_STAGE_MULTIPLIERS = {
-    barbarism:     { martial: 1.5, fertility: 1.3, science: 0.5, faith: 0.5, industry: 0.8 },
+    barbarism:     { martial: 1.2, fertility: 1.3, science: 0.5, faith: 0.5, industry: 0.8 },
     classical:     { martial: 1.0, fertility: 1.0, science: 1.5, faith: 1.3, industry: 1.2 },
     imperial:      { martial: 1.3, fertility: 0.8, science: 1.2, faith: 1.0, industry: 1.5 },
     enlightenment: { martial: 1.1, fertility: 1.0, science: 2.0, faith: 1.2, industry: 1.5 },

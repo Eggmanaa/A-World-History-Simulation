@@ -59,6 +59,54 @@ const HEX_SIDE_MATERIAL = new THREE.MeshStandardMaterial({
 });
 
 // ============================================================
+// MINIATURE SHARED RESOURCES (Apr 2026 graphics upgrade)
+// ============================================================
+// One material per color for ALL building/wonder miniatures. Sharing
+// materials at module scope means the detail upgrade REDUCES GPU state
+// changes versus the old per-mesh inline materials, even though each
+// piece now has more geometry. flatShading keeps the board-game look.
+const MM = {
+  stone:      new THREE.MeshStandardMaterial({ color: '#c9b896', roughness: 0.9,  flatShading: true }),
+  stoneDark:  new THREE.MeshStandardMaterial({ color: '#9b8b7a', roughness: 0.92, flatShading: true }),
+  stucco:     new THREE.MeshStandardMaterial({ color: '#e8dcc0', roughness: 0.85, flatShading: true }),
+  marble:     new THREE.MeshStandardMaterial({ color: '#efe9dc', roughness: 0.75, flatShading: true }),
+  marbleDim:  new THREE.MeshStandardMaterial({ color: '#d9d2c0', roughness: 0.8,  flatShading: true }),
+  wood:       new THREE.MeshStandardMaterial({ color: '#6b4f33', roughness: 0.8,  flatShading: true }),
+  woodDark:   new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: 0.85, flatShading: true }),
+  terracotta: new THREE.MeshStandardMaterial({ color: '#a4502f', roughness: 0.8,  flatShading: true }),
+  thatch:     new THREE.MeshStandardMaterial({ color: '#c2a34e', roughness: 0.95, flatShading: true }),
+  leaf:       new THREE.MeshStandardMaterial({ color: '#3f7a3a', roughness: 0.9,  flatShading: true }),
+  leafDark:   new THREE.MeshStandardMaterial({ color: '#2d5c2a', roughness: 0.9,  flatShading: true }),
+  gold:       new THREE.MeshStandardMaterial({ color: '#e0b64f', roughness: 0.35, metalness: 0.6, flatShading: true }),
+  iron:       new THREE.MeshStandardMaterial({ color: '#5a6068', roughness: 0.6,  metalness: 0.3, flatShading: true }),
+  clothRed:   new THREE.MeshStandardMaterial({ color: '#a03030', roughness: 0.9,  flatShading: true }),
+  clothBlue:  new THREE.MeshStandardMaterial({ color: '#2f5f9e', roughness: 0.9,  flatShading: true }),
+  soil:       new THREE.MeshStandardMaterial({ color: '#7a5c3d', roughness: 1.0,  flatShading: true }),
+  sand:       new THREE.MeshStandardMaterial({ color: '#d6c08a', roughness: 0.95, flatShading: true }),
+  water:      new THREE.MeshStandardMaterial({ color: '#3f7fc4', roughness: 0.25, metalness: 0.3, flatShading: true }),
+  flame:      new THREE.MeshStandardMaterial({ color: '#ffb03a', emissive: new THREE.Color('#ff7a26'), emissiveIntensity: 1.1, roughness: 0.4 }),
+  smoke:      new THREE.MeshStandardMaterial({ color: '#b9b9b9', transparent: true, opacity: 0.55, roughness: 1 }),
+};
+
+// Soft contact shadow under every piece - one geometry + one material
+// shared by all instances. polygonOffset keeps it from z-fighting the
+// hex top cap.
+const GROUND_SHADOW_GEO = new THREE.CircleGeometry(0.42, 20);
+const GROUND_SHADOW_MAT = new THREE.MeshBasicMaterial({
+  color: '#000000', transparent: true, opacity: 0.22, depthWrite: false,
+  polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+});
+const GroundShadow: React.FC<{ r?: number }> = ({ r = 1 }) => (
+  <mesh
+    geometry={GROUND_SHADOW_GEO}
+    material={GROUND_SHADOW_MAT}
+    rotation={[-Math.PI / 2, 0, 0]}
+    position={[0, 0.135, 0]}
+    scale={[r, r, 1]}
+  />
+);
+
+// ============================================================
 // ECOSYSTEM & TREE SPECIES SYSTEM
 // ============================================================
 // Each climate has MULTIPLE tree species (like a real forest) and
@@ -1061,931 +1109,973 @@ const gamePieceMaterial = (color: string) => (
 );
 
 export const House3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Rustic house with steep red-tiled roof and stone base (Mediterranean style)
-    const roofColor = "#8B4513"; // Red-brown terracotta roof tiles
-    const stoneColor = "#D4C4A8"; // Warm beige stone
-    const woodColor = "#5D4E37"; // Dark wood accents
-
+    // Detailed timber-framed cottage: stone footing, stucco walls with
+    // crossed beams, terracotta pyramid roof with ridge cap, chimney with
+    // smoke, door + lintel, two windows, stepping stones.
     return (
         <group position={position}>
+            <GroundShadow r={0.85} />
             <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-                {/* Stone foundation/base */}
-                <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-                    <boxGeometry args={[0.6, 0.15, 0.55]} />
-                    <meshStandardMaterial color="#9B8B7A" roughness={0.9} flatShading />
+                <mesh position={[0, 0.07, 0]} material={MM.stoneDark} castShadow receiveShadow>
+                    <boxGeometry args={[0.62, 0.14, 0.56]} />
                 </mesh>
-
-                {/* Main stone walls */}
-                <mesh position={[0, 0.32, 0]} castShadow>
+                <mesh position={[0, 0.32, 0]} material={MM.stucco} castShadow>
                     <boxGeometry args={[0.5, 0.4, 0.45]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
                 </mesh>
-
-                {/* Wood beam detail on front */}
-                <mesh position={[0, 0.35, 0.23]} castShadow>
-                    <boxGeometry args={[0.45, 0.08, 0.02]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                {/* timber frame beams */}
+                <mesh position={[0, 0.47, 0.228]} material={MM.woodDark}>
+                    <boxGeometry args={[0.5, 0.05, 0.02]} />
                 </mesh>
-
-                {/* Steep roof - terracotta tiles (4-sided pyramid) */}
-                <mesh position={[0, 0.72, 0]} rotation={[0, Math.PI/4, 0]} castShadow>
-                    <coneGeometry args={[0.42, 0.5, 4]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.8} flatShading />
+                <mesh position={[-0.17, 0.32, 0.228]} material={MM.woodDark}>
+                    <boxGeometry args={[0.04, 0.36, 0.02]} />
                 </mesh>
-
-                {/* Roof trim */}
-                <mesh position={[0, 0.52, 0]} rotation={[0, Math.PI/4, 0]} castShadow>
-                    <boxGeometry args={[0.55, 0.04, 0.55]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.6} />
+                <mesh position={[0.17, 0.32, 0.228]} material={MM.woodDark}>
+                    <boxGeometry args={[0.04, 0.36, 0.02]} />
                 </mesh>
-
-                {/* Door */}
-                <mesh position={[0, 0.25, 0.23]} castShadow>
-                    <boxGeometry args={[0.12, 0.22, 0.02]} />
-                    <meshStandardMaterial color="#3D2817" roughness={0.8} />
+                {/* roof + eaves + ridge cap */}
+                <mesh position={[0, 0.52, 0]} rotation={[0, Math.PI / 4, 0]} material={MM.wood}>
+                    <boxGeometry args={[0.58, 0.05, 0.58]} />
                 </mesh>
-
-                {/* Small window */}
-                <mesh position={[0.15, 0.38, 0.23]} castShadow>
+                <mesh position={[0, 0.74, 0]} rotation={[0, Math.PI / 4, 0]} material={MM.terracotta} castShadow>
+                    <coneGeometry args={[0.44, 0.42, 4]} />
+                </mesh>
+                <mesh position={[0, 0.95, 0]} material={MM.woodDark}>
+                    <boxGeometry args={[0.07, 0.05, 0.07]} />
+                </mesh>
+                {/* chimney + smoke */}
+                <mesh position={[0.18, 0.78, -0.1]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.09, 0.3, 0.09]} />
+                </mesh>
+                <mesh position={[0.18, 0.99, -0.1]} material={MM.smoke}>
+                    <sphereGeometry args={[0.05, 6, 6]} />
+                </mesh>
+                <mesh position={[0.22, 1.07, -0.08]} material={MM.smoke}>
+                    <sphereGeometry args={[0.035, 6, 6]} />
+                </mesh>
+                {/* door with lintel + windows */}
+                <mesh position={[0, 0.24, 0.232]} material={MM.woodDark}>
+                    <boxGeometry args={[0.13, 0.22, 0.02]} />
+                </mesh>
+                <mesh position={[0, 0.37, 0.235]} material={MM.wood}>
+                    <boxGeometry args={[0.17, 0.04, 0.02]} />
+                </mesh>
+                <mesh position={[-0.15, 0.38, 0.232]} material={MM.clothBlue}>
                     <boxGeometry args={[0.08, 0.08, 0.02]} />
-                    <meshStandardMaterial color="#87CEEB" roughness={0.3} metalness={0.1} />
+                </mesh>
+                <mesh position={[0.15, 0.38, 0.232]} material={MM.clothBlue}>
+                    <boxGeometry args={[0.08, 0.08, 0.02]} />
+                </mesh>
+                {/* stepping stones */}
+                <mesh position={[0, 0.015, 0.36]} material={MM.stone}>
+                    <cylinderGeometry args={[0.05, 0.05, 0.03, 6]} />
+                </mesh>
+                <mesh position={[0.07, 0.015, 0.46]} material={MM.stone}>
+                    <cylinderGeometry args={[0.04, 0.04, 0.03, 6]} />
                 </mesh>
             </group>
         </group>
     );
 };
+
 
 interface Wall3DProps {
     position: [number, number, number];
-    connections?: number[];
+    // Optional neighbor-connection hints (legacy); current design is
+    // orientation-agnostic so these are accepted and ignored.
+    connections?: string[];
 }
 
 export const Wall3D: React.FC<Wall3DProps> = ({ position, connections = [] }) => {
-    // Robust beige/tan stone wall with battlements (low-poly style)
-    const stoneColor = "#C9B896"; // Warm beige stone
-    const darkStone = "#A89B7E"; // Darker accent stone
-
+    // Fortified gate segment: crenellated curtain wall, arched gateway,
+    // two round towers with conical roofs and banners.
+    void connections; // orientation-agnostic design
     return (
         <group position={position}>
-            <group position={[0, 0.3, 0]} scale={[0.95, 0.95, 0.95]}>
-                {/* Main wall tower base */}
-                <mesh position={[0, 0.25, 0]} castShadow receiveShadow>
-                    <cylinderGeometry args={[0.32, 0.38, 0.5, 6]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
+            <GroundShadow r={0.95} />
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                <mesh position={[0, 0.2, 0]} material={MM.stone} castShadow receiveShadow>
+                    <boxGeometry args={[0.85, 0.36, 0.2]} />
                 </mesh>
-
-                {/* Stone texture band */}
-                <mesh position={[0, 0.12, 0]} castShadow>
-                    <cylinderGeometry args={[0.36, 0.4, 0.08, 6]} />
-                    <meshStandardMaterial color={darkStone} roughness={0.95} flatShading />
-                </mesh>
-
-                {/* Top platform */}
-                <mesh position={[0, 0.52, 0]} castShadow>
-                    <cylinderGeometry args={[0.36, 0.32, 0.06, 6]} />
-                    <meshStandardMaterial color={darkStone} roughness={0.85} flatShading />
-                </mesh>
-
-                {/* Battlements (crenellations) */}
-                {[0, 60, 120, 180, 240, 300].map((angle, i) => (
-                    <mesh
-                        key={i}
-                        position={[
-                            Math.cos(angle * Math.PI / 180) * 0.28,
-                            0.62,
-                            Math.sin(angle * Math.PI / 180) * 0.28
-                        ]}
-                        castShadow
-                    >
-                        <boxGeometry args={[0.1, 0.14, 0.1]} />
-                        <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
+                {/* crenellations */}
+                {[-0.3, -0.1, 0.1, 0.3].map((x, i) => (
+                    <mesh key={i} position={[x, 0.43, 0]} material={MM.stoneDark}>
+                        <boxGeometry args={[0.09, 0.1, 0.2]} />
                     </mesh>
                 ))}
-
-                {/* Wall connections to other segments */}
-                {connections.map((angle, i) => (
-                    <group key={i} rotation={[0, (angle * Math.PI) / 180, 0]}>
-                        {/* Wall segment */}
-                        <mesh position={[0.48, 0.2, 0]} castShadow receiveShadow>
-                            <boxGeometry args={[0.6, 0.4, 0.18]} />
-                            <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
-                        </mesh>
-                        {/* Wall top crenellations */}
-                        {[-0.2, 0.2].map((offset, j) => (
-                            <mesh key={j} position={[0.48 + offset, 0.47, 0]} castShadow>
-                                <boxGeometry args={[0.15, 0.12, 0.2]} />
-                                <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
-                            </mesh>
-                        ))}
-                    </group>
-                ))}
+                {/* gate arch */}
+                <mesh position={[0, 0.14, 0.105]} material={MM.woodDark}>
+                    <boxGeometry args={[0.18, 0.24, 0.02]} />
+                </mesh>
+                <mesh position={[0, 0.28, 0.105]} rotation={[Math.PI / 2, 0, 0]} material={MM.stoneDark}>
+                    <cylinderGeometry args={[0.09, 0.09, 0.02, 12, 1, false, 0, Math.PI]} />
+                </mesh>
+                {/* towers + roofs + banners */}
+                <mesh position={[-0.42, 0.3, 0]} material={MM.stoneDark} castShadow>
+                    <cylinderGeometry args={[0.13, 0.15, 0.6, 8]} />
+                </mesh>
+                <mesh position={[0.42, 0.3, 0]} material={MM.stoneDark} castShadow>
+                    <cylinderGeometry args={[0.13, 0.15, 0.6, 8]} />
+                </mesh>
+                <mesh position={[-0.42, 0.68, 0]} material={MM.terracotta}>
+                    <coneGeometry args={[0.16, 0.18, 8]} />
+                </mesh>
+                <mesh position={[0.42, 0.68, 0]} material={MM.terracotta}>
+                    <coneGeometry args={[0.16, 0.18, 8]} />
+                </mesh>
+                <mesh position={[-0.42, 0.84, 0]} material={MM.wood}>
+                    <cylinderGeometry args={[0.01, 0.01, 0.14, 4]} />
+                </mesh>
+                <mesh position={[-0.38, 0.87, 0]} material={MM.clothRed}>
+                    <boxGeometry args={[0.07, 0.05, 0.01]} />
+                </mesh>
             </group>
         </group>
     );
 };
+
 
 export const Temple3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Classical Greek/Roman temple with columns and triangular pediment
-    const marbleColor = "#E8E4DC"; // Warm off-white marble
-    const columnColor = "#DDD8CC"; // Slightly darker for columns
-    const roofColor = "#8B7355"; // Terracotta/bronze roof
-    const baseColor = "#C9C0B0"; // Stone base
-
+    // Classical temple: two-step podium, colonnade, entablature, pediment,
+    // and a burning altar out front flanked by votive statues.
     return (
         <group position={position}>
-            <group scale={[0.85, 0.85, 0.85]} position={[0, 0.3, 0]}>
-                {/* Stepped base (stylobate) */}
-                <mesh position={[0, 0.04, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.95, 0.08, 0.7]} />
-                    <meshStandardMaterial color={baseColor} roughness={0.85} flatShading />
+            <GroundShadow r={0.95} />
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                <mesh position={[0, 0.045, 0]} material={MM.marbleDim} receiveShadow>
+                    <boxGeometry args={[0.72, 0.09, 0.58]} />
                 </mesh>
-                <mesh position={[0, 0.12, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.85, 0.08, 0.6]} />
-                    <meshStandardMaterial color={marbleColor} roughness={0.8} flatShading />
+                <mesh position={[0, 0.115, 0]} material={MM.marble}>
+                    <boxGeometry args={[0.62, 0.06, 0.5]} />
                 </mesh>
-
-                {/* Floor/Cella base */}
-                <mesh position={[0, 0.2, 0]} receiveShadow>
-                    <boxGeometry args={[0.75, 0.08, 0.5]} />
-                    <meshStandardMaterial color={marbleColor} roughness={0.75} flatShading />
+                {/* cella */}
+                <mesh position={[0, 0.34, -0.05]} material={MM.marbleDim} castShadow>
+                    <boxGeometry args={[0.4, 0.38, 0.32]} />
                 </mesh>
-
-                {/* Columns - front row */}
-                {[-0.28, -0.09, 0.09, 0.28].map((x, i) => (
-                    <group key={`front-${i}`} position={[x, 0.42, 0.18]}>
-                        {/* Column shaft */}
-                        <mesh castShadow>
-                            <cylinderGeometry args={[0.045, 0.055, 0.4, 8]} />
-                            <meshStandardMaterial color={columnColor} roughness={0.7} flatShading />
-                        </mesh>
-                        {/* Column capital */}
-                        <mesh position={[0, 0.22, 0]} castShadow>
-                            <boxGeometry args={[0.1, 0.05, 0.1]} />
-                            <meshStandardMaterial color={marbleColor} roughness={0.6} flatShading />
-                        </mesh>
-                    </group>
+                {/* colonnade */}
+                {[-0.22, -0.075, 0.075, 0.22].map((x, i) => (
+                    <mesh key={i} position={[x, 0.32, 0.19]} material={MM.marble}>
+                        <cylinderGeometry args={[0.035, 0.04, 0.36, 8]} />
+                    </mesh>
                 ))}
-
-                {/* Columns - back row */}
-                {[-0.28, -0.09, 0.09, 0.28].map((x, i) => (
-                    <group key={`back-${i}`} position={[x, 0.42, -0.18]}>
-                        <mesh castShadow>
-                            <cylinderGeometry args={[0.045, 0.055, 0.4, 8]} />
-                            <meshStandardMaterial color={columnColor} roughness={0.7} flatShading />
-                        </mesh>
-                        <mesh position={[0, 0.22, 0]} castShadow>
-                            <boxGeometry args={[0.1, 0.05, 0.1]} />
-                            <meshStandardMaterial color={marbleColor} roughness={0.6} flatShading />
-                        </mesh>
-                    </group>
+                {[-0.24, 0.24].map((x, i) => (
+                    <mesh key={'s' + i} position={[x, 0.32, 0]} material={MM.marble}>
+                        <cylinderGeometry args={[0.035, 0.04, 0.36, 8]} />
+                    </mesh>
                 ))}
-
-                {/* Inner cella/sanctuary */}
-                <mesh position={[0, 0.42, 0]} castShadow>
-                    <boxGeometry args={[0.35, 0.38, 0.25]} />
-                    <meshStandardMaterial color={marbleColor} roughness={0.75} flatShading />
+                {/* entablature + pediment */}
+                <mesh position={[0, 0.545, 0]} material={MM.marble} castShadow>
+                    <boxGeometry args={[0.66, 0.07, 0.52]} />
                 </mesh>
-
-                {/* Entablature (horizontal beam) */}
-                <mesh position={[0, 0.66, 0]} castShadow>
-                    <boxGeometry args={[0.8, 0.06, 0.55]} />
-                    <meshStandardMaterial color={marbleColor} roughness={0.7} flatShading />
+                <mesh position={[0, 0.65, 0]} rotation={[0, 0, 0]} material={MM.marbleDim}>
+                    <cylinderGeometry args={[0.3, 0.3, 0.5, 3, 1]} />
                 </mesh>
-
-                {/* Triangular pediment (roof) */}
-                <mesh position={[0, 0.82, 0]} rotation={[0, Math.PI/2, 0]} castShadow>
-                    <coneGeometry args={[0.45, 0.28, 3]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.8} flatShading />
+                <mesh position={[0, 0.86, 0]} material={MM.gold}>
+                    <sphereGeometry args={[0.045, 8, 8]} />
                 </mesh>
-
-                {/* Roof ridge ornament */}
-                <mesh position={[0, 0.95, 0]} castShadow>
-                    <sphereGeometry args={[0.05, 6, 6]} />
-                    <meshStandardMaterial color="#B8860B" roughness={0.4} metalness={0.3} />
+                {/* altar + flame + statues */}
+                <mesh position={[0, 0.08, 0.42]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.12, 0.12, 0.12]} />
+                </mesh>
+                <mesh position={[0, 0.2, 0.42]} material={MM.flame}>
+                    <coneGeometry args={[0.045, 0.12, 6]} />
+                </mesh>
+                <mesh position={[-0.28, 0.13, 0.38]} material={MM.marbleDim}>
+                    <cylinderGeometry args={[0.03, 0.04, 0.16, 6]} />
+                </mesh>
+                <mesh position={[0.28, 0.13, 0.38]} material={MM.marbleDim}>
+                    <cylinderGeometry args={[0.03, 0.04, 0.16, 6]} />
                 </mesh>
             </group>
         </group>
     );
 };
+
 
 export const Amphitheatre3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Semi-circular amphitheatre with tiered seating (Roman style)
-    const stoneColor = "#D4CAB8"; // Warm limestone
-    const seatColor = "#C4B8A4"; // Slightly darker for seats
-    const stageColor = "#8B7355"; // Dark wood/earth stage
-    const archColor = "#BFB5A3"; // Arch stone color
-
+    // Greek theater: three tiers of semicircular seating carved around an
+    // orchestra floor, a skene (stage building), and torch-lit entrances.
+    const tiers = [
+        { r: 0.42, h: 0.1, y: 0.05 },
+        { r: 0.33, h: 0.1, y: 0.15 },
+        { r: 0.24, h: 0.1, y: 0.25 },
+    ];
     return (
         <group position={position}>
-            <group scale={[0.85, 0.85, 0.85]} position={[0, 0.25, 0]}>
-                {/* Base foundation */}
-                <mesh position={[0, 0.02, 0]} receiveShadow>
-                    <cylinderGeometry args={[0.75, 0.8, 0.04, 16, 1, false, 0, Math.PI]} />
-                    <meshStandardMaterial color={"#A89B7E"} roughness={0.9} flatShading />
-                </mesh>
-
-                {/* Tiered seating - semicircular rows */}
-                {[0.7, 0.58, 0.46, 0.34].map((radius, tier) => (
-                    <mesh
-                        key={tier}
-                        position={[0, 0.08 + tier * 0.12, -0.02 * tier]}
-                        castShadow
-                    >
-                        <cylinderGeometry args={[radius, radius + 0.04, 0.1, 12, 1, false, 0, Math.PI]} />
-                        <meshStandardMaterial
-                            color={tier % 2 === 0 ? seatColor : stoneColor}
-                            roughness={0.85}
-                            flatShading
-                        />
+            <GroundShadow r={0.95} />
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                {tiers.map((t, i) => (
+                    <mesh key={i} position={[0, t.y, -0.05]} material={i % 2 ? MM.marbleDim : MM.stone} castShadow={i === 0} receiveShadow>
+                        <cylinderGeometry args={[t.r, t.r + 0.03, t.h, 20, 1, false, 0, Math.PI]} />
                     </mesh>
                 ))}
-
-                {/* Top wall/rim of amphitheatre */}
-                <mesh position={[0, 0.58, -0.08]} castShadow>
-                    <cylinderGeometry args={[0.72, 0.75, 0.08, 12, 1, false, 0, Math.PI]} />
-                    <meshStandardMaterial color={archColor} roughness={0.8} flatShading />
+                {/* orchestra floor */}
+                <mesh position={[0, 0.02, -0.05]} material={MM.sand}>
+                    <cylinderGeometry args={[0.2, 0.2, 0.04, 20, 1, false, 0, Math.PI]} />
                 </mesh>
-
-                {/* Arched entrances on sides */}
-                {[-0.62, 0.62].map((x, i) => (
-                    <group key={i} position={[x, 0.25, 0.15]} rotation={[0, i === 0 ? 0.3 : -0.3, 0]}>
-                        <mesh castShadow>
-                            <boxGeometry args={[0.12, 0.35, 0.15]} />
-                            <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
-                        </mesh>
-                        {/* Arch top */}
-                        <mesh position={[0, 0.2, 0]} castShadow>
-                            <cylinderGeometry args={[0.06, 0.06, 0.15, 8, 1, false, 0, Math.PI]} />
-                            <meshStandardMaterial color={archColor} roughness={0.8} flatShading />
-                        </mesh>
-                    </group>
-                ))}
-
-                {/* Orchestra/Stage area (half circle at front) */}
-                <mesh position={[0, 0.06, 0.25]} rotation={[-Math.PI/2, 0, 0]} receiveShadow>
-                    <circleGeometry args={[0.25, 16, 0, Math.PI]} />
-                    <meshStandardMaterial color={stageColor} roughness={0.9} flatShading />
+                {/* skene stage building */}
+                <mesh position={[0, 0.12, 0.22]} material={MM.stucco} castShadow>
+                    <boxGeometry args={[0.5, 0.22, 0.14]} />
                 </mesh>
-
-                {/* Stage back wall (scaenae frons) */}
-                <mesh position={[0, 0.2, 0.45]} castShadow>
-                    <boxGeometry args={[0.6, 0.32, 0.06]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.8} flatShading />
+                <mesh position={[0, 0.26, 0.22]} material={MM.terracotta}>
+                    <boxGeometry args={[0.54, 0.05, 0.18]} />
                 </mesh>
-
-                {/* Decorative columns on stage wall */}
-                {[-0.2, 0, 0.2].map((x, i) => (
-                    <mesh key={i} position={[x, 0.2, 0.42]} castShadow>
-                        <cylinderGeometry args={[0.025, 0.03, 0.3, 6]} />
-                        <meshStandardMaterial color={"#E8E0D4"} roughness={0.6} flatShading />
+                {/* stage columns */}
+                {[-0.18, 0, 0.18].map((x, i) => (
+                    <mesh key={'c' + i} position={[x, 0.1, 0.31]} material={MM.marble}>
+                        <cylinderGeometry args={[0.02, 0.02, 0.18, 6]} />
                     </mesh>
                 ))}
+                {/* torches at the entrances */}
+                <mesh position={[-0.46, 0.12, 0.1]} material={MM.wood}>
+                    <cylinderGeometry args={[0.015, 0.015, 0.2, 4]} />
+                </mesh>
+                <mesh position={[-0.46, 0.24, 0.1]} material={MM.flame}>
+                    <sphereGeometry args={[0.03, 6, 6]} />
+                </mesh>
+                <mesh position={[0.46, 0.12, 0.1]} material={MM.wood}>
+                    <cylinderGeometry args={[0.015, 0.015, 0.2, 4]} />
+                </mesh>
+                <mesh position={[0.46, 0.24, 0.1]} material={MM.flame}>
+                    <sphereGeometry args={[0.03, 6, 6]} />
+                </mesh>
             </group>
         </group>
     );
 };
+
 
 export const Farm3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Ancient farm with thatched-roof barn, plowed field rows, and grain storage
-    const thatchColor = "#B8A060"; // Dry straw/thatch
-    const woodColor = "#6B4226"; // Rough timber
-    const soilColor = "#5C4033"; // Dark plowed earth
-    const cropColor = "#7B9E3A"; // Green crop shoots
-    const stoneColor = "#9B8B7A"; // Foundation stone
-
+    // Working farmstead: tilled plot with crop rows, post-and-rail fence,
+    // a small barn with loft door, hay bales, and a water trough.
     return (
         <group position={position}>
+            <GroundShadow r={0.95} />
             <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-                {/* Plowed field rows */}
-                {[-0.25, -0.15, -0.05, 0.05, 0.15, 0.25].map((z, i) => (
-                    <mesh key={`row-${i}`} position={[-0.25, 0.02, z]} receiveShadow>
-                        <boxGeometry args={[0.35, 0.03, 0.06]} />
-                        <meshStandardMaterial color={soilColor} roughness={0.95} flatShading />
+                {/* tilled plot + crop rows */}
+                <mesh position={[-0.15, 0.02, 0.1]} material={MM.soil} receiveShadow>
+                    <boxGeometry args={[0.5, 0.045, 0.55]} />
+                </mesh>
+                {[-0.32, -0.21, -0.1, 0.01].map((x, i) => (
+                    <mesh key={i} position={[x, 0.055, 0.1]} material={i % 2 ? MM.leaf : MM.leafDark}>
+                        <boxGeometry args={[0.055, 0.05, 0.5]} />
                     </mesh>
                 ))}
-
-                {/* Crop shoots on alternating rows */}
-                {[-0.25, -0.05, 0.15].map((z, i) => (
-                    <group key={`crops-${i}`}>
-                        {[-0.38, -0.3, -0.22, -0.14].map((x, j) => (
-                            <mesh key={j} position={[x, 0.06, z]} castShadow>
-                                <boxGeometry args={[0.02, 0.06, 0.02]} />
-                                <meshStandardMaterial color={cropColor} roughness={0.8} flatShading />
-                            </mesh>
-                        ))}
-                    </group>
-                ))}
-
-                {/* Barn - stone foundation */}
-                <mesh position={[0.22, 0.06, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.35, 0.12, 0.4]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
-                </mesh>
-
-                {/* Barn - wooden walls */}
-                <mesh position={[0.22, 0.22, 0]} castShadow>
-                    <boxGeometry args={[0.3, 0.2, 0.35]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.85} flatShading />
-                </mesh>
-
-                {/* Barn - thatched roof */}
-                <mesh position={[0.22, 0.42, 0]} rotation={[0, 0, 0]} castShadow>
-                    <coneGeometry args={[0.3, 0.25, 4]} />
-                    <meshStandardMaterial color={thatchColor} roughness={0.95} flatShading />
-                </mesh>
-
-                {/* Barn door */}
-                <mesh position={[0.22, 0.18, 0.18]} castShadow>
-                    <boxGeometry args={[0.12, 0.16, 0.02]} />
-                    <meshStandardMaterial color="#3D2817" roughness={0.8} />
-                </mesh>
-
-                {/* Grain storage pot */}
-                <mesh position={[0.42, 0.1, -0.15]} castShadow>
-                    <cylinderGeometry args={[0.04, 0.06, 0.12, 8]} />
-                    <meshStandardMaterial color="#A0522D" roughness={0.8} flatShading />
-                </mesh>
-
-                {/* Wooden fence posts */}
-                {[-0.42, -0.42, -0.42].map((x, i) => (
-                    <mesh key={`fence-${i}`} position={[x, 0.08, -0.2 + i * 0.2]} castShadow>
-                        <boxGeometry args={[0.03, 0.12, 0.03]} />
-                        <meshStandardMaterial color={woodColor} roughness={0.9} flatShading />
+                {/* wheat tufts */}
+                {[[-0.3, 0.32], [-0.12, 0.3], [-0.22, -0.1]].map(([x, z], i) => (
+                    <mesh key={'w' + i} position={[x, 0.1, z]} material={MM.thatch}>
+                        <coneGeometry args={[0.03, 0.1, 5]} />
                     </mesh>
                 ))}
-
-                {/* Fence rail */}
-                <mesh position={[-0.42, 0.1, 0]} castShadow>
-                    <boxGeometry args={[0.02, 0.02, 0.4]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.9} />
+                {/* barn */}
+                <mesh position={[0.28, 0.16, -0.18]} material={MM.wood} castShadow>
+                    <boxGeometry args={[0.32, 0.28, 0.3]} />
+                </mesh>
+                <mesh position={[0.28, 0.38, -0.18]} rotation={[0, Math.PI / 4, 0]} material={MM.terracotta} castShadow>
+                    <coneGeometry args={[0.27, 0.22, 4]} />
+                </mesh>
+                <mesh position={[0.28, 0.2, -0.025]} material={MM.woodDark}>
+                    <boxGeometry args={[0.1, 0.12, 0.02]} />
+                </mesh>
+                {/* fence around plot */}
+                {[[-0.42, 0.38], [-0.42, 0.1], [-0.42, -0.18], [0.12, 0.38], [0.12, -0.18]].map(([x, z], i) => (
+                    <mesh key={'p' + i} position={[x, 0.08, z]} material={MM.woodDark}>
+                        <cylinderGeometry args={[0.015, 0.015, 0.14, 4]} />
+                    </mesh>
+                ))}
+                <mesh position={[-0.42, 0.11, 0.1]} material={MM.wood}>
+                    <boxGeometry args={[0.02, 0.02, 0.56]} />
+                </mesh>
+                <mesh position={[-0.15, 0.11, 0.38]} material={MM.wood}>
+                    <boxGeometry args={[0.56, 0.02, 0.02]} />
+                </mesh>
+                {/* hay + trough */}
+                <mesh position={[0.34, 0.07, 0.16]} rotation={[0, 0.5, 0]} material={MM.thatch}>
+                    <cylinderGeometry args={[0.07, 0.07, 0.12, 8]} />
+                </mesh>
+                <mesh position={[0.16, 0.05, 0.3]} material={MM.woodDark}>
+                    <boxGeometry args={[0.16, 0.06, 0.08]} />
+                </mesh>
+                <mesh position={[0.16, 0.075, 0.3]} material={MM.water}>
+                    <boxGeometry args={[0.13, 0.02, 0.05]} />
                 </mesh>
             </group>
         </group>
     );
 };
+
 
 export const Workshop3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Ancient blacksmith/craftsman workshop with forge, anvil, and chimney
-    const stoneColor = "#8B8178"; // Rough grey stone
-    const darkStone = "#5C534A"; // Dark stone for forge
-    const woodColor = "#5D4E37"; // Timber frame
-    const metalColor = "#696969"; // Iron/steel grey
-    const fireColor = "#FF6B35"; // Forge glow
-    const roofColor = "#6B4226"; // Dark wood roof
-
+    // Smithy: stone workshop with shed roof, glowing forge chimney, anvil
+    // on a stump, workbench, barrel, crate, and a log pile.
     return (
         <group position={position}>
+            <GroundShadow r={0.9} />
             <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-                {/* Stone foundation */}
-                <mesh position={[0, 0.06, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.7, 0.12, 0.55]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.9} flatShading />
+                <mesh position={[-0.08, 0.06, 0]} material={MM.stoneDark} receiveShadow>
+                    <boxGeometry args={[0.6, 0.12, 0.52]} />
                 </mesh>
-
-                {/* Main workshop walls */}
-                <mesh position={[0, 0.28, 0]} castShadow>
-                    <boxGeometry args={[0.6, 0.32, 0.45]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
+                <mesh position={[-0.08, 0.3, -0.05]} material={MM.stone} castShadow>
+                    <boxGeometry args={[0.5, 0.36, 0.4]} />
                 </mesh>
-
-                {/* Timber frame beams (cross-hatched) */}
-                <mesh position={[0, 0.35, 0.23]} castShadow>
-                    <boxGeometry args={[0.55, 0.04, 0.02]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                {/* shed roof (single slope) */}
+                <mesh position={[-0.08, 0.52, -0.02]} rotation={[0.28, 0, 0]} material={MM.wood} castShadow>
+                    <boxGeometry args={[0.58, 0.05, 0.5]} />
                 </mesh>
-                <mesh position={[-0.15, 0.28, 0.23]} castShadow>
-                    <boxGeometry args={[0.04, 0.28, 0.02]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                {/* forge chimney with ember glow + smoke */}
+                <mesh position={[-0.28, 0.62, -0.15]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.12, 0.42, 0.12]} />
                 </mesh>
-                <mesh position={[0.15, 0.28, 0.23]} castShadow>
-                    <boxGeometry args={[0.04, 0.28, 0.02]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.7} />
+                <mesh position={[-0.28, 0.84, -0.15]} material={MM.flame}>
+                    <boxGeometry args={[0.08, 0.03, 0.08]} />
                 </mesh>
-
-                {/* Sloped roof */}
-                <mesh position={[0, 0.52, 0]} rotation={[0, 0, 0]} castShadow>
-                    <coneGeometry args={[0.48, 0.3, 4]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.85} flatShading />
+                <mesh position={[-0.28, 0.95, -0.13]} material={MM.smoke}>
+                    <sphereGeometry args={[0.05, 6, 6]} />
                 </mesh>
-
-                {/* Stone chimney */}
-                <mesh position={[0.2, 0.65, -0.1]} castShadow>
-                    <boxGeometry args={[0.1, 0.35, 0.1]} />
-                    <meshStandardMaterial color={darkStone} roughness={0.9} flatShading />
+                <mesh position={[-0.24, 1.04, -0.1]} material={MM.smoke}>
+                    <sphereGeometry args={[0.035, 6, 6]} />
                 </mesh>
-
-                {/* Chimney cap */}
-                <mesh position={[0.2, 0.84, -0.1]} castShadow>
-                    <boxGeometry args={[0.14, 0.04, 0.14]} />
-                    <meshStandardMaterial color={darkStone} roughness={0.85} flatShading />
+                {/* anvil on stump */}
+                <mesh position={[0.22, 0.08, 0.18]} material={MM.woodDark}>
+                    <cylinderGeometry args={[0.05, 0.06, 0.12, 6]} />
                 </mesh>
-
-                {/* Forge opening (glowing) */}
-                <mesh position={[-0.22, 0.2, 0.23]} castShadow>
-                    <boxGeometry args={[0.15, 0.12, 0.02]} />
-                    <meshStandardMaterial color={fireColor} roughness={0.3} emissive={fireColor} emissiveIntensity={0.6} />
+                <mesh position={[0.22, 0.17, 0.18]} material={MM.iron}>
+                    <boxGeometry args={[0.14, 0.05, 0.05]} />
                 </mesh>
-
-                {/* Anvil outside */}
-                <mesh position={[-0.35, 0.08, 0.2]} castShadow>
-                    <boxGeometry args={[0.08, 0.04, 0.05]} />
-                    <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} flatShading />
+                {/* workbench + tools */}
+                <mesh position={[0.24, 0.12, -0.12]} material={MM.wood}>
+                    <boxGeometry args={[0.18, 0.04, 0.3]} />
                 </mesh>
-                {/* Anvil top */}
-                <mesh position={[-0.35, 0.12, 0.2]} castShadow>
-                    <boxGeometry args={[0.12, 0.03, 0.06]} />
-                    <meshStandardMaterial color={metalColor} roughness={0.4} metalness={0.6} flatShading />
+                <mesh position={[0.24, 0.16, -0.2]} material={MM.iron}>
+                    <boxGeometry args={[0.1, 0.02, 0.03]} />
                 </mesh>
-
-                {/* Workshop door */}
-                <mesh position={[0.05, 0.2, 0.23]} castShadow>
-                    <boxGeometry args={[0.14, 0.24, 0.02]} />
-                    <meshStandardMaterial color="#3D2817" roughness={0.8} />
+                {/* barrel + crate + logs */}
+                <mesh position={[0.05, 0.09, 0.32]} material={MM.wood}>
+                    <cylinderGeometry args={[0.055, 0.055, 0.14, 8]} />
+                </mesh>
+                <mesh position={[-0.15, 0.07, 0.34]} material={MM.woodDark}>
+                    <boxGeometry args={[0.1, 0.1, 0.1]} />
+                </mesh>
+                <mesh position={[-0.35, 0.05, 0.28]} rotation={[0, 0, Math.PI / 2]} material={MM.woodDark}>
+                    <cylinderGeometry args={[0.03, 0.03, 0.16, 5]} />
+                </mesh>
+                <mesh position={[-0.35, 0.1, 0.28]} rotation={[0, 0, Math.PI / 2]} material={MM.wood}>
+                    <cylinderGeometry args={[0.03, 0.03, 0.16, 5]} />
                 </mesh>
             </group>
         </group>
     );
 };
+
 
 export const Library3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Ancient library/scriptorium with columns, scroll alcoves, and domed roof
-    const marbleColor = "#E0D8C8"; // Warm marble
-    const columnColor = "#D4CAB8"; // Column marble
-    const roofColor = "#7B6B5A"; // Terracotta/stone roof
-    const scrollColor = "#DEB887"; // Papyrus scroll color
-    const baseColor = "#B8A88A"; // Stone base
-
+    // Scholars' hall: stepped entrance, columned porch, low dome with gold
+    // finial, and a scroll rack by the door.
     return (
         <group position={position}>
-            <group position={[0, 0.3, 0]} scale={[0.85, 0.85, 0.85]}>
-                {/* Stepped base platform */}
-                <mesh position={[0, 0.04, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.85, 0.08, 0.65]} />
-                    <meshStandardMaterial color={baseColor} roughness={0.85} flatShading />
+            <GroundShadow r={0.9} />
+            <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+                <mesh position={[0, 0.04, 0.1]} material={MM.marbleDim} receiveShadow>
+                    <boxGeometry args={[0.66, 0.08, 0.6]} />
                 </mesh>
-                <mesh position={[0, 0.12, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.75, 0.08, 0.55]} />
-                    <meshStandardMaterial color={marbleColor} roughness={0.8} flatShading />
+                <mesh position={[0, 0.1, 0.16]} material={MM.marble}>
+                    <boxGeometry args={[0.56, 0.05, 0.44]} />
                 </mesh>
-
-                {/* Main building body */}
-                <mesh position={[0, 0.32, 0]} castShadow>
-                    <boxGeometry args={[0.65, 0.32, 0.45]} />
-                    <meshStandardMaterial color={marbleColor} roughness={0.75} flatShading />
+                {/* main hall */}
+                <mesh position={[0, 0.31, -0.05]} material={MM.stucco} castShadow>
+                    <boxGeometry args={[0.52, 0.34, 0.4]} />
                 </mesh>
-
-                {/* Front columns (4 columns) */}
-                {[-0.24, -0.08, 0.08, 0.24].map((x, i) => (
-                    <group key={`col-${i}`} position={[x, 0.36, 0.26]}>
-                        <mesh castShadow>
-                            <cylinderGeometry args={[0.035, 0.045, 0.36, 8]} />
-                            <meshStandardMaterial color={columnColor} roughness={0.7} flatShading />
-                        </mesh>
-                        {/* Column capital */}
-                        <mesh position={[0, 0.2, 0]} castShadow>
-                            <boxGeometry args={[0.08, 0.04, 0.08]} />
-                            <meshStandardMaterial color={marbleColor} roughness={0.6} flatShading />
-                        </mesh>
-                    </group>
+                {/* porch columns + lintel */}
+                {[-0.19, -0.065, 0.065, 0.19].map((x, i) => (
+                    <mesh key={i} position={[x, 0.28, 0.24]} material={MM.marble}>
+                        <cylinderGeometry args={[0.026, 0.03, 0.3, 8]} />
+                    </mesh>
                 ))}
-
-                {/* Triangular pediment (like a classical library facade) */}
-                <mesh position={[0, 0.56, 0.22]} rotation={[Math.PI/2, 0, 0]} castShadow>
-                    <coneGeometry args={[0.36, 0.18, 3]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.8} flatShading />
+                <mesh position={[0, 0.46, 0.22]} material={MM.marble}>
+                    <boxGeometry args={[0.5, 0.05, 0.12]} />
                 </mesh>
-
-                {/* Main flat roof */}
-                <mesh position={[0, 0.5, 0]} castShadow>
-                    <boxGeometry args={[0.7, 0.04, 0.5]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.8} flatShading />
+                {/* dome + finial */}
+                <mesh position={[0, 0.52, -0.05]} material={MM.clothBlue} castShadow>
+                    <sphereGeometry args={[0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
                 </mesh>
-
-                {/* Small dome on top (knowledge/wisdom symbol) */}
-                <mesh position={[0, 0.6, -0.05]} castShadow>
-                    <sphereGeometry args={[0.12, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.7} flatShading />
+                <mesh position={[0, 0.76, -0.05]} material={MM.gold}>
+                    <sphereGeometry args={[0.035, 8, 8]} />
                 </mesh>
-
-                {/* Scroll alcoves on side wall (3 niches) */}
-                {[-0.12, 0, 0.12].map((z, i) => (
-                    <group key={`alcove-${i}`} position={[0.33, 0.32, z]}>
-                        {/* Niche shadow */}
-                        <mesh castShadow>
-                            <boxGeometry args={[0.02, 0.1, 0.08]} />
-                            <meshStandardMaterial color="#4A4035" roughness={0.9} />
-                        </mesh>
-                        {/* Scroll inside */}
-                        <mesh position={[0.02, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-                            <cylinderGeometry args={[0.02, 0.02, 0.07, 6]} />
-                            <meshStandardMaterial color={scrollColor} roughness={0.7} flatShading />
-                        </mesh>
-                    </group>
+                {/* doorway */}
+                <mesh position={[0, 0.24, 0.155]} material={MM.woodDark}>
+                    <boxGeometry args={[0.12, 0.2, 0.02]} />
+                </mesh>
+                {/* scroll rack: frame + scroll ends */}
+                <mesh position={[0.3, 0.14, 0.3]} material={MM.wood}>
+                    <boxGeometry args={[0.12, 0.16, 0.08]} />
+                </mesh>
+                {[[0.27, 0.18], [0.33, 0.18], [0.27, 0.11], [0.33, 0.11]].map(([x, y], i) => (
+                    <mesh key={'s' + i} position={[x, y, 0.345]} rotation={[Math.PI / 2, 0, 0]} material={MM.marble}>
+                        <cylinderGeometry args={[0.018, 0.018, 0.02, 6]} />
+                    </mesh>
                 ))}
-
-                {/* Entrance doorway */}
-                <mesh position={[0, 0.25, 0.23]} castShadow>
-                    <boxGeometry args={[0.14, 0.22, 0.02]} />
-                    <meshStandardMaterial color="#2D2817" roughness={0.8} />
-                </mesh>
             </group>
         </group>
     );
 };
+
 
 export const Barracks3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
-    // Military barracks with training yard, weapon racks, and watchtower
-    const stoneColor = "#9B8B7A"; // Rough stone
-    const darkStone = "#6B5D4F"; // Dark accent stone
-    const woodColor = "#5D4E37"; // Dark timber
-    const roofColor = "#4A3728"; // Dark thatched/wood roof
-    const metalColor = "#808080"; // Iron weapons
-    const bannerColor = "#8B0000"; // Dark red military banner
-
+    // Military post: fortified hall, watchtower with lookout roof, war
+    // banner, shield wall, spear rack, and a training dummy.
     return (
         <group position={position}>
+            <GroundShadow r={0.95} />
             <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-                {/* Stone foundation platform */}
-                <mesh position={[0, 0.04, 0]} receiveShadow castShadow>
-                    <boxGeometry args={[0.8, 0.08, 0.6]} />
-                    <meshStandardMaterial color={darkStone} roughness={0.9} flatShading />
+                <mesh position={[-0.05, 0.06, 0]} material={MM.stoneDark} receiveShadow>
+                    <boxGeometry args={[0.64, 0.12, 0.5]} />
                 </mesh>
-
-                {/* Main barracks building */}
-                <mesh position={[-0.1, 0.24, -0.05]} castShadow>
-                    <boxGeometry args={[0.5, 0.32, 0.4]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
+                <mesh position={[-0.05, 0.28, 0]} material={MM.stone} castShadow>
+                    <boxGeometry args={[0.54, 0.32, 0.4]} />
                 </mesh>
-
-                {/* Barracks flat/sloped roof */}
-                <mesh position={[-0.1, 0.44, -0.05]} castShadow>
-                    <boxGeometry args={[0.55, 0.06, 0.45]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.9} flatShading />
+                <mesh position={[-0.05, 0.49, 0]} rotation={[0, 0, 0]} material={MM.woodDark} castShadow>
+                    <boxGeometry args={[0.6, 0.06, 0.46]} />
                 </mesh>
-                {/* Roof ridge */}
-                <mesh position={[-0.1, 0.52, -0.05]} castShadow>
-                    <coneGeometry args={[0.32, 0.15, 4]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.9} flatShading />
-                </mesh>
-
-                {/* Watchtower on corner */}
-                <mesh position={[0.28, 0.4, 0.18]} castShadow>
-                    <boxGeometry args={[0.15, 0.55, 0.15]} />
-                    <meshStandardMaterial color={stoneColor} roughness={0.85} flatShading />
-                </mesh>
-                {/* Watchtower top */}
-                <mesh position={[0.28, 0.72, 0.18]} castShadow>
-                    <boxGeometry args={[0.2, 0.06, 0.2]} />
-                    <meshStandardMaterial color={darkStone} roughness={0.85} flatShading />
-                </mesh>
-                {/* Watchtower pointed roof */}
-                <mesh position={[0.28, 0.82, 0.18]} castShadow>
-                    <coneGeometry args={[0.12, 0.15, 4]} />
-                    <meshStandardMaterial color={roofColor} roughness={0.9} flatShading />
-                </mesh>
-
-                {/* Weapon rack */}
-                <group position={[0.32, 0.12, -0.15]}>
-                    {/* Rack frame */}
-                    <mesh castShadow>
-                        <boxGeometry args={[0.04, 0.2, 0.15]} />
-                        <meshStandardMaterial color={woodColor} roughness={0.8} flatShading />
-                    </mesh>
-                    {/* Spears/weapons on rack */}
-                    {[-0.04, 0, 0.04].map((z, i) => (
-                        <mesh key={i} position={[0.03, 0.05, z]} castShadow>
-                            <cylinderGeometry args={[0.008, 0.008, 0.25, 4]} />
-                            <meshStandardMaterial color={metalColor} roughness={0.5} metalness={0.4} />
-                        </mesh>
-                    ))}
-                </group>
-
-                {/* Training dummy */}
-                <group position={[-0.38, 0.12, 0.2]}>
-                    {/* Post */}
-                    <mesh castShadow>
-                        <cylinderGeometry args={[0.02, 0.02, 0.2, 6]} />
-                        <meshStandardMaterial color={woodColor} roughness={0.8} />
-                    </mesh>
-                    {/* Crossbar */}
-                    <mesh position={[0, 0.08, 0]} castShadow>
-                        <boxGeometry args={[0.15, 0.03, 0.03]} />
-                        <meshStandardMaterial color={woodColor} roughness={0.8} />
-                    </mesh>
-                </group>
-
-                {/* Military banner on watchtower */}
-                <mesh position={[0.28, 0.9, 0.18]} castShadow>
-                    <cylinderGeometry args={[0.008, 0.008, 0.18, 4]} />
-                    <meshStandardMaterial color={woodColor} roughness={0.8} />
-                </mesh>
-                <mesh position={[0.32, 0.92, 0.18]} castShadow>
-                    <boxGeometry args={[0.08, 0.1, 0.01]} />
-                    <meshStandardMaterial color={bannerColor} roughness={0.7} flatShading />
-                </mesh>
-
-                {/* Barracks door */}
-                <mesh position={[-0.1, 0.18, 0.16]} castShadow>
-                    <boxGeometry args={[0.14, 0.22, 0.02]} />
-                    <meshStandardMaterial color="#2D2817" roughness={0.8} />
-                </mesh>
-
-                {/* Window slits */}
-                {[-0.25, 0.05].map((x, i) => (
-                    <mesh key={i} position={[x, 0.32, 0.16]} castShadow>
-                        <boxGeometry args={[0.04, 0.1, 0.02]} />
-                        <meshStandardMaterial color="#1A1A1A" roughness={0.9} />
+                {/* shields on the wall */}
+                {[-0.22, -0.05, 0.12].map((x, i) => (
+                    <mesh key={i} position={[x, 0.32, 0.205]} rotation={[Math.PI / 2, 0, 0]} material={i % 2 ? MM.clothRed : MM.iron}>
+                        <cylinderGeometry args={[0.05, 0.05, 0.02, 8]} />
                     </mesh>
                 ))}
+                {/* watchtower */}
+                <mesh position={[0.32, 0.35, -0.12]} material={MM.wood} castShadow>
+                    <boxGeometry args={[0.14, 0.66, 0.14]} />
+                </mesh>
+                <mesh position={[0.32, 0.72, -0.12]} material={MM.woodDark}>
+                    <boxGeometry args={[0.2, 0.05, 0.2]} />
+                </mesh>
+                <mesh position={[0.32, 0.84, -0.12]} material={MM.terracotta}>
+                    <coneGeometry args={[0.14, 0.16, 4]} />
+                </mesh>
+                {/* banner pole + flag */}
+                <mesh position={[0.32, 1.0, -0.12]} material={MM.wood}>
+                    <cylinderGeometry args={[0.012, 0.012, 0.18, 4]} />
+                </mesh>
+                <mesh position={[0.38, 1.04, -0.12]} material={MM.clothRed}>
+                    <boxGeometry args={[0.1, 0.06, 0.01]} />
+                </mesh>
+                {/* spear rack */}
+                <mesh position={[-0.36, 0.1, 0.26]} material={MM.wood}>
+                    <boxGeometry args={[0.16, 0.03, 0.03]} />
+                </mesh>
+                {[-0.41, -0.36, -0.31].map((x, i) => (
+                    <mesh key={'sp' + i} position={[x, 0.2, 0.26]} rotation={[0, 0, 0.12 * (i - 1)]} material={MM.wood}>
+                        <cylinderGeometry args={[0.008, 0.008, 0.26, 4]} />
+                    </mesh>
+                ))}
+                {/* training dummy */}
+                <mesh position={[0.2, 0.12, 0.3]} material={MM.woodDark}>
+                    <cylinderGeometry args={[0.02, 0.02, 0.2, 4]} />
+                </mesh>
+                <mesh position={[0.2, 0.19, 0.3]} rotation={[0, 0, Math.PI / 2]} material={MM.wood}>
+                    <cylinderGeometry args={[0.015, 0.015, 0.16, 4]} />
+                </mesh>
+                <mesh position={[0.2, 0.26, 0.3]} material={MM.thatch}>
+                    <sphereGeometry args={[0.035, 6, 6]} />
+                </mesh>
             </group>
         </group>
     );
 };
 
-// ============================================================
-// WONDER VARIANTS — each wonder renders a distinct silhouette that
-// hints at the real building while keeping the low-poly board-game art
-// style. Falls back to a default ziggurat for unmapped ids.
-// ============================================================
 
 const WonderPyramid: React.FC = () => (
-    // Egyptian Great Pyramid: a single tall four-sided pyramid.
+    // Giza: stepped limestone courses, smooth cap, gold capstone, causeway
+    // and two flanking mastaba blocks.
     <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-        <mesh position={[0, 0.4, 0]} castShadow receiveShadow rotation={[0, Math.PI / 4, 0]}>
-            <coneGeometry args={[0.55, 0.85, 4]} />
-            <meshStandardMaterial color="#d6b87a" roughness={0.85} flatShading />
+        <GroundShadow r={1.05} />
+        {[
+            { s: 0.95, y: 0.06, h: 0.12 },
+            { s: 0.78, y: 0.17, h: 0.11 },
+            { s: 0.62, y: 0.27, h: 0.1 },
+            { s: 0.46, y: 0.36, h: 0.09 },
+        ].map((c, i) => (
+            <mesh key={i} position={[0, c.y, 0]} material={i % 2 ? MM.sand : MM.stone} castShadow={i === 0} receiveShadow>
+                <boxGeometry args={[c.s, c.h, c.s]} />
+            </mesh>
+        ))}
+        <mesh position={[0, 0.52, 0]} rotation={[0, Math.PI / 4, 0]} material={MM.stone} castShadow>
+            <coneGeometry args={[0.33, 0.24, 4]} />
         </mesh>
-        <mesh position={[0, 0.025, 0]} receiveShadow>
-            <boxGeometry args={[0.95, 0.05, 0.95]} />
-            <meshStandardMaterial color="#c8a967" roughness={0.9} flatShading />
+        <mesh position={[0, 0.66, 0]} rotation={[0, Math.PI / 4, 0]} material={MM.gold}>
+            <coneGeometry args={[0.07, 0.08, 4]} />
+        </mesh>
+        <mesh position={[0, 0.02, 0.42]} material={MM.sand}>
+            <boxGeometry args={[0.14, 0.04, 0.32]} />
+        </mesh>
+        <mesh position={[-0.38, 0.05, 0.34]} material={MM.stoneDark}>
+            <boxGeometry args={[0.12, 0.1, 0.1]} />
+        </mesh>
+        <mesh position={[0.38, 0.05, 0.34]} material={MM.stoneDark}>
+            <boxGeometry args={[0.12, 0.1, 0.1]} />
         </mesh>
     </group>
 );
 
+
 const WonderStonehenge: React.FC = () => {
-    // Ring of upright stones with lintels. 6 standing stones in a circle.
-    const radius = 0.32;
-    const stones = Array.from({ length: 6 }, (_, i) => {
-        const a = (i / 6) * Math.PI * 2;
-        return [Math.cos(a) * radius, 0.3, Math.sin(a) * radius] as [number, number, number];
+    // True trilithons: paired uprights with separate lintels, a central
+    // altar stone, and two fallen sarsens in the grass.
+    const trilithons = Array.from({ length: 5 }, (_, i) => {
+        const a = (i / 5) * Math.PI * 2 + 0.3;
+        return { a, x: Math.cos(a) * 0.32, z: Math.sin(a) * 0.32 };
     });
     return (
-        <group position={[0, 0.3, 0]}>
-            {stones.map((p, i) => (
-                <mesh key={i} position={p} castShadow>
-                    <boxGeometry args={[0.12, 0.45, 0.08]} />
-                    <meshStandardMaterial color="#7a7570" roughness={0.95} flatShading />
-                </mesh>
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={1.0} />
+            {trilithons.map((t, i) => (
+                <group key={i} position={[t.x, 0, t.z]} rotation={[0, -t.a + Math.PI / 2, 0]}>
+                    <mesh position={[-0.07, 0.2, 0]} material={MM.stoneDark} castShadow={i < 2}>
+                        <boxGeometry args={[0.09, 0.4, 0.09]} />
+                    </mesh>
+                    <mesh position={[0.07, 0.2, 0]} material={MM.stone}>
+                        <boxGeometry args={[0.09, 0.4, 0.09]} />
+                    </mesh>
+                    <mesh position={[0, 0.44, 0]} material={MM.stoneDark}>
+                        <boxGeometry args={[0.26, 0.08, 0.1]} />
+                    </mesh>
+                </group>
             ))}
-            {/* Top lintel ring */}
-            <mesh position={[0, 0.55, 0]} castShadow>
-                <torusGeometry args={[0.32, 0.05, 6, 18]} />
-                <meshStandardMaterial color="#88837e" roughness={0.95} flatShading />
+            <mesh position={[0, 0.05, 0]} material={MM.stone}>
+                <boxGeometry args={[0.16, 0.1, 0.1]} />
+            </mesh>
+            <mesh position={[0.14, 0.03, -0.5]} rotation={[0, 0.4, Math.PI / 2]} material={MM.stoneDark}>
+                <boxGeometry args={[0.08, 0.3, 0.08]} />
+            </mesh>
+            <mesh position={[-0.5, 0.03, 0.14]} rotation={[Math.PI / 2, 0, 0.8]} material={MM.stone}>
+                <boxGeometry args={[0.08, 0.26, 0.08]} />
             </mesh>
         </group>
     );
 };
+
 
 const WonderParthenon: React.FC = () => {
-    // Greek temple: stylobate + ring of columns + triangular pediment.
+    // Athens: three-step crepidoma, full peristyle suggestion (10 visible
+    // columns), entablature, twin pediments and inner cella.
     return (
-        <group position={[0, 0.3, 0]}>
-            {/* Stepped stylobate */}
-            <mesh position={[0, 0.05, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.9, 0.1, 0.6]} />
-                <meshStandardMaterial color="#e8e4dc" roughness={0.85} flatShading />
-            </mesh>
-            {/* Columns: 6 across the front (and back), 2 visible on each side */}
-            {[-0.32, -0.19, -0.06, 0.06, 0.19, 0.32].flatMap((x) => [-0.22, 0.22].map((z) => [x, 0.32, z] as [number, number, number])).map((p, i) => (
-                <mesh key={i} position={p} castShadow>
-                    <cylinderGeometry args={[0.04, 0.04, 0.45, 8]} />
-                    <meshStandardMaterial color="#f0ece4" roughness={0.8} flatShading />
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={1.05} />
+            {[0.98, 0.9, 0.82].map((s, i) => (
+                <mesh key={i} position={[0, 0.035 + i * 0.05, 0]} material={MM.marbleDim} receiveShadow>
+                    <boxGeometry args={[s, 0.05, s * 0.64]} />
                 </mesh>
             ))}
-            {/* Architrave */}
-            <mesh position={[0, 0.58, 0]} castShadow>
-                <boxGeometry args={[0.85, 0.08, 0.55]} />
-                <meshStandardMaterial color="#dcd6c8" roughness={0.85} flatShading />
+            <mesh position={[0, 0.34, 0]} material={MM.marbleDim} castShadow>
+                <boxGeometry args={[0.5, 0.3, 0.28]} />
             </mesh>
-            {/* Triangular pediment (front) */}
-            <mesh position={[0, 0.7, 0.275]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-                <coneGeometry args={[0.42, 0.18, 3]} />
-                <meshStandardMaterial color="#d8d2c4" roughness={0.85} flatShading />
+            {[-0.34, -0.204, -0.068, 0.068, 0.204, 0.34].map((x, i) => (
+                <group key={i}>
+                    <mesh position={[x, 0.33, 0.21]} material={MM.marble}>
+                        <cylinderGeometry args={[0.032, 0.038, 0.34, 8]} />
+                    </mesh>
+                    <mesh position={[x, 0.33, -0.21]} material={MM.marble}>
+                        <cylinderGeometry args={[0.032, 0.038, 0.34, 8]} />
+                    </mesh>
+                </group>
+            ))}
+            {[-0.34, 0.34].map((x, i) => (
+                <mesh key={'s' + i} position={[x, 0.33, 0]} material={MM.marble}>
+                    <cylinderGeometry args={[0.032, 0.038, 0.34, 8]} />
+                </mesh>
+            ))}
+            <mesh position={[0, 0.535, 0]} material={MM.marble} castShadow>
+                <boxGeometry args={[0.8, 0.07, 0.5]} />
+            </mesh>
+            <mesh position={[0, 0.63, 0]} rotation={[0, 0, Math.PI / 2]} material={MM.marbleDim}>
+                <cylinderGeometry args={[0.12, 0.12, 0.78, 3, 1]} />
+            </mesh>
+            <mesh position={[0, 0.4, 0]} material={MM.gold}>
+                <boxGeometry args={[0.06, 0.14, 0.06]} />
             </mesh>
         </group>
     );
 };
+
 
 const WonderHangingGardens: React.FC = () => {
-    // Tiered terraced gardens with trees.
+    // Babylon: arched terraces dripping with greenery, a water channel
+    // cascading down the front, palms on the crown.
     return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.85, 0.16, 0.85]} />
-                <meshStandardMaterial color="#9b7c4e" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 0.28, 0]} castShadow>
-                <boxGeometry args={[0.65, 0.14, 0.65]} />
-                <meshStandardMaterial color="#a8855a" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 0.45, 0]} castShadow>
-                <boxGeometry args={[0.45, 0.12, 0.45]} />
-                <meshStandardMaterial color="#b8946a" roughness={0.9} flatShading />
-            </mesh>
-            {/* Trees on each tier */}
-            {[[-0.3, 0.2, 0.3], [0.3, 0.2, -0.3], [-0.2, 0.4, 0], [0.2, 0.4, 0.2], [0, 0.55, 0]].map((p, i) => (
-                <mesh key={i} position={p as [number, number, number]} castShadow>
-                    <coneGeometry args={[0.07, 0.18, 6]} />
-                    <meshStandardMaterial color="#3f7a3a" roughness={0.9} flatShading />
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={1.0} />
+            {[
+                { s: 0.9, y: 0.09, h: 0.18 },
+                { s: 0.66, y: 0.27, h: 0.16 },
+                { s: 0.44, y: 0.43, h: 0.14 },
+            ].map((t, i) => (
+                <mesh key={i} position={[0, t.y, 0]} material={i % 2 ? MM.sand : MM.stone} castShadow={i === 0} receiveShadow>
+                    <boxGeometry args={[t.s, t.h, t.s]} />
                 </mesh>
+            ))}
+            {/* arch piers on the bottom terrace */}
+            {[-0.3, -0.1, 0.1, 0.3].map((x, i) => (
+                <mesh key={'p' + i} position={[x, 0.07, 0.46]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.07, 0.14, 0.03]} />
+                </mesh>
+            ))}
+            {/* cascading greenery on every ledge */}
+            {[[-0.42, 0.2, 0.34], [0.42, 0.2, -0.3], [0.3, 0.37, 0.28], [-0.3, 0.37, -0.26], [0.18, 0.52, 0.18], [-0.18, 0.52, -0.16]].map(([x, y, z], i) => (
+                <mesh key={'g' + i} position={[x, y, z]} material={i % 2 ? MM.leaf : MM.leafDark}>
+                    <sphereGeometry args={[0.09, 7, 6]} />
+                </mesh>
+            ))}
+            {/* water channel down the front + basin */}
+            <mesh position={[0, 0.3, 0.36]} rotation={[0.5, 0, 0]} material={MM.water}>
+                <boxGeometry args={[0.08, 0.5, 0.02]} />
+            </mesh>
+            <mesh position={[0, 0.03, 0.52]} material={MM.water}>
+                <cylinderGeometry args={[0.09, 0.09, 0.04, 10]} />
+            </mesh>
+            {/* crown palms */}
+            {[[-0.08, 0.06], [0.1, -0.04]].map(([x, z], i) => (
+                <group key={'t' + i} position={[x, 0.5, z]}>
+                    <mesh position={[0, 0.08, 0]} material={MM.woodDark}>
+                        <cylinderGeometry args={[0.015, 0.02, 0.16, 5]} />
+                    </mesh>
+                    <mesh position={[0, 0.18, 0]} material={MM.leaf}>
+                        <coneGeometry args={[0.08, 0.1, 6]} />
+                    </mesh>
+                </group>
             ))}
         </group>
     );
 };
+
 
 const WonderGreatWall: React.FC = () => {
-    // Long battlement wall with crenellations.
+    // A snaking run of wall with two double-roofed watchtowers, full
+    // crenellation and a war banner.
     return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.95, 0.32, 0.22]} />
-                <meshStandardMaterial color="#8a7e72" roughness={0.92} flatShading />
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={1.05} />
+            <mesh position={[-0.28, 0.16, 0.1]} rotation={[0, 0.5, 0]} material={MM.stone} castShadow receiveShadow>
+                <boxGeometry args={[0.5, 0.3, 0.18]} />
             </mesh>
-            {/* Crenellations along the top */}
-            {[-0.36, -0.18, 0, 0.18, 0.36].map((x, i) => (
-                <mesh key={i} position={[x, 0.4, 0]} castShadow>
-                    <boxGeometry args={[0.1, 0.12, 0.22]} />
-                    <meshStandardMaterial color="#9a8e82" roughness={0.92} flatShading />
+            <mesh position={[0.24, 0.16, -0.08]} rotation={[0, -0.35, 0]} material={MM.stone} castShadow>
+                <boxGeometry args={[0.5, 0.3, 0.18]} />
+            </mesh>
+            {/* crenellations along both runs */}
+            {[-0.44, -0.3, -0.16].map((x, i) => (
+                <mesh key={i} position={[x, 0.35, 0.19 - (x + 0.3) * 0.55]} rotation={[0, 0.5, 0]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.08, 0.08, 0.18]} />
                 </mesh>
             ))}
-            {/* End watchtowers */}
-            <mesh position={[-0.45, 0.32, 0]} castShadow>
-                <boxGeometry args={[0.18, 0.55, 0.28]} />
-                <meshStandardMaterial color="#7a6f64" roughness={0.92} flatShading />
+            {[0.1, 0.24, 0.38].map((x, i) => (
+                <mesh key={'c' + i} position={[x, 0.35, -0.03 - (x - 0.24) * -0.35]} rotation={[0, -0.35, 0]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.08, 0.08, 0.18]} />
+                </mesh>
+            ))}
+            {/* watchtowers with double pagoda roofs */}
+            {[[-0.02, 0.02], [0.48, -0.16]].map(([x, z], i) => (
+                <group key={'t' + i} position={[x, 0, z]}>
+                    <mesh position={[0, 0.28, 0]} material={MM.stoneDark} castShadow>
+                        <boxGeometry args={[0.22, 0.5, 0.22]} />
+                    </mesh>
+                    <mesh position={[0, 0.56, 0]} material={MM.terracotta}>
+                        <boxGeometry args={[0.28, 0.05, 0.28]} />
+                    </mesh>
+                    <mesh position={[0, 0.66, 0]} material={MM.stone}>
+                        <boxGeometry args={[0.16, 0.14, 0.16]} />
+                    </mesh>
+                    <mesh position={[0, 0.76, 0]} rotation={[0, Math.PI / 4, 0]} material={MM.terracotta}>
+                        <coneGeometry args={[0.16, 0.12, 4]} />
+                    </mesh>
+                </group>
+            ))}
+            <mesh position={[-0.02, 0.9, 0.02]} material={MM.wood}>
+                <cylinderGeometry args={[0.01, 0.01, 0.16, 4]} />
             </mesh>
-            <mesh position={[0.45, 0.32, 0]} castShadow>
-                <boxGeometry args={[0.18, 0.55, 0.28]} />
-                <meshStandardMaterial color="#7a6f64" roughness={0.92} flatShading />
+            <mesh position={[0.03, 0.94, 0.02]} material={MM.clothRed}>
+                <boxGeometry args={[0.09, 0.05, 0.01]} />
             </mesh>
         </group>
     );
 };
+
 
 const WonderColosseum: React.FC = () => {
-    // Round tiered amphitheater.
+    // Rome: three arcaded tiers (pillar rings suggest the arches), sand
+    // arena floor and the ring of awning masts on the top rim.
+    const ringPillars = (r: number, n: number, y: number, h: number) =>
+        Array.from({ length: n }, (_, i) => {
+            const a = (i / n) * Math.PI * 2;
+            return { x: Math.cos(a) * r, z: Math.sin(a) * r, y, h, key: `${r}-${i}` };
+        });
     return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.12, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[0.45, 0.5, 0.24, 16]} />
-                <meshStandardMaterial color="#c9a878" roughness={0.85} flatShading />
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={1.05} />
+            <mesh position={[0, 0.1, 0]} material={MM.stone} castShadow receiveShadow>
+                <cylinderGeometry args={[0.48, 0.52, 0.2, 18, 1, true]} />
             </mesh>
-            <mesh position={[0, 0.32, 0]} castShadow>
-                <cylinderGeometry args={[0.4, 0.45, 0.18, 16]} />
-                <meshStandardMaterial color="#d8b988" roughness={0.85} flatShading />
+            <mesh position={[0, 0.28, 0]} material={MM.sand} castShadow>
+                <cylinderGeometry args={[0.43, 0.47, 0.16, 18, 1, true]} />
             </mesh>
-            <mesh position={[0, 0.48, 0]} castShadow>
-                <cylinderGeometry args={[0.34, 0.4, 0.14, 16]} />
-                <meshStandardMaterial color="#e2c898" roughness={0.85} flatShading />
+            <mesh position={[0, 0.42, 0]} material={MM.stone}>
+                <cylinderGeometry args={[0.38, 0.42, 0.12, 18, 1, true]} />
             </mesh>
-            {/* Open center */}
-            <mesh position={[0, 0.58, 0]}>
-                <cylinderGeometry args={[0.22, 0.22, 0.05, 16]} />
-                <meshStandardMaterial color="#5a4536" roughness={0.95} flatShading />
+            {/* arch pillars around the base tier */}
+            {ringPillars(0.5, 10, 0.1, 0.18).map((p) => (
+                <mesh key={p.key} position={[p.x, p.y, p.z]} material={MM.stoneDark}>
+                    <boxGeometry args={[0.05, p.h, 0.05]} />
+                </mesh>
+            ))}
+            {/* arena floor */}
+            <mesh position={[0, 0.05, 0]} material={MM.sand}>
+                <cylinderGeometry args={[0.34, 0.34, 0.06, 16]} />
             </mesh>
-        </group>
-    );
-};
-
-const WonderLighthouse: React.FC = () => {
-    // Tapered tower with a flame at the top.
-    return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.5, 0.2, 0.5]} />
-                <meshStandardMaterial color="#b8a890" roughness={0.85} flatShading />
+            <mesh position={[0, 0.06, 0]} material={MM.soil}>
+                <boxGeometry args={[0.3, 0.055, 0.05]} />
             </mesh>
-            <mesh position={[0, 0.42, 0]} castShadow>
-                <cylinderGeometry args={[0.16, 0.22, 0.5, 8]} />
-                <meshStandardMaterial color="#d2c2a8" roughness={0.8} flatShading />
-            </mesh>
-            <mesh position={[0, 0.78, 0]} castShadow>
-                <cylinderGeometry args={[0.13, 0.16, 0.18, 8]} />
-                <meshStandardMaterial color="#a89878" roughness={0.85} flatShading />
-            </mesh>
-            <mesh position={[0, 0.94, 0]} castShadow>
-                <coneGeometry args={[0.1, 0.18, 8]} />
-                <meshStandardMaterial color="#ff8a3a" emissive="#ff5a1a" emissiveIntensity={0.8} roughness={0.4} flatShading />
-            </mesh>
-        </group>
-    );
-};
-
-const WonderColossus: React.FC = () => {
-    // Tall standing figure on a pedestal.
-    return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.1, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[0.3, 0.35, 0.2, 12]} />
-                <meshStandardMaterial color="#7c6a52" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 0.42, 0]} castShadow>
-                <boxGeometry args={[0.18, 0.45, 0.12]} />
-                <meshStandardMaterial color="#c79850" roughness={0.4} metalness={0.5} flatShading />
-            </mesh>
-            <mesh position={[0, 0.75, 0]} castShadow>
-                <sphereGeometry args={[0.1, 10, 10]} />
-                <meshStandardMaterial color="#c79850" roughness={0.4} metalness={0.5} flatShading />
-            </mesh>
-            {/* Crown spikes */}
-            <mesh position={[0, 0.88, 0]} castShadow>
-                <coneGeometry args={[0.07, 0.12, 8]} />
-                <meshStandardMaterial color="#e0b266" roughness={0.4} metalness={0.6} flatShading />
-            </mesh>
-        </group>
-    );
-};
-
-const WonderGreatLibrary: React.FC = () => {
-    // Domed scholarly building with steps.
-    return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.06, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.85, 0.12, 0.7]} />
-                <meshStandardMaterial color="#d8c8a4" roughness={0.85} flatShading />
-            </mesh>
-            <mesh position={[0, 0.24, 0]} castShadow>
-                <boxGeometry args={[0.7, 0.24, 0.55]} />
-                <meshStandardMaterial color="#e8d8b4" roughness={0.85} flatShading />
-            </mesh>
-            {/* Dome */}
-            <mesh position={[0, 0.5, 0]} castShadow>
-                <sphereGeometry args={[0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                <meshStandardMaterial color="#a8c8d8" roughness={0.5} flatShading />
-            </mesh>
-            {/* Front columns */}
-            {[-0.2, 0, 0.2].map((x, i) => (
-                <mesh key={i} position={[x, 0.3, 0.3]} castShadow>
-                    <cylinderGeometry args={[0.03, 0.03, 0.3, 8]} />
-                    <meshStandardMaterial color="#f0e8d4" roughness={0.85} flatShading />
+            {/* awning masts */}
+            {ringPillars(0.4, 8, 0.54, 0.12).map((p) => (
+                <mesh key={'m' + p.key} position={[p.x, p.y, p.z]} material={MM.wood}>
+                    <cylinderGeometry args={[0.01, 0.01, 0.12, 4]} />
                 </mesh>
             ))}
         </group>
     );
 };
 
-const WonderOracle: React.FC = () => {
-    // Round columned temple (tholos).
+
+const WonderLighthouse: React.FC = () => {
+    // Pharos of Alexandria: square base with corner pinnacles, octagonal
+    // mid-stage, round lantern with live flame, statue on the crown.
     return (
-        <group position={[0, 0.3, 0]}>
-            <mesh position={[0, 0.05, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[0.4, 0.42, 0.1, 16]} />
-                <meshStandardMaterial color="#e0d8c4" roughness={0.85} flatShading />
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={0.9} />
+            <mesh position={[0, 0.13, 0]} material={MM.stone} castShadow receiveShadow>
+                <boxGeometry args={[0.52, 0.26, 0.52]} />
             </mesh>
-            {/* Ring of columns */}
-            {Array.from({ length: 8 }, (_, i) => {
-                const a = (i / 8) * Math.PI * 2;
-                const r = 0.32;
+            {[[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]].map(([x, z], i) => (
+                <mesh key={i} position={[x, 0.3, z]} material={MM.stoneDark}>
+                    <coneGeometry args={[0.035, 0.09, 4]} />
+                </mesh>
+            ))}
+            <mesh position={[0, 0.46, 0]} material={MM.stucco} castShadow>
+                <cylinderGeometry args={[0.15, 0.2, 0.4, 8]} />
+            </mesh>
+            <mesh position={[0, 0.72, 0]} material={MM.stone}>
+                <cylinderGeometry args={[0.1, 0.13, 0.16, 10]} />
+            </mesh>
+            {/* lantern colonnettes + fire */}
+            {[0, 1, 2, 3].map((i) => {
+                const a = (i / 4) * Math.PI * 2;
                 return (
-                    <mesh key={i} position={[Math.cos(a) * r, 0.32, Math.sin(a) * r]} castShadow>
-                        <cylinderGeometry args={[0.035, 0.035, 0.4, 8]} />
-                        <meshStandardMaterial color="#f0ece0" roughness={0.85} flatShading />
+                    <mesh key={'c' + i} position={[Math.cos(a) * 0.08, 0.84, Math.sin(a) * 0.08]} material={MM.marble}>
+                        <cylinderGeometry args={[0.012, 0.012, 0.1, 4]} />
                     </mesh>
                 );
             })}
-            {/* Conical roof */}
-            <mesh position={[0, 0.66, 0]} castShadow>
-                <coneGeometry args={[0.4, 0.22, 16]} />
-                <meshStandardMaterial color="#b89878" roughness={0.85} flatShading />
+            <mesh position={[0, 0.85, 0]} material={MM.flame}>
+                <coneGeometry args={[0.05, 0.12, 6]} />
+            </mesh>
+            <mesh position={[0, 0.95, 0.02]} material={MM.smoke}>
+                <sphereGeometry args={[0.035, 6, 6]} />
+            </mesh>
+            <mesh position={[0, 0.93, 0]} material={MM.terracotta}>
+                <coneGeometry args={[0.09, 0.07, 8]} />
+            </mesh>
+            <mesh position={[0, 1.0, 0]} material={MM.gold}>
+                <boxGeometry args={[0.03, 0.08, 0.03]} />
             </mesh>
         </group>
     );
 };
 
+
+const WonderColossus: React.FC = () => {
+    // Rhodes: the bronze giant astride the harbor mouth, torch raised,
+    // ships' berth of blue water between the twin pedestals.
+    return (
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={0.9} />
+            <mesh position={[-0.16, 0.08, 0]} material={MM.stone} castShadow receiveShadow>
+                <boxGeometry args={[0.18, 0.16, 0.24]} />
+            </mesh>
+            <mesh position={[0.16, 0.08, 0]} material={MM.stone} castShadow>
+                <boxGeometry args={[0.18, 0.16, 0.24]} />
+            </mesh>
+            <mesh position={[0, 0.03, 0]} material={MM.water}>
+                <boxGeometry args={[0.5, 0.05, 0.2]} />
+            </mesh>
+            {/* legs astride */}
+            <mesh position={[-0.12, 0.32, 0]} rotation={[0, 0, 0.18]} material={MM.gold} castShadow>
+                <cylinderGeometry args={[0.035, 0.045, 0.34, 6]} />
+            </mesh>
+            <mesh position={[0.12, 0.32, 0]} rotation={[0, 0, -0.18]} material={MM.gold}>
+                <cylinderGeometry args={[0.035, 0.045, 0.34, 6]} />
+            </mesh>
+            {/* torso + arms */}
+            <mesh position={[0, 0.56, 0]} material={MM.gold} castShadow>
+                <boxGeometry args={[0.16, 0.22, 0.1]} />
+            </mesh>
+            <mesh position={[-0.11, 0.6, 0]} rotation={[0, 0, 0.5]} material={MM.gold}>
+                <cylinderGeometry args={[0.02, 0.025, 0.18, 5]} />
+            </mesh>
+            <mesh position={[0.13, 0.72, 0]} rotation={[0, 0, -0.35]} material={MM.gold}>
+                <cylinderGeometry args={[0.02, 0.025, 0.2, 5]} />
+            </mesh>
+            {/* head + crown + torch */}
+            <mesh position={[0, 0.74, 0]} material={MM.gold}>
+                <sphereGeometry args={[0.06, 8, 8]} />
+            </mesh>
+            {[0, 1, 2, 3, 4].map((i) => {
+                const a = (i / 5) * Math.PI - Math.PI * 0.0;
+                return (
+                    <mesh key={i} position={[Math.cos(a) * 0.06, 0.78 + Math.sin(a) * 0.03, 0]} rotation={[0, 0, -a + Math.PI / 2]} material={MM.gold}>
+                        <coneGeometry args={[0.012, 0.05, 4]} />
+                    </mesh>
+                );
+            })}
+            <mesh position={[0.19, 0.84, 0]} material={MM.flame}>
+                <coneGeometry args={[0.035, 0.08, 6]} />
+            </mesh>
+        </group>
+    );
+};
+
+
+const WonderGreatLibrary: React.FC = () => {
+    // Alexandria: monumental steps, five-column facade, twin wings and a
+    // grand blue dome; a scroll cart waits by the entrance.
+    return (
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={1.0} />
+            {[0.9, 0.8].map((s, i) => (
+                <mesh key={i} position={[0, 0.04 + i * 0.06, 0.1]} material={MM.marbleDim} receiveShadow>
+                    <boxGeometry args={[s, 0.06, s * 0.6]} />
+                </mesh>
+            ))}
+            <mesh position={[0, 0.32, -0.06]} material={MM.stucco} castShadow>
+                <boxGeometry args={[0.56, 0.34, 0.36]} />
+            </mesh>
+            {/* side wings */}
+            <mesh position={[-0.38, 0.22, -0.04]} material={MM.marbleDim} castShadow>
+                <boxGeometry args={[0.2, 0.22, 0.3]} />
+            </mesh>
+            <mesh position={[0.38, 0.22, -0.04]} material={MM.marbleDim}>
+                <boxGeometry args={[0.2, 0.22, 0.3]} />
+            </mesh>
+            {/* facade columns */}
+            {[-0.22, -0.11, 0, 0.11, 0.22].map((x, i) => (
+                <mesh key={i} position={[x, 0.3, 0.2]} material={MM.marble}>
+                    <cylinderGeometry args={[0.025, 0.03, 0.3, 8]} />
+                </mesh>
+            ))}
+            <mesh position={[0, 0.47, 0.18]} material={MM.marble}>
+                <boxGeometry args={[0.54, 0.05, 0.1]} />
+            </mesh>
+            {/* dome + finial */}
+            <mesh position={[0, 0.5, -0.06]} material={MM.clothBlue} castShadow>
+                <sphereGeometry args={[0.24, 14, 9, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            </mesh>
+            <mesh position={[0, 0.77, -0.06]} material={MM.gold}>
+                <sphereGeometry args={[0.04, 8, 8]} />
+            </mesh>
+            {/* scroll cart */}
+            <mesh position={[0.32, 0.1, 0.34]} material={MM.wood}>
+                <boxGeometry args={[0.14, 0.08, 0.1]} />
+            </mesh>
+            {[[0.29, 0.16], [0.35, 0.16]].map(([x, y], i) => (
+                <mesh key={'s' + i} position={[x, y, 0.34]} rotation={[Math.PI / 2, 0, 0]} material={MM.marble}>
+                    <cylinderGeometry args={[0.02, 0.02, 0.08, 6]} />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+
+
+const WonderOracle: React.FC = () => {
+    // Delphi: round tholos on a three-step base, ring of columns, conical
+    // roof, the sacred gold tripod and laurel bushes.
+    return (
+        <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
+            <GroundShadow r={0.9} />
+            {[0.5, 0.44, 0.38].map((r, i) => (
+                <mesh key={i} position={[0, 0.03 + i * 0.04, 0]} material={MM.marbleDim} receiveShadow>
+                    <cylinderGeometry args={[r, r + 0.02, 0.05, 16]} />
+                </mesh>
+            ))}
+            {Array.from({ length: 9 }, (_, i) => {
+                const a = (i / 9) * Math.PI * 2;
+                return (
+                    <mesh key={i} position={[Math.cos(a) * 0.28, 0.3, Math.sin(a) * 0.28]} material={MM.marble}>
+                        <cylinderGeometry args={[0.028, 0.032, 0.34, 8]} />
+                    </mesh>
+                );
+            })}
+            <mesh position={[0, 0.5, 0]} material={MM.marble}>
+                <cylinderGeometry args={[0.34, 0.34, 0.05, 16]} />
+            </mesh>
+            <mesh position={[0, 0.62, 0]} material={MM.terracotta} castShadow>
+                <coneGeometry args={[0.36, 0.2, 16]} />
+            </mesh>
+            <mesh position={[0, 0.75, 0]} material={MM.gold}>
+                <sphereGeometry args={[0.03, 8, 8]} />
+            </mesh>
+            {/* sacred tripod + smoke of the Pythia */}
+            <mesh position={[0, 0.14, 0]} material={MM.gold}>
+                <cylinderGeometry args={[0.05, 0.03, 0.12, 6]} />
+            </mesh>
+            <mesh position={[0, 0.24, 0]} material={MM.smoke}>
+                <sphereGeometry args={[0.035, 6, 6]} />
+            </mesh>
+            {/* laurels */}
+            {[[0.44, 0.3], [-0.42, -0.28], [0.1, -0.48]].map(([x, z], i) => (
+                <mesh key={'l' + i} position={[x, 0.08, z]} material={i % 2 ? MM.leaf : MM.leafDark}>
+                    <sphereGeometry args={[0.06, 7, 6]} />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+
+
 const WonderZiggurat: React.FC = () => (
-    // Original ziggurat — used for ziggurat-of-ur and as default fallback.
+    // Ur: three mud-brick terraces, the long frontal stair ramp, crowning
+    // shrine with gold ornament, date palms at the base.
     <group position={[0, 0.3, 0]} scale={[0.9, 0.9, 0.9]}>
-        <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.9, 0.15, 0.9]} />
-            <meshStandardMaterial color="#CD853F" roughness={0.8} flatShading />
+        <GroundShadow r={1.0} />
+        {[
+            { s: 0.9, y: 0.09, h: 0.18, m: MM.terracotta },
+            { s: 0.64, y: 0.26, h: 0.15, m: MM.sand },
+            { s: 0.42, y: 0.41, h: 0.13, m: MM.terracotta },
+        ].map((t, i) => (
+            <mesh key={i} position={[0, t.y, 0]} material={t.m} castShadow={i === 0} receiveShadow>
+                <boxGeometry args={[t.s, t.h, t.s]} />
+            </mesh>
+        ))}
+        {/* grand stair ramp */}
+        <mesh position={[0, 0.2, 0.4]} rotation={[0.63, 0, 0]} material={MM.sand}>
+            <boxGeometry args={[0.14, 0.62, 0.05]} />
         </mesh>
-        <mesh position={[0, 0.25, 0]} castShadow>
-            <boxGeometry args={[0.7, 0.15, 0.7]} />
-            <meshStandardMaterial color="#DEB887" roughness={0.8} flatShading />
+        {/* shrine + gold */}
+        <mesh position={[0, 0.55, 0]} material={MM.clothBlue} castShadow>
+            <boxGeometry args={[0.2, 0.16, 0.2]} />
         </mesh>
-        <mesh position={[0, 0.42, 0]} castShadow>
-            <boxGeometry args={[0.5, 0.15, 0.5]} />
-            <meshStandardMaterial color="#D2B48C" roughness={0.75} flatShading />
+        <mesh position={[0, 0.68, 0]} material={MM.gold}>
+            <sphereGeometry args={[0.05, 8, 8]} />
         </mesh>
-        <mesh position={[0, 0.58, 0]} castShadow>
-            <boxGeometry args={[0.25, 0.18, 0.25]} />
-            <meshStandardMaterial color="#B8860B" roughness={0.4} metalness={0.3} flatShading />
-        </mesh>
-        <mesh position={[0, 0.72, 0]} castShadow>
-            <sphereGeometry args={[0.08, 8, 8]} />
-            <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.5} />
-        </mesh>
+        {/* date palms */}
+        {[[0.42, 0.34], [-0.44, 0.28]].map(([x, z], i) => (
+            <group key={i} position={[x, 0, z]}>
+                <mesh position={[0, 0.09, 0]} material={MM.woodDark}>
+                    <cylinderGeometry args={[0.015, 0.025, 0.18, 5]} />
+                </mesh>
+                <mesh position={[0, 0.2, 0]} material={MM.leaf}>
+                    <coneGeometry args={[0.09, 0.1, 6]} />
+                </mesh>
+            </group>
+        ))}
     </group>
 );
+
 
 export const Wonder3D: React.FC<{
     position: [number, number, number];

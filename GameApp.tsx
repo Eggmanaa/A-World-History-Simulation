@@ -140,7 +140,7 @@ const checkSavingThrow = (
 // describing exactly what mechanical effect it grants. Drives both the
 // civ-selection grid and any future trait-info surfaces.
 const TRAIT_DESCRIPTIONS: Record<string, string> = {
-  Strength: 'Martial × 2. Doubles your unified combat stat for both attack rolls and defense rolls.',
+  Strength: 'Martial × 1.5. Multiplies your unified combat stat for both attack rolls and defense rolls.',
   Industrious: 'Production Income × 2. Twice the per-turn fill on your Production Pool, so buildings come online faster.',
   Intelligence: 'Science Yield × 2 (minimum 2). Each Research action contributes twice the science.',
   Wisdom: 'Faith Yield × 2 (minimum 2). Each Worship action contributes twice the faith.',
@@ -174,7 +174,7 @@ const STAT_EXPLANATIONS: Record<string, {
       'Religion tenet: Holy War adds +2 per converted neighbor, +1 baseline.',
       'Cultural Prestige: +1 Martial per 10 Culture Total.',
       'Peace treaties: +1 Martial each; Military treaties: +3 Martial each.',
-      'Trait bonus: Strength doubles your Martial total.',
+      'Trait bonus: Strength multiplies your Martial total by 1.5.',
       'Cultural Stages (Imperial/Modern) scale Martial.',
     ],
     affects: ['Attack rolls (vs target Martial)', 'Raid mitigation each turn', 'Conquest score (8 pts per decisive conquest)'],
@@ -333,6 +333,12 @@ const calculateStats = (
   // the rest of the balance pass (Sparta + Strength + island + Barbarism
   // multipliers used to push Martial above 100).
   if (civData.isIsland) terrainDefense += 3;
+  // BALANCE (Sparta 60-Martial fix): terrain + island contribution is
+  // capped at +4 total. Per-terrain-TYPE bonuses meant a varied map
+  // (forest+mountain+high mountain+river+island) granted ~12 free
+  // Martial before trait/stage multipliers amplified it. Terrain now
+  // flavors defense instead of rivaling base stats.
+  terrainDefense = Math.min(4, terrainDefense);
 
   // 2. Building Bonuses
   const buildings = tiles
@@ -555,7 +561,10 @@ const calculateStats = (
   // Strength × Martial and Industrious × Industry are safe because those
   // stats are derived from base + buildings each render and never stored as
   // running totals.
-  if (civData.traits.includes("Strength")) martial *= 2;
+  // BALANCE: Strength is x1.5, not x2 - it multiplied the ENTIRE
+  // running total (base + terrain + buildings), so multiplier civs
+  // opened at 6x the Martial of non-multiplier civs.
+  if (civData.traits.includes("Strength")) martial = Math.round(martial * 1.5);
   if (civData.traits.includes("Industrious")) {
     // Apr 2026 balance pass: dropped the Industry *2 multiplier here
     // (was double-stacking with Production Income *2 making this trait
@@ -697,8 +706,10 @@ const calculateStats = (
 
       // STRUCTURAL tech effects (reapplied each render — safe because the
       // base values are re-derived from civData.baseStats every call).
-      if (tech.effect === "martial_2x") martial *= 2;
-      if (tech.effect === "martial_3x") martial *= 3;
+      // BALANCE: tech multipliers softened so trait x stage x tech
+      // stacking tops out near x3.6 rather than x9.
+      if (tech.effect === "martial_2x") martial = Math.round(martial * 1.5);
+      if (tech.effect === "martial_3x") martial *= 2;
       if (tech.effect === "industry_bonus_5") industry += 5;
 
       // ACCUMULATING tech effects (science_bonus_3, science_bonus_5,

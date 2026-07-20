@@ -7,7 +7,7 @@ import type { CivPreset } from '../types';
 // Trait descriptions used as native title-attribute tooltips on trait
 // pills throughout the student dashboard. Mirrors GameApp's lookup.
 const TRAIT_DESCRIPTIONS: Record<string, string> = {
-  Strength: 'Martial × 2. Doubles your unified combat stat for both attack rolls and defense rolls.',
+  Strength: 'Martial × 1.5. Multiplies your unified combat stat for both attack rolls and defense rolls.',
   Industrious: 'Production Income × 2. Twice the per-turn Production Pool fill.',
   Intelligence: 'Science Yield × 2 (minimum 2). Each Research action contributes twice the science.',
   Wisdom: 'Faith Yield × 2 (minimum 2). Each Worship action contributes twice the faith.',
